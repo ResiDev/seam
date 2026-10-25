@@ -1,0 +1,30 @@
+/* Shared look for every mock: tokyonight-night, the user's colorscheme. Inline this whole file. */
+.mock { font-family: var(--font-sans); color: var(--foreground); }
+.mock h2 { font-size: 20px; margin: 0 0 6px; }
+.mock .lede { color: var(--muted-foreground); margin: 0 0 18px; line-height: 1.5; font-size: 14px; }
+.mock .cap { font-size: 13px; color: var(--muted-foreground); margin: 22px 0 8px; line-height: 1.45; }
+.mock .cap b { color: var(--foreground); }
+.mock kbd { font-family: var(--font-mono); font-size: 12px; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--secondary); color: var(--foreground); }
+
+/* A Neovim screen. Write its rows in a <pre class="nv">, 100 columns wide. */
+.nv { background: #1a1b26; color: #c0caf5; border-radius: var(--radius); padding: 16px;
+  margin: 0; overflow-x: auto; line-height: 1.32; white-space: pre;
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+  font-size: min(12.5px, calc((100vw - 34px) / 61)); }
+.nv span { white-space: pre; }
+/* tokyonight-night */
+.nv .fg  { color: #c0caf5; } .nv .fd { color: #a9b1d6; }
+.nv .c   { color: #565f89; } .nv .d3 { color: #3b4261; }   /* comment, gutter */
+.nv .b   { color: #7aa2f7; } .nv .cy { color: #7dcfff; } .nv .t { color: #1abc9c; }
+.nv .m   { color: #bb9af7; } .nv .o  { color: #ff9e64; } .nv .y { color: #e0af68; }
+.nv .g   { color: #9ece6a; } .nv .r  { color: #f7768e; } .nv .rr { color: #db4b4b; }
+.nv .bold { font-weight: 700; } .nv .it { font-style: italic; } .nv .ul { text-decoration: underline; }
+.nv .st  { text-decoration: line-through; }
+.nv .sel { background: #292e42; }                /* cursor line / selection */
+.nv .vis { background: #283457; }                /* visual / lit item */
+.nv .fl  { background: #16161e; }                /* float body */
+.nv .sl  { background: #16161e; color: #a9b1d6; } /* statusline */
+.nv .mode { background: #7aa2f7; color: #15161e; font-weight: 700; }
+.nv .bg-r { background: #3f2430; } .nv .bg-y { background: #3a3326; } .nv .bg-g { background: #273326; }
+.nv .bg-b { background: #22304d; }
