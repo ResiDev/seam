@@ -1,5 +1,6 @@
--- Source files, their treesitter trees, highlight captures copied onto
--- copied lines, enclosing functions. Throwaway lab code.
+-- Code panes: source files and their treesitter trees, lines copied into
+-- rows with their highlight captures painted on as they come into view, and
+-- the questions asked of a file's tree: enclosing function, import, statement.
 local api = vim.api
 local M = {}
 
@@ -14,7 +15,8 @@ end
 M.root = nil
 M.ns = api.nvim_create_namespace 'seam_code'
 local files = {}
-M.stats = { parses = 0, parse_ms = 0, cap_ms = 0 }
+-- buffer -> { rows = row0 -> code, painted = row0 -> true }, the rows of copied code
+local shown = {}
 
 function M.reset()
   files = {}
@@ -40,11 +42,10 @@ function M.file(path)
   return P
 end
 
-function M.tree(P)
+local function tree(P)
   if P.root == nil then
     P.root = false
     if P.lang then
-      local t0 = vim.uv.hrtime()
       P.text = table.concat(P.lines, '\n')
       local ok, parser = pcall(vim.treesitter.get_string_parser, P.text, P.lang)
       if ok then
@@ -54,8 +55,6 @@ function M.tree(P)
           P.query = vim.treesitter.query.get(P.lang, 'highlights')
         end
       end
-      M.stats.parses = M.stats.parses + 1
-      M.stats.parse_ms = M.stats.parse_ms + (vim.uv.hrtime() - t0) / 1e6
     end
   end
   return P.root or nil
@@ -63,7 +62,7 @@ end
 
 -- the captures of rows r0..r1 (0-based), cached per row
 local function captures(P, r0, r1)
-  local root = M.tree(P)
+  local root = tree(P)
   if not root or not P.query then
     return
   end
@@ -77,7 +76,6 @@ local function captures(P, r0, r1)
   if not s then
     return
   end
-  local t0 = vim.uv.hrtime()
   for r = s, e do
     P.caps[r] = {}
   end
@@ -97,12 +95,11 @@ local function captures(P, r0, r1)
       end
     end
   end
-  M.stats.cap_ms = M.stats.cap_ms + (vim.uv.hrtime() - t0) / 1e6
 end
 
---- Copy the captures of source line `lnum` (1-based) from byte `from` onto
---- buffer row `row` at byte column `dst`.
-function M.paint(buf, row, path, lnum, from, dst, len)
+-- Copy the captures of source line `lnum` (1-based) from byte `from` onto
+-- buffer row `row` at byte column `dst`.
+local function paint(buf, row, path, lnum, from, dst, len)
   local P = M.file(path)
   captures(P, lnum - 1, lnum - 1)
   local list = P.caps[lnum - 1]
@@ -117,10 +114,72 @@ function M.paint(buf, row, path, lnum, from, dst, len)
   end
 end
 
---- Warm the capture cache for a range in one query run.
-function M.warm(path, l0, l1)
-  local P = M.file(path)
-  captures(P, l0 - 1, l1 - 1)
+--- Append source line `lnum` of `path` to row `r`, from its first non-blank
+--- when `trim`; its captures are painted when it comes into view.
+---@param r table a draw row
+---@param path string
+---@param lnum integer
+---@param trim? boolean
+---@param maxw? integer
+---@return table r
+function M.add(r, path, lnum, trim, maxw)
+  local src = M.file(path).lines[lnum] or ''
+  local from = trim and #(src:match '^%s*') or 0
+  local text = src:sub(from + 1)
+  if maxw and #text > maxw then
+    text = text:sub(1, maxw)
+  end
+  r.code = { path, lnum, from, r.b, #text }
+  r:add(text)
+  return r
+end
+
+--- The rows of copied code now in `buf`, by 0-based row, none painted yet.
+---@param buf integer
+---@param rows table<integer, table>
+function M.track(buf, rows)
+  shown[buf] = { rows = rows, painted = {} }
+end
+
+--- Paint the code rows in view in `win`, and a screen above and below.
+---@param win integer
+function M.paint_win(win)
+  if not api.nvim_win_is_valid(win) then
+    return
+  end
+  local buf = api.nvim_win_get_buf(win)
+  local C = shown[buf]
+  if not C or next(C.rows) == nil then
+    return
+  end
+  local tb = api.nvim_win_call(win, function()
+    return { vim.fn.line 'w0', vim.fn.line 'w$' }
+  end)
+  local top, bot = tb[1], tb[2]
+  local h = api.nvim_win_get_height(win)
+  -- warm each file's range in one query run
+  local ranges = {}
+  for r0 = math.max(top - 1 - h, 0), bot - 1 + h do
+    local c = C.rows[r0]
+    if c and not C.painted[r0] then
+      local R = ranges[c[1]]
+      if not R then
+        ranges[c[1]] = { c[2], c[2] }
+      else
+        R[1], R[2] = math.min(R[1], c[2]), math.max(R[2], c[2])
+      end
+    end
+  end
+  for path, R in pairs(ranges) do
+    captures(M.file(path), R[1] - 1, R[2] - 1)
+  end
+  for r0 = math.max(top - 1 - h, 0), bot - 1 + h do
+    local c = C.rows[r0]
+    if c and not C.painted[r0] then
+      C.painted[r0] = true
+      paint(buf, r0, c[1], c[2], c[3], c[4], c[5])
+    end
+  end
 end
 
 local FN = {
@@ -135,7 +194,7 @@ local FN = {
 --- Returns 1-based start and end lines.
 function M.enclosing(path, line, col)
   local P = M.file(path)
-  local root = M.tree(P)
+  local root = tree(P)
   if not root then
     return line, line
   end
@@ -181,7 +240,7 @@ end
 --- The import statement in `path` that names `name`: its 1-based lines.
 function M.import_of(path, name)
   local P = M.file(path)
-  local root = M.tree(P)
+  local root = tree(P)
   if not root then
     return nil
   end
@@ -202,7 +261,7 @@ end
 --- not an export of the data).
 function M.statement_at(path, line)
   local P = M.file(path)
-  local root = M.tree(P)
+  local root = tree(P)
   if not root then
     return line, line
   end

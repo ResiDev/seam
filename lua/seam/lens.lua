@@ -190,7 +190,7 @@ function M.apply(lens, m)
       end
     end
     e.uses, e.deps = uses, deps
-    e.nusers, e.nrefs, e.nbuilt = vim.tbl_count(files), #uses, vim.tbl_count(names)
+    e.nusers, e.nbuilt = vim.tbl_count(files), vim.tbl_count(names)
     e.hidden_users, e.hidden_dep_files = vim.tbl_count(hidden), vim.tbl_count(hidden_deps)
     if #e.all_uses > 0 and visible(e.path, 'contracts') then
       m.contracts[#m.contracts + 1] = e
