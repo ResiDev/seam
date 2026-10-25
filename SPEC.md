@@ -189,21 +189,23 @@ The screens are locked in the design docs. The code must keep these rules:
 
 ```
 lua/seam/
-  init.lua          setup, :Seam
-  repo.lua          files, packages, hues
-  syntax.lua        treesitter: exports, members, imports, names in a declaration, role, enclosing function
-  source/init.lua   seam.Source, and picking one
-  source/lsp.lua
-  source/fake.lua
-  index.lua         the model, the cache, staleness, the background pass
-  tree.lua          paths to rows: compaction, folding, the package bar
-  code.lua          a code pane: copied lines, copied captures, dim, lit, underline, ⋯
-  draw/explorer.lua
-  draw/page.lua     the Contract, Built from and Used by tabs
-  screen.lua        the tab page, its windows, keys, cursor to redraw
+  init.lua          :Seam, start and open, what tests and view steps call
+  state.lua         the one table every screen reads: repo, models, tab, windows, what is shown
+  index.lua         the model from a source's JSON, the lens applied, where indexes live, indexing
   theme.lua         highlight groups, hues
+  lens.lua          the lens: patterns, what it hides, .seams/lens.json
+  tree.lua          paths to rows: compaction, folding, the package bar
+  code.lua          a code pane: copied lines, copied captures painted in view, enclosing function
+  draw/init.lua     rows, putting them in a buffer, the pieces both screens share
+  draw/explorer.lua the contracts list, and the trees or diagram beside it
+  draw/page.lua     the Built from and Used by tabs, the contract, the seam
+  diagram.lua       the v and V views, drawn by thread's flow renderer
+  lens_panel.lua    the lens float and its keys
+  screen.lua        the tab page, its windows, keys, status line, cursor to redraw
+scripts/
+  extract.lua       the treesitter index, in a headless nvim of its own
 tests/
-  fixture/pantry/   the made-up repo from the mocks, as real files
+  check.lua         every screen through its keys on a real repo
 ```
 
 ## Tests

@@ -1,7 +1,10 @@
--- seam lab: the explorer's diagram views, drawn by thread.nvim's flow
--- renderer (read only, on the runtimepath) and recoloured here from its hits.
+-- The explorer's diagram views, drawn by thread.nvim's flow renderer (read
+-- only, on the runtimepath) and recoloured here from its hits.
 --   contract  deps grouped by folder -> the contract -> users grouped by folder
 --   map       packages, provider -> user, the cursor's package lit
+local draw = require 'seam.draw'
+local index = require 'seam.index'
+local theme = require 'seam.theme'
 local M = {}
 
 local THREAD = vim.fn.expand '~/.config/nvim/thread.nvim'
@@ -11,26 +14,7 @@ end
 local layout = require 'thread.ui.diagram'
 local validate = require('thread.model.diagram').validate
 
-local H -- helpers from init: model, hue, pkg_of, is_test, shape, plural
-
-function M.setup(helpers)
-  H = helpers
-  local s = function(n, o)
-    vim.api.nvim_set_hl(0, n, o)
-  end
-  -- thread's setup has not run here
-  s('ThreadDiagramBox', { fg = '#737aa2' })
-  s('ThreadDiagramEdge', { fg = '#565f89' })
-  s('ThreadDiagramNode', { fg = '#c0caf5' })
-  s('ThreadDiagramText', { fg = '#a9b1d6' })
-  s('ThreadDiagramLabel', { fg = '#737aa2', italic = true })
-  s('ThreadDiagramHint', { fg = '#565f89' })
-  s('ThreadDiagramHere', { fg = '#c0caf5', bold = true })
-  s('ThreadBroken', { fg = '#f7768e' })
-  s('SeamDiagDim', { fg = '#3b4261' })
-  s('SeamDiagDimText', { fg = '#545c7e' })
-  s('SeamEdgeLabel', { fg = '#9aa5ce', italic = true })
-end
+local Row, plural = draw.row, draw.plural
 
 ---------------------------------------------------------------- groups
 
@@ -41,7 +25,7 @@ end
 --- the group a file falls in, seen from contract c: its package, or inside
 --- c's own package the next folder down (past `src/`)
 local function group_of(m, c, path)
-  local pkg = H.pkg_of(m, path)
+  local pkg = index.pkg_of(m, path)
   if pkg == '.' then
     return '.', './', pkg
   end
@@ -105,7 +89,7 @@ local function collect(m, c, items, path_of, count_key)
       if not g.files[path] then
         g.files[path] = true
         g.nfiles = g.nfiles + 1
-        g.alltest = g.alltest and H.is_test(path)
+        g.alltest = g.alltest and index.is_test(path)
       end
       local k = count_key(it)
       if k == true then
@@ -236,8 +220,8 @@ local function paint_ports(g, h, out_hl, in_hl)
   end
 end
 
---- the grid as lab rows, offset by `pad` columns
-local function grid_rows(g, pad, Row)
+--- the grid as rows, offset by `pad` columns
+local function grid_rows(g, pad)
   local out = {}
   for r = 0, g.h - 1 do
     local row = Row()
@@ -287,7 +271,7 @@ local function render(raw, width)
 end
 
 --- text as rows, wrapped at `width`, starting at column `pad`
-local function para(rows, Row, pad, text, hl, width)
+local function para(rows, pad, text, hl, width)
   local line = ''
   local function flush()
     rows[#rows + 1] = Row():add(string.rep(' ', pad)):add(line, hl)
@@ -329,12 +313,12 @@ end
 local function summary(m, c, deps, users)
   local upk, dpk = {}, {}
   for _, u in ipairs(c.uses) do
-    upk[H.pkg_of(m, u.path)] = true
+    upk[index.pkg_of(m, u.path)] = true
   end
   for _, dp in ipairs(c.deps) do
     local p = dp.target and dp.target:match '^(.*):%d+:[^:]*$'
     if p then
-      dpk[H.pkg_of(m, p)] = true
+      dpk[index.pkg_of(m, p)] = true
     end
   end
   local others = {}
@@ -354,7 +338,7 @@ local function summary(m, c, deps, users)
     end
     who = and_list(l) .. ' use it'
   else
-    who = H.plural(#others, 'other package') .. (upk[c.pkg] and ' and its own use it' or ' use it')
+    who = plural(#others, 'other package') .. (upk[c.pkg] and ' and its own use it' or ' use it')
   end
   local nd = vim.tbl_count(dpk)
   local built
@@ -363,15 +347,15 @@ local function summary(m, c, deps, users)
   elseif nd == 1 and dpk[c.pkg] then
     built = 'it draws only on its own package'
   else
-    built = 'it draws on ' .. H.plural(nd, 'package')
+    built = 'it draws on ' .. plural(nd, 'package')
   end
   return string.format('%s; %s.', who, built),
-    string.format('%s in %s; built from %s.', H.plural(#c.uses, 'use'), H.plural(c.nusers, 'file'), H.plural(c.nbuilt, 'name'))
+    string.format('%s in %s; built from %s.', plural(#c.uses, 'use'), plural(c.nusers, 'file'), plural(c.nbuilt, 'name'))
 end
 
 --- rows for contract c's diagram, `width` columns
-function M.contract(c, width, Row, sides)
-  local m = H.model()
+function M.contract(c, width, sides)
+  local m = index.model()
   local deps = sides == 'used' and {}
     or rank_groups(collect(m, c, c.deps, function(dp)
       return dp.target and dp.target:match '^(.*):%d+:[^:]*$'
@@ -390,22 +374,22 @@ function M.contract(c, width, Row, sides)
     elseif g.rest or not g.pkg or g.pkg == '.' then
       return 'SeamBarGrey', 'SeamHueGrey', 'SeamBarGrey'
     end
-    local hu = H.hue(g.pkg)
+    local hu = theme.hue(g.pkg)
     return hu.bar, hu.name, hu.bar
   end
   for i, g in ipairs(deps) do
     local id = 'd' .. i
-    nodes[#nodes + 1] = { id = id, label = g.label .. '\n' .. H.plural(g.nfiles, 'file') .. ' · ' .. H.plural(g.n, 'name') }
+    nodes[#nodes + 1] = { id = id, label = g.label .. '\n' .. plural(g.nfiles, 'file') .. ' · ' .. plural(g.n, 'name') }
     edges[#edges + 1] = { from = id, to = 'c' }
     info[id] = { g = g, side = 'dep' }
   end
   local inner = math.max(2, #deps, #users)
-  local label, top = pad_label({ H.shape(c), c.path }, inner)
+  local label, top = pad_label({ draw.shape(c), c.path }, inner)
   nodes[#nodes + 1] = { id = 'c', label = label }
   info.c = { top = top }
   for i, g in ipairs(users) do
     local id = 'u' .. i
-    nodes[#nodes + 1] = { id = id, label = g.label .. '\n' .. H.plural(g.nfiles, 'file') .. ' · ' .. H.plural(g.n, 'use') }
+    nodes[#nodes + 1] = { id = id, label = g.label .. '\n' .. plural(g.nfiles, 'file') .. ' · ' .. plural(g.n, 'use') }
     edges[#edges + 1] = { from = 'c', to = id }
     info[id] = { g = g, side = 'use' }
   end
@@ -451,11 +435,11 @@ function M.contract(c, width, Row, sides)
     hdr:add('used by', 'SeamSection')
   end
   rows[#rows + 1] = hdr
-  vim.list_extend(rows, grid_rows(g, pad, Row))
+  vim.list_extend(rows, grid_rows(g, pad))
   rows[#rows + 1] = Row()
   local s1, s2 = summary(m, c, deps, users)
-  para(rows, Row, pad, s1, 'SeamText', width)
-  para(rows, Row, pad, s2, 'SeamLabel', width)
+  para(rows, pad, s1, 'SeamText', width)
+  para(rows, pad, s2, 'SeamLabel', width)
   if drawn.degraded then
     rows[#rows + 1] = Row():add(string.rep(' ', pad)):add('(' .. drawn.degraded .. ')', 'SeamLabel')
   end
@@ -476,7 +460,7 @@ local function map_data(m)
     ncon[c.pkg] = (ncon[c.pkg] or 0) + 1
     pk[c.pkg] = true
     for _, u in ipairs(c.uses) do
-      local a = H.pkg_of(m, u.path)
+      local a = index.pkg_of(m, u.path)
       if a ~= c.pkg then
         local k = c.pkg .. '\0' .. a
         count[k] = (count[k] or 0) + 1
@@ -529,8 +513,8 @@ local function fmt_n(n)
   return tostring(n)
 end
 
-function M.map(c, width, Row)
-  local m = H.model()
+function M.map(c, width)
+  local m = index.model()
   local D = map_data(m)
   local deg = {}
   for _, e in ipairs(D.edges) do
@@ -587,7 +571,7 @@ function M.map(c, width, Row)
     end
   end
   if mine then
-    local hu = H.hue(c.pkg)
+    local hu = theme.hue(c.pkg)
     lit_hl[hu.bar], lit_hl.SeamText = true, true
     -- its arrows: out to its users in its hue, in from its providers plain
     paint_ports(g, mine, hu.bar, 'SeamText')
@@ -632,7 +616,7 @@ function M.map(c, width, Row)
   for _, h in ipairs(drawn.hits) do
     local inf = info[h.node.id]
     if h == mine then
-      local hu = H.hue(c.pkg)
+      local hu = theme.hue(c.pkg)
       paint_box(g, h, hu.bar, { [inf.top + 1] = hu.name })
     elseif near[inf.pkg] then
       paint_box(g, h, 'SeamBarGrey', { [inf.top + 1] = 'SeamText' })
@@ -642,7 +626,7 @@ function M.map(c, width, Row)
   end
   local pad = math.max(1, math.floor((width - drawn.width) / 2))
   local rows = { Row(), Row() }
-  vim.list_extend(rows, grid_rows(g, pad, Row))
+  vim.list_extend(rows, grid_rows(g, pad))
   rows[#rows + 1] = Row()
   local into, outof, rev = {}, {}, {}
   local function nm(p)
@@ -673,14 +657,14 @@ function M.map(c, width, Row)
   end
   local name = nm(c.pkg)
   local line = string.format('%s: its contracts are used by %s', name, fmt(outof))
-  rows[#rows + 1] = Row():add(string.rep(' ', pad)):add(name, H.hue(c.pkg).name):add(line:sub(#name + 1), 'SeamText')
-  para(rows, Row, pad, string.format('it uses the contracts of %s', fmt(into)), 'SeamText', width)
+  rows[#rows + 1] = Row():add(string.rep(' ', pad)):add(name, theme.hue(c.pkg).name):add(line:sub(#name + 1), 'SeamText')
+  para(rows, pad, string.format('it uses the contracts of %s', fmt(into)), 'SeamText', width)
   rows[#rows + 1] = Row()
   local notes = 'Arrows run from a package to those that use its contracts, labelled with uses. One arrow per pair, the stronger way'
   if #rev > 0 then
     notes = notes .. '; the other way here: ' .. table.concat(rev, ', ')
   end
-  para(rows, Row, pad, notes .. '.', 'SeamLabel', width)
+  para(rows, pad, notes .. '.', 'SeamLabel', width)
   line = string.format('Links under %d uses not drawn: %d.', MIN_LINK, #D.small)
   rows[#rows + 1] = Row():add(string.rep(' ', pad)):add(line, 'SeamLabel')
   if drawn.degraded then
