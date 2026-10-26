@@ -185,6 +185,7 @@ function M.on_move()
   if c and c ~= st.shown then
     st.shown = c
     explorer.contract(c)
+    paint()
   end
 end
 
@@ -955,6 +956,7 @@ function M.open(root)
     index.load()
     if st.screen == 'explorer' and st.shown then
       explorer.contract_head(st.shown)
+      paint()
     end
     vim.cmd 'redrawstatus'
   end, 30)

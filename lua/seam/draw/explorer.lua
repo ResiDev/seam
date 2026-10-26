@@ -224,7 +224,7 @@ local function signature(c, w, max)
 end
 
 --- The head over the trees: the contract, its declaration, the sources.
---- Its declaration takes two rows, or five beside used by alone.
+--- Its declaration takes two rows, or five beside one tree alone.
 ---@param c table
 function M.contract_head(c)
   local win = st.win.rhead
@@ -233,7 +233,7 @@ function M.contract_head(c)
   r:add(shape(c), 'SeamBold'):add('   ' .. c.kind .. ' in ', 'SeamLabel')
   draw.path(r, c.path, c.line)
   local rows = { r }
-  vim.list_extend(rows, signature(c, w - 1, st.sides == 'used' and 5 or 2))
+  vim.list_extend(rows, signature(c, w - 1, st.sides == 'both' and 2 or 5))
   rows[#rows + 1] = compare(c)
   draw.put(st.buf.rhead, rows)
   if win and api.nvim_win_is_valid(win) then
