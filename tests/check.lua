@@ -324,7 +324,7 @@ end
 
 -- the call tree: its four windows on its own buffers, the list its rows with
 -- the cursor on the row the view says, the call lit beside it, the budget
--- inside the window, called by drawn upward
+-- inside the window, the anchor on top either way and the pin saying which
 local function check_calls(fresh)
   if st.screen ~= 'calls' or not st.calls then
     return fail 'not on the Calls screen'
@@ -338,11 +338,10 @@ local function check_calls(fresh)
   if #api.nvim_tabpage_list_wins(st.tab) ~= 4 then
     fail(('%d windows on the Calls screen, not 4'):format(#api.nvim_tabpage_list_wins(st.tab)))
   end
-  local pad = st.calls_pad or 0
-  if api.nvim_buf_line_count(st.cbuf.list) ~= pad + math.max(1, #r.rows) then
+  if api.nvim_buf_line_count(st.cbuf.list) ~= math.max(1, #r.rows) then
     fail 'the list is not its rows'
   end
-  local i = api.nvim_win_get_cursor(w.list)[1] - pad
+  local i = api.nvim_win_get_cursor(w.list)[1]
   local x = r.rows[i]
   if #r.rows > 0 and not x then
     return fail 'the cursor is off the rows'
@@ -362,14 +361,20 @@ local function check_calls(fresh)
   if fresh and r.levels > 0 and #r.rows > api.nvim_win_get_height(w.list) then
     fail(('the budget opened %d levels into %d rows, %d high'):format(r.levels, #r.rows, api.nvim_win_get_height(w.list)))
   end
-  if st.calls.dir == 'up' and st.calls.anchor then
-    for j, y in ipairs(r.rows) do
-      if y.parent and y.parent <= j then
-        return fail 'going up, a caller sits below what it calls'
-      end
+  for j, y in ipairs(r.rows) do
+    if y.parent and y.parent >= j then
+      return fail 'a row sits above the row it hangs from'
     end
-    if #r.rows > 0 and r.rows[#r.rows].parent then
-      fail 'going up, the last row does not call the anchor'
+  end
+  if st.calls.anchor then
+    local pin = api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)
+    local want = st.calls.dir == 'up' and '↓ calls' or '↑'
+    if #pin ~= 3 or pin[1]:sub(1, #want) ~= want or not pin[2]:match '^━' then
+      fail('the pin is not the other way, the anchor, the titles: ' .. table.concat(pin, ' | '))
+    end
+    local word = st.calls.dir == 'up' and 'above' or 'below'
+    if not pin[3]:match(word) then
+      fail('the column is not ' .. word)
     end
   end
 end

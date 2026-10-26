@@ -65,7 +65,7 @@ local M = {}
 ---@field segs string[]|nil a dir row's names
 
 ---@class seam.CallRows
----@field rows seam.CallRow[] in screen order: going up, every caller above what it calls
+---@field rows seam.CallRow[] in screen order, each row above the rows under it
 ---@field anchor string|nil
 ---@field dir seam.Dir
 ---@field shared string[] the shared nodes in view, not open
@@ -382,14 +382,6 @@ local function walk(g, view, is_open, m)
   end
   for j, r in ipairs(top) do
     emit(r, nil, j == #top)
-  end
-  if dir == 'up' and view.anchor then
-    -- every caller below its callers, so above what it calls
-    local rev = {}
-    for i = #flat, 1, -1 do
-      rev[#rev + 1] = flat[i]
-    end
-    flat = rev
   end
   for i, r in ipairs(flat) do
     r.i = i

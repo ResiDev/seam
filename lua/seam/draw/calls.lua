@@ -1,6 +1,6 @@
--- The Calls screen drawn: its head, the anchor pinned above the tree going
--- down and below it going up, the tree, and the code of the row under the
--- cursor: where it is called, then its own body.
+-- The Calls screen drawn: its head, the anchor pinned above the tree, the
+-- tree, and the code of the row under the cursor: where it is called, then
+-- its own body.
 local api = vim.api
 local calls = require 'seam.calls'
 local code = require 'seam.code'
@@ -88,7 +88,8 @@ function M.head(buf, g, view, r, width)
   local right
   if a then
     name(h, a, 'SeamBold', 60)
-    h:add('   ' .. (a.kind == 'module' and 'top of the file' or a.kind) .. ' in ', 'SeamLabel')
+    h:add(view.dir == 'up' and '  called by' or '  calls', 'SeamTitle')
+    h:add('     ' .. (a.kind == 'module' and 'top of the file' or a.kind) .. ' in ', 'SeamLabel')
     draw.path(h, a.path, a.line > 0 and a.line or nil)
     local n = view.dir == 'up' and calls.above(g, a.id, visible) or calls.below(g, a.id, visible)
     right = ('budget %d rows  ·  depth %d shown  ·  %d %s'):format(view.height or 0, r.levels + 1, n, view.dir == 'up' and 'above' or 'below')
@@ -116,15 +117,13 @@ function M.head(buf, g, view, r, width)
     end
   end
   local rows = { h, t }
-  if view.dir == 'up' and view.anchor then
-    rows[3] = titles(view)
-  end
   draw.put(buf, rows)
   return #rows
 end
 
---- The anchor pinned: going down, who calls it, it, then the column titles;
---- going up, it, then what it calls. From the top, what the roots are.
+--- The anchor pinned over the tree: the other way from it (going down, who
+--- calls it; going up, what it calls), it, then the column titles. From the
+--- top, what the roots are.
 ---@param buf integer
 ---@param g seam.Graph
 ---@param view seam.CallsView
@@ -159,7 +158,7 @@ function M.pin(buf, g, view)
   if view.dir == 'up' then
     local n = calls.used_by(g, a.id, visible)
     me:add(('   called by %d  ·  %d above'):format(n, calls.above(g, a.id, visible)), 'SeamLabel')
-    rows = { me, others('down', '↓ calls ', '↓ calls nothing') }
+    rows = { others('down', '↓ calls ', '↓ calls nothing'), me, titles(view) }
   else
     local kids = calls.kids(g, a.id, 'down', visible)
     me:add(('   calls %d  ·  %d below'):format(#kids, calls.below(g, a.id, visible)), 'SeamLabel')
@@ -170,7 +169,7 @@ function M.pin(buf, g, view)
 end
 
 -- the guides down the left, from its parents' places among their siblings
-local function guides(r, rows, x, up, anchored)
+local function guides(r, rows, x, anchored)
   local chain, p = {}, x.parent
   while p do
     table.insert(chain, 1, rows[p])
@@ -180,7 +179,7 @@ local function guides(r, rows, x, up, anchored)
     r:add(chain[j].last and '  ' or '│ ', 'SeamDim')
   end
   if anchored or x.parent then
-    r:add(x.last and (up and '┌ ' or '└ ') or '├ ', 'SeamDim')
+    r:add(x.last and '└ ' or '├ ', 'SeamDim')
   end
 end
 
@@ -206,19 +205,15 @@ local function columns(r, x)
   end
 end
 
---- The tree: a row each, `pad` empty rows over it.
+--- The tree: a row each.
 ---@param buf integer
 ---@param g seam.Graph
 ---@param view seam.CallsView
 ---@param r seam.CallRows
----@param pad integer
-function M.list(buf, g, view, r, pad)
+function M.list(buf, g, view, r)
   local m = index.model()
-  local up, anchored = view.dir == 'up' and view.anchor ~= nil, view.anchor ~= nil
+  local anchored = view.anchor ~= nil
   local out = {}
-  for _ = 1, pad do
-    out[#out + 1] = row()
-  end
   for i, x in ipairs(r.rows) do
     local node = x.id and g.nodes[x.id]
     local pkg = x.pkg or (x.path and index.pkg_of(m, x.path))
@@ -228,7 +223,7 @@ function M.list(buf, g, view, r, pad)
     else
       tree.bar(d, pkg)
     end
-    guides(d, r.rows, x, up, anchored)
+    guides(d, r.rows, x, anchored)
     local folded = x.fold == 'folded' or (x.kind == 'dir' and not x.touched)
     d:add(x.fold == 'open' and '▾ ' or folded and '▸ ' or '  ', 'SeamLabel')
     local room = COUNT_END - 6 - d.w

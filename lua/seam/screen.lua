@@ -774,7 +774,7 @@ local function calls_at()
   if not (calls_valid() and st.calls_rows) then
     return 1
   end
-  local l = api.nvim_win_get_cursor(st.cwin.list)[1] - (st.calls_pad or 0)
+  local l = api.nvim_win_get_cursor(st.cwin.list)[1]
   return math.max(1, math.min(l, #st.calls_rows.rows))
 end
 
@@ -813,9 +813,6 @@ function M.calls_status()
       end
     end
     table.sort(sibs)
-    if v.dir == 'up' then
-      sibs = vim.fn.reverse(sibs)
-    end
     left = left .. ('  %d of %d'):format(vim.fn.index(sibs, i) + 1, #sibs)
   end
   local hints = { 'j/k row', 'h fold', 'l open', '[ ] sibling', 'L open all', 'H as it opened' }
@@ -827,17 +824,15 @@ function M.calls_status()
 end
 
 local function calls_layout()
-  local v = st.calls
-  local side = v.anchor and v.dir or 'top'
-  if st.screen == 'calls' and st.calls_side == side and calls_valid() then
+  if st.screen == 'calls' and calls_valid() then
     return
   end
-  st.screen, st.calls_side = 'calls', side
+  st.screen = 'calls'
   local head = reset_tab()
   api.nvim_win_set_buf(head, st.cbuf.head)
   local list = split(st.cbuf.list, head, 'below', true)
   local pane = split(st.cbuf.code, list, 'right')
-  local pin = split(st.cbuf.pin, list, side == 'up' and 'below' or 'above')
+  local pin = split(st.cbuf.pin, list, 'above')
   for _, w in ipairs { head, pin, pane } do
     winopts(w)
   end
@@ -856,13 +851,6 @@ end
 local function calls_moved()
   if st.screen ~= 'calls' or st.drawing or not (calls_valid() and st.calls_rows) then
     return
-  end
-  local l = api.nvim_win_get_cursor(st.cwin.list)[1]
-  local pad = st.calls_pad or 0
-  if l <= pad and #st.calls_rows.rows > 0 then
-    st.drawing = true
-    api.nvim_win_set_cursor(st.cwin.list, { pad + 1, 0 })
-    st.drawing = false
   end
   local i = calls_at()
   local x = st.calls_rows.rows[i]
@@ -885,13 +873,13 @@ local function calls_cursor(key)
     end
   end
   if not target then
-    target = st.calls.dir == 'up' and st.calls.anchor and #r.rows or 1
+    target = 1
     for i = #r.rows, 1, -1 do
       target = not st.calls.anchor and r.rows[i].id and i or target
     end
   end
   st.drawing = true
-  api.nvim_win_set_cursor(st.cwin.list, { math.max(1, (st.calls_pad or 0) + target), 0 })
+  api.nvim_win_set_cursor(st.cwin.list, { target, 0 })
   st.drawing = false
   calls_moved()
 end
@@ -900,26 +888,22 @@ show_calls = function()
   local m = index.model()
   local g, v = m.graph, st.calls
   calls_layout()
-  local up = v.dir == 'up' and v.anchor ~= nil
-  api.nvim_win_set_height(st.cwin.head, up and 3 or 2)
-  api.nvim_win_set_height(st.cwin.pin, (v.anchor and not up) and 3 or 2)
+  api.nvim_win_set_height(st.cwin.head, 2)
+  api.nvim_win_set_height(st.cwin.pin, v.anchor and 3 or 2)
   local h = calls_height()
   local r = calls.rows(g, v, h, m)
   st.calls_rows = r
   calls_draw.head(st.cbuf.head, g, v, r, vim.o.columns)
   calls_draw.pin(st.cbuf.pin, g, v)
-  -- going up the tree grows from the anchor pinned below it
-  st.calls_pad = up and math.max(0, h - #r.rows) or 0
   local w = st.cwin.list
   local same = st.calls_drawn == (v.anchor or '') .. v.dir
   local top = same and api.nvim_win_call(w, function()
     return vim.fn.line 'w0'
   end) or nil
   st.drawing = true
-  calls_draw.list(st.cbuf.list, g, v, r, st.calls_pad)
-  local n = api.nvim_buf_line_count(st.cbuf.list)
+  calls_draw.list(st.cbuf.list, g, v, r)
   api.nvim_win_call(w, function()
-    vim.fn.winrestview { topline = top or (up and math.max(1, n - h + 1) or 1) }
+    vim.fn.winrestview { topline = top or 1 }
   end)
   st.drawing = false
   st.calls_drawn = (v.anchor or '') .. v.dir
@@ -929,7 +913,7 @@ show_calls = function()
 end
 
 local function calls_leave()
-  st.calls, st.calls_rows, st.calls_side = nil, nil, nil
+  st.calls, st.calls_rows = nil, nil
   layout_explorer()
   show_list(st.explorer_at)
   paint()

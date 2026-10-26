@@ -1,5 +1,5 @@
 -- The call tree as data, on a graph written by hand: counts, rows, the
--- budget, called by drawn upward, and what each key does to the view.
+-- budget, called by, and what each key does to the view.
 --   nvim -l tests/calls.lua
 -- Exits 0 when nothing failed.
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
@@ -205,30 +205,30 @@ do
   eq({ v.anchor, v.dir }, { A, 'up' }, '<BS> from the top: back where it was')
 end
 
--- called by, drawn upward: every caller above what it calls, the anchor's own last
+-- called by, drawn down from the anchor like calls: each caller under what it calls
 do
   local v = calls.new(B, 'up')
   local r = calls.rows(g, v, 100, M)
   local ok = true
   for i, x in ipairs(r.rows) do
-    if x.parent and x.parent <= i then
+    if x.parent and x.parent >= i then
       ok = false
     end
     for _, kid in ipairs(x.kids) do
-      if kid >= i then
+      if kid <= i then
         ok = false
       end
     end
   end
-  expect(ok, 'every caller sits above what it calls')
-  expect(r.rows[#r.rows].parent == nil, 'the last row calls the anchor')
+  expect(ok, 'every caller sits under what it calls')
+  eq(r.rows[1].key, k(B, A), 'the first row calls the anchor')
   local ti, t = find(r, k(B, 'tests'))
   eq({ t.kind, t.fold, t.files }, { 'tests', 'folded', 1 }, 'tests fold to one row, never opened for you')
   local ai, a = find(r, k(B, A))
-  eq({ a.kids[1], a.count, a.lines }, { ai - 1, 2, { 2, 4 } }, "a's nearest caller is the row just above it; a calls b at 2 and 4")
+  eq({ a.kids[1], a.count, a.lines }, { ai + 1, 2, { 2, 4 } }, "a's first caller is the row just under it; a calls b at 2 and 4")
   eq(calls.key(g, v, r, ai, 'l', 100, M), 'move', 'l on an open row going up')
-  eq(v.cursor, r.rows[ai - 1].key, 'l goes up the screen')
-  expect(ti < #r.rows, 'the tests row sits above the callers it follows')
+  eq(v.cursor, r.rows[ai + 1].key, 'l goes down the screen, as going down')
+  expect(ti == #r.rows and t.last, 'the tests row last, after the callers it follows')
 end
 
 -- from the top: folders, a file whose top is a root is its row, tests last
