@@ -843,9 +843,9 @@ function M.calls_status()
   local p = calls.pane(g, v, r, x and i or nil, index.model())
   local swap = {}
   if p and #p.places > 0 then
-    swap = { '<Tab> ' .. (p.code == 'called' and 'itself' or 'called at'), ']]/[[ ' .. (p.code == 'called' and 'place' or 'call') }
+    swap = { '<Tab> ' .. (p.code == 'called' and 'itself' or 'called at'), 'n/N ' .. (p.code == 'called' and 'place' or 'call') }
   elseif p and #p.lines > 0 then
-    swap = { ']]/[[ call' }
+    swap = { 'n/N call' }
   end
   if calls_valid() and api.nvim_get_current_win() == st.cwin.code then
     return left, table.concat(vim.list_extend(swap, { '<Esc> the tree', 'K back', '- explorer', 'q close' }), '   ')
@@ -1010,17 +1010,13 @@ end
 local function calls_keys(buf)
   local o = { buffer = buf, nowait = true, silent = true }
   local press = calls_press
-  for _, k in ipairs { 'l', 'h', 'L', 'H', '<CR>', '~', '<BS>', 'K', 'C', '<Tab>' } do
+  for _, k in ipairs { 'l', 'h', 'L', 'H', '<CR>', '~', '<BS>', 'K', 'C', '<Tab>', ']', '[' } do
     vim.keymap.set('n', k, press(k), o)
-  end
-  -- ] and [ wait for a second ] or [ rather than taking the sibling at once
-  for _, k in ipairs { ']', '[' } do
-    vim.keymap.set('n', k, press(k), { buffer = buf, silent = true })
   end
   vim.keymap.set('n', 'j', press('j', true), o)
   vim.keymap.set('n', 'k', press('k', true), o)
-  vim.keymap.set('n', ']]', press(']]', true), o)
-  vim.keymap.set('n', '[[', press('[[', true), o)
+  vim.keymap.set('n', 'n', press(']]', true), o)
+  vim.keymap.set('n', 'N', press('[[', true), o)
   vim.keymap.set('n', '<Down>', press 'j', o)
   vim.keymap.set('n', '<Up>', press 'k', o)
   vim.keymap.set('n', 'J', calls_page, o)

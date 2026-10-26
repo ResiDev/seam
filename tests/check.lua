@@ -442,7 +442,7 @@ local function swap()
     local now = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, api.nvim_win_get_cursor(st.cwin.list)[1], st.models[st.cur])
     local list = before and (before.code == 'called' and before.places or before.lines) or {}
     if before and now and #list > 1 then
-      local want = k == ']]' and before.n % #list + 1 or (before.n <= 1 and #list or before.n - 1)
+      local want = (k == ']]' or k == 'n') and before.n % #list + 1 or (before.n <= 1 and #list or before.n - 1)
       if now.n ~= want then
         fail(('%s went from %d to %d of %d, not %d'):format(k, before.n, now.n, #list, want))
       end
@@ -455,9 +455,9 @@ local function swap()
       fail('<Tab> did not swap to ' .. code_)
     end
     check_calls(false)
-    step ']]'
-    step ']]'
-    step '[['
+    step 'n'
+    step 'n'
+    step 'N'
     step(']]', true)
     step('[[', true)
     key 'j'
@@ -465,7 +465,7 @@ local function swap()
       fail('j did not keep ' .. code_)
     end
     check_calls(false)
-    step '[['
+    step 'N'
   end
 end
 
@@ -720,7 +720,7 @@ do
         if not (p and p.code == 'called' and vim.tbl_count(by) == 7 and u and u.line == 59 and u.from:match 'useRun%.ts:%d+:useOwnedRun$') then
           fail(('createRun called at: %d callers, on %s, not 7 and useRun.ts:59'):format(vim.tbl_count(by), u and (u.from .. ':' .. u.line) or 'nothing'))
         end
-        key ']]'
+        key 'n'
         check_code(ci)
         key '<BS>'
       end
