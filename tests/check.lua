@@ -76,6 +76,17 @@ local function check_page()
     elseif #p.refs > 0 then
       fail 'names in the code, but none shown'
     end
+    -- each piece of code is painted one way: two highlights of one priority
+    -- on one range are drawn in no promised order
+    local seen = {}
+    for _, m in ipairs(api.nvim_buf_get_extmarks(p.buf.mid, require('seam.code').ns, 0, -1, { details = true })) do
+      local k = m[2] .. ':' .. m[3] .. ':' .. m[4].end_col .. ':' .. m[4].priority
+      if seen[k] then
+        fail(('%s and %s both paint row %d at %d'):format(seen[k], m[4].hl_group, m[2] + 1, m[3]))
+        break
+      end
+      seen[k] = m[4].hl_group
+    end
     return
   end
   local want = st.panes[p.tab]
