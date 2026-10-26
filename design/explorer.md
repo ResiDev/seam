@@ -40,7 +40,8 @@ before files, each sorted by name.
 ## Orders
 
 `<Tab>` steps through them: by folder (the default, the tree), most used,
-most built from, by name. They are ways of ordering one list, not modes.
+most built from. They are ways of ordering one list, not modes. The header
+names none of them: the tree shows by folder, and the count sorted by is lit.
 
 ![Most used](mocks/explorer-most-used.png)
 

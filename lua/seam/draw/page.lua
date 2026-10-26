@@ -69,7 +69,7 @@ function M.head(p)
   local c = p.c
   local rows = {}
   local r = row()
-  r:add(' Contracts', 'SeamLabel')
+  r:add(' Seams', 'SeamLabel')
   for _, prev in ipairs(st.stack) do
     r:add(' › ', 'SeamLabel'):add(shape(prev.c), 'SeamLabel')
   end

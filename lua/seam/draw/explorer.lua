@@ -18,7 +18,6 @@ M.ORDERS = {
   { key = 'folder', label = 'by folder', short = 'by folder' },
   { key = 'used', label = 'most used first', short = 'most used' },
   { key = 'built', label = 'most built from first', short = 'most built from' },
-  { key = 'name', label = 'by name', short = 'by name' },
 }
 -- the widths of the contracts and built-from columns
 M.LW, M.MW = 46, 60
@@ -53,17 +52,18 @@ end
 local function head()
   local order = M.ORDERS[st.order]
   local rows = {}
-  local r = row()
-  r:add('Contracts', 'SeamTitle'):add('  ' .. order.label, 'SeamText')
+  local r = row():add('Seams', 'SeamTitle')
+  local on = #vim.tbl_filter(function(rule)
+    return lens.any(rule.cols)
+  end, st.lens.rules)
+  if on > 0 then
+    r:add('   ' .. on .. (on == 1 and ' filter applied' or ' filters applied'), 'SeamFilter')
+  end
   rows[1] = r
   r = row()
   if st.filter ~= '' then
     r:add('/ ', 'SeamLabel'):add(st.filter, 'SeamBold'):add('  ' .. #st.crows .. ' found', 'SeamLabel')
-  else
-    r:add('/ search', 'SeamLabel')
   end
-  local sum = lens.summary(st.lens)
-  r:add('   L ', 'SeamLabel'):add(sum ~= '' and sum or 'lens', sum ~= '' and 'SeamText' or 'SeamLabel')
   rows[2] = r
   r = row()
   draw.source(r)

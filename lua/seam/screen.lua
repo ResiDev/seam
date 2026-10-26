@@ -155,7 +155,7 @@ function M.status()
     hints[#hints + 1] = (#st.stack > 0 and '- ' or 'K ') .. 'overview'
     right = table.concat(hints, '   ')
   else
-    left = 'contracts  ' .. ORDERS[st.order].short
+    left = 'seams'
     local vw = st.view == 'diagram' and 'v trees   V map' or st.view == 'map' and 'v diagram   V trees' or 'v diagram   V map'
     local sd = st.sides == 'built' and 'b both   u used by' or st.sides == 'used' and 'b built from   u both' or 'b built from   u used by'
     right = '<Tab> ' .. ORDERS[st.order % #ORDERS + 1].short .. '   ' .. vw .. '   ' .. sd .. '   L lens   / search   J open'
@@ -209,6 +209,7 @@ local function show_list(keep)
   end
   st.shown = nil
   M.on_move()
+  paint()
 end
 
 local function layout_explorer()
