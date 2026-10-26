@@ -24,6 +24,8 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `D` | clear the filter |
 | `J` `<CR>` | open the contract's page |
 | `L` | the lens: what the explorer and pages show |
+| `c` | the calls of the contract under the cursor, down from it |
+| `C` | the calls from the top: where the code starts |
 | `gd` | the declaration, in a normal window |
 
 ## A contract's page
@@ -43,6 +45,25 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `K` `<BS>` | up a level: the previous page, or the explorer |
 | `-` | straight to the explorer from any depth, on this contract |
 | `L` | the lens |
+
+## Calls
+
+The call tree of a function, component or class: what it calls all the way down, or what calls it all the way up, or everything from where the code starts.
+
+| Key | Does |
+|---|---|
+| `j` `k` | the next or previous row |
+| `l` | open the row one level; on an open row, its first child; on an `↑ also` row, where it is open |
+| `h` | fold the row; on a folded one, its parent |
+| `L` | open everything under the row until the budget runs out |
+| `H` | fold back to what the budget opened |
+| `]` `[` | the next or previous sibling |
+| `<CR>` | anchor on the row |
+| `~` | flip: calls, called by |
+| `<BS>` | the previous anchor; from the first, the explorer |
+| `-` | from the top |
+| `gd` | the declaration, in a normal window |
+| `q` | close |
 
 ## The lens
 

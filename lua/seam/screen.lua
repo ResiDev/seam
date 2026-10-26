@@ -1,7 +1,9 @@
--- The tab page seam lives in: the explorer's windows and a page's, the keys
--- in each, the status line, and moving between them, the cursor redrawing
--- what it lands on.
+-- The tab page seam lives in: the explorer's windows, a page's and the call
+-- tree's, the keys in each, the status line, and moving between them, the
+-- cursor redrawing what it lands on.
 local api = vim.api
+local calls = require 'seam.calls'
+local calls_draw = require 'seam.draw.calls'
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local explorer = require 'seam.draw.explorer'
@@ -154,13 +156,15 @@ function M.status()
     end
     hints[#hints + 1] = (#st.stack > 0 and '- ' or 'K ') .. 'overview'
     right = table.concat(hints, '   ')
+  elseif st.screen == 'calls' and st.calls then
+    left, right = M.calls_status()
   else
     left = 'seams'
     local vw = st.view == 'diagram' and 'v trees   V map' or st.view == 'map' and 'v diagram   V trees' or 'v diagram   V map'
     local sd = st.sides == 'built' and 'b both   u used by' or st.sides == 'used' and 'b built from   u both' or 'b built from   u used by'
-    right = '<Tab> ' .. ORDERS[st.order % #ORDERS + 1].short .. '   ' .. vw .. '   ' .. sd .. '   L lens   / search   J open'
+    right = '<Tab> ' .. ORDERS[st.order % #ORDERS + 1].short .. '   ' .. vw .. '   ' .. sd .. '   L lens   / search   J open   c calls   C from the top'
   end
-  if srcs ~= '' then
+  if srcs ~= '' and st.screen ~= 'calls' then
     right = right .. '   ' .. srcs
   end
   -- the keys that fit, the last ones dropped first
@@ -752,6 +756,257 @@ function M.switch()
   end
 end
 
+---------------------------------------------------------------- calls
+
+local show_calls
+
+local function calls_valid()
+  local w = st.cwin
+  return w and api.nvim_win_is_valid(w.head) and api.nvim_win_is_valid(w.list) and api.nvim_win_is_valid(w.pin) and api.nvim_win_is_valid(w.code)
+end
+
+local function calls_height()
+  return calls_valid() and api.nvim_win_get_height(st.cwin.list) or 40
+end
+
+-- the row under the list's cursor
+local function calls_at()
+  if not (calls_valid() and st.calls_rows) then
+    return 1
+  end
+  local l = api.nvim_win_get_cursor(st.cwin.list)[1] - (st.calls_pad or 0)
+  return math.max(1, math.min(l, #st.calls_rows.rows))
+end
+
+local function calls_label(node)
+  return node.kind == 'module' and vim.fn.fnamemodify(node.path, ':t') or shape(node)
+end
+
+--- The status line on the Calls screen: the way from the top of the tree to
+--- the row under the cursor, then the keys.
+---@return string left, string right
+function M.calls_status()
+  local v, r = st.calls, st.calls_rows
+  local g = index.model().graph
+  local i = calls_at()
+  local x = r and r.rows[i]
+  local crumb = {}
+  local p = x
+  while p do
+    table.insert(crumb, 1, p.id and calls_label(g.nodes[p.id]) or p.kind == 'tests' and 'tests' or vim.fn.fnamemodify(p.path or '', ':t'))
+    p = p.parent and r.rows[p.parent]
+  end
+  table.insert(crumb, 1, v.anchor and calls_label(g.nodes[v.anchor]) or 'from the top')
+  local left = table.concat(crumb, ' › ')
+  if v.anchor then
+    left = left .. '  ' .. (v.dir == 'up' and 'called by' or 'calls')
+  end
+  if x then
+    local sibs = {}
+    if x.parent then
+      sibs = r.rows[x.parent].kids
+    else
+      for j, y in ipairs(r.rows) do
+        if not y.parent then
+          sibs[#sibs + 1] = j
+        end
+      end
+    end
+    table.sort(sibs)
+    if v.dir == 'up' then
+      sibs = vim.fn.reverse(sibs)
+    end
+    left = left .. ('  %d of %d'):format(vim.fn.index(sibs, i) + 1, #sibs)
+  end
+  local hints = { 'j/k row', 'h fold', 'l open', '[ ] sibling', 'L open all', 'H as it opened' }
+  if v.anchor then
+    hints[#hints + 1] = v.dir == 'up' and '~ calls' or '~ called by'
+  end
+  vim.list_extend(hints, { '<CR> anchor here', '- from the top', '<BS> back' })
+  return left, table.concat(hints, '   ')
+end
+
+local function calls_layout()
+  local v = st.calls
+  local side = v.anchor and v.dir or 'top'
+  if st.screen == 'calls' and st.calls_side == side and calls_valid() then
+    return
+  end
+  st.screen, st.calls_side = 'calls', side
+  local head = reset_tab()
+  api.nvim_win_set_buf(head, st.cbuf.head)
+  local list = split(st.cbuf.list, head, 'below', true)
+  local pane = split(st.cbuf.code, list, 'right')
+  local pin = split(st.cbuf.pin, list, side == 'up' and 'below' or 'above')
+  for _, w in ipairs { head, pin, pane } do
+    winopts(w)
+  end
+  winopts(list, true)
+  wrap(pane)
+  vim.wo[pane].winfixwidth = false
+  vim.wo[head].winfixheight = true
+  vim.wo[pin].winfixheight = true
+  api.nvim_win_set_width(list, calls_draw.LW)
+  st.cwin = { head = head, list = list, pin = pin, code = pane }
+  st.calls_drawn = nil
+  api.nvim_set_current_win(list)
+end
+
+-- the code of the row under the cursor, when it moved to another
+local function calls_moved()
+  if st.screen ~= 'calls' or st.drawing or not (calls_valid() and st.calls_rows) then
+    return
+  end
+  local l = api.nvim_win_get_cursor(st.cwin.list)[1]
+  local pad = st.calls_pad or 0
+  if l <= pad and #st.calls_rows.rows > 0 then
+    st.drawing = true
+    api.nvim_win_set_cursor(st.cwin.list, { pad + 1, 0 })
+    st.drawing = false
+  end
+  local i = calls_at()
+  local x = st.calls_rows.rows[i]
+  st.calls.cursor = x and x.key or st.calls.cursor
+  draw.cursor_line(st.cwin.list)
+  if st.calls_shown ~= (x and x.key or '') then
+    st.calls_shown = x and x.key or ''
+    calls_draw.pane(st.cbuf.code, st.cwin.code, index.model().graph, st.calls, st.calls_rows, x and i)
+    paint()
+  end
+  vim.cmd 'redrawstatus'
+end
+
+local function calls_cursor(key)
+  local r = st.calls_rows
+  local target
+  for i, x in ipairs(r.rows) do
+    if x.key == key then
+      target = i
+    end
+  end
+  if not target then
+    target = st.calls.dir == 'up' and st.calls.anchor and #r.rows or 1
+    for i = #r.rows, 1, -1 do
+      target = not st.calls.anchor and r.rows[i].id and i or target
+    end
+  end
+  st.drawing = true
+  api.nvim_win_set_cursor(st.cwin.list, { math.max(1, (st.calls_pad or 0) + target), 0 })
+  st.drawing = false
+  calls_moved()
+end
+
+show_calls = function()
+  local m = index.model()
+  local g, v = m.graph, st.calls
+  calls_layout()
+  local up = v.dir == 'up' and v.anchor ~= nil
+  api.nvim_win_set_height(st.cwin.head, up and 3 or 2)
+  api.nvim_win_set_height(st.cwin.pin, (v.anchor and not up) and 3 or 2)
+  local h = calls_height()
+  local r = calls.rows(g, v, h, m)
+  st.calls_rows = r
+  calls_draw.head(st.cbuf.head, g, v, r, vim.o.columns)
+  calls_draw.pin(st.cbuf.pin, g, v)
+  -- going up the tree grows from the anchor pinned below it
+  st.calls_pad = up and math.max(0, h - #r.rows) or 0
+  local w = st.cwin.list
+  local same = st.calls_drawn == (v.anchor or '') .. v.dir
+  local top = same and api.nvim_win_call(w, function()
+    return vim.fn.line 'w0'
+  end) or nil
+  st.drawing = true
+  calls_draw.list(st.cbuf.list, g, v, r, st.calls_pad)
+  local n = api.nvim_buf_line_count(st.cbuf.list)
+  api.nvim_win_call(w, function()
+    vim.fn.winrestview { topline = top or (up and math.max(1, n - h + 1) or 1) }
+  end)
+  st.drawing = false
+  st.calls_drawn = (v.anchor or '') .. v.dir
+  st.calls_shown = nil
+  calls_cursor(v.cursor)
+  paint()
+end
+
+local function calls_leave()
+  st.calls, st.calls_rows, st.calls_side = nil, nil, nil
+  layout_explorer()
+  show_list(st.explorer_at)
+  paint()
+end
+
+local function calls_keys(buf)
+  local o = { buffer = buf, nowait = true, silent = true }
+  local function press(k, times)
+    return function()
+      for _ = 1, times and vim.v.count1 or 1 do
+        local m = index.model()
+        local a = calls.key(m.graph, st.calls, st.calls_rows, calls_at(), k, calls_height(), m)
+        if a == 'redraw' then
+          show_calls()
+        elseif a == 'move' then
+          calls_cursor(st.calls.cursor)
+        elseif a == 'explorer' then
+          return calls_leave()
+        end
+      end
+    end
+  end
+  for _, k in ipairs { 'l', 'h', 'L', 'H', ']', '[', '<CR>', '~', '<BS>', '-' } do
+    vim.keymap.set('n', k, press(k), o)
+  end
+  vim.keymap.set('n', 'j', press('j', true), o)
+  vim.keymap.set('n', 'k', press('k', true), o)
+  vim.keymap.set('n', '<Down>', press 'j', o)
+  vim.keymap.set('n', '<Up>', press 'k', o)
+  vim.keymap.set('n', 'K', '<Nop>', o)
+  vim.keymap.set('n', 'gd', function()
+    local g = index.model().graph
+    local x = st.calls_rows and st.calls_rows.rows[calls_at()]
+    local id = x and x.id or st.calls.anchor
+    local node = id and g.nodes[id]
+    if node then
+      M.goto_decl { path = node.path, line = math.max(1, node.line) }
+    end
+  end, o)
+  vim.keymap.set('n', 'q', M.close, o)
+end
+
+--- The Calls screen on a function, component or class by id, or from the top.
+---@param id string|nil
+function M.open_calls(id)
+  local m = index.model()
+  if not (m and m.graph) then
+    vim.notify('seam: this index has no calls; :Seam! indexes again', vim.log.levels.WARN)
+    return
+  end
+  if id and not m.graph.nodes[id] then
+    vim.notify('seam: ' .. (index.id_path(id) and id:match '[^:]*$' or id) .. ' is not a function, component or class', vim.log.levels.INFO)
+    return
+  end
+  if st.screen == 'explorer' then
+    st.explorer_at = st.shown
+  end
+  if not (st.cbuf and api.nvim_buf_is_valid(st.cbuf.list)) then
+    st.cbuf = { head = draw.scratch 'calls-head', pin = draw.scratch 'calls-pin', list = draw.scratch 'calls', code = draw.scratch 'calls-code' }
+    calls_keys(st.cbuf.list)
+    for _, b in ipairs { st.cbuf.head, st.cbuf.pin, st.cbuf.code } do
+      vim.keymap.set('n', 'q', M.close, { buffer = b, nowait = true, silent = true })
+    end
+    api.nvim_create_autocmd('CursorMoved', { group = aug, buffer = st.cbuf.list, callback = calls_moved })
+    api.nvim_create_autocmd('VimResized', {
+      group = aug,
+      callback = function()
+        if st.screen == 'calls' and api.nvim_get_current_tabpage() == st.tab then
+          show_calls()
+        end
+      end,
+    })
+  end
+  st.calls = calls.new(id, 'down')
+  show_calls()
+end
+
 ---------------------------------------------------------------- lens
 
 --- The lens changed: save it, filter every source, redraw what is shown. A
@@ -761,7 +1016,10 @@ function M.lens_changed()
   for _, m in pairs(st.models) do
     lens.apply(st.lens, m)
   end
-  if st.screen == 'page' and st.page then
+  if st.screen == 'calls' and st.calls then
+    st.calls.auto = nil
+    show_calls()
+  elseif st.screen == 'page' and st.page then
     if lens_panel.is_open() then
       st.page_stale = true
     else
@@ -843,6 +1101,14 @@ local function explorer_keys(buf)
   end
   vim.keymap.set('n', '<CR>', open, o)
   vim.keymap.set('n', 'J', open, o)
+  vim.keymap.set('n', 'c', function()
+    if st.shown then
+      M.open_calls(st.shown.id)
+    end
+  end, o)
+  vim.keymap.set('n', 'C', function()
+    M.open_calls(nil)
+  end, o)
   -- the top level: nothing above it, and no hover from another plugin's K
   vim.keymap.set('n', 'K', '<Nop>', o)
   vim.keymap.set('n', 'gd', function()

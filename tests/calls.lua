@@ -20,7 +20,7 @@ local function eq(got, want, what)
 end
 
 -- a -> b b c d s; b -> e; c -> e c; e -> f; f -> b; s -> d; u1..u4 -> s;
--- main's top -> a; a test's top -> a b
+-- main's top -> a; a test's top -> a b t
 local function node(id, kind, calls_)
   local path, line, name = id:match '^(.*):(%d+):(.*)$'
   return {
@@ -35,7 +35,7 @@ local function node(id, kind, calls_)
   }
 end
 local A, B, C, D, E, F, S = 'src/a.ts:1:a', 'src/b.ts:1:b', 'src/c.ts:1:c', 'src/d.ts:1:d', 'src/e.ts:1:e', 'src/f.ts:1:f', 'src/s.ts:1:s'
-local MAIN, TEST = 'src/main.ts:0:', 'src/a.test.ts:0:'
+local MAIN, TEST, T = 'src/main.ts:0:', 'src/a.test.ts:0:', 'src/t.ts:1:t'
 local U = { 'src/u.ts:1:u1', 'src/u.ts:11:u2', 'src/u.ts:21:u3', 'src/u.ts:31:u4' }
 local function graph()
   local list = {
@@ -47,7 +47,8 @@ local function graph()
     node(F, nil, { { B, 2, 3 } }),
     node(S, nil, { { D, 2, 3 } }),
     node(MAIN, 'module', { { A, 3, 1 } }),
-    node(TEST, 'module', { { A, 5, 1 }, { B, 9, 1 } }),
+    node(TEST, 'module', { { A, 5, 1 }, { B, 9, 1 }, { T, 12, 1 } }),
+    node(T),
   }
   for i, u in ipairs(U) do
     list[#list + 1] = node(u, nil, { { S, i * 10 - 8, 3 } })
@@ -110,7 +111,7 @@ eq(#tests == 1 and tests[1].id, TEST, 'the test that calls b, apart')
 
 -- roots: what nothing calls, tests apart
 local roots, troots = calls.roots(g)
-eq(roots, { MAIN, U[1], U[2], U[3], U[4] }, 'roots')
+eq(roots, { MAIN, T, U[1], U[2], U[3], U[4] }, 'roots: what nothing calls, a test aside')
 eq(troots, { TEST }, 'test roots')
 
 -- the budget: whole levels; 4 rows, then b and c open (3 more), then e (1), then f (1)
@@ -245,8 +246,8 @@ do
   eq(r.rows[#r.rows].fold, 'folded', 'and folded')
   local _, d = find(r, 'dir:src')
   eq(d.kind, 'dir', 'the folder')
-  -- 8 rows of skeleton, 5 more for the first level
-  eq({ calls.rows(g, calls.new(nil), 12, M).levels, calls.rows(g, calls.new(nil), 13, M).levels }, { 0, 1 }, 'the budget pays for the folders too')
+  -- 10 rows of skeleton, 5 more for the first level
+  eq({ calls.rows(g, calls.new(nil), 14, M).levels, calls.rows(g, calls.new(nil), 15, M).levels }, { 0, 1 }, 'the budget pays for the folders too')
 end
 
 io.stdout:write(('calls: %d checks, %d failures\n'):format(checks, #failures))

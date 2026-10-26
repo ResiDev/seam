@@ -322,6 +322,160 @@ do
   seam.lens_changed()
 end
 
+-- the call tree: its four windows on its own buffers, the list its rows with
+-- the cursor on the row the view says, the call lit beside it, the budget
+-- inside the window, called by drawn upward
+local function check_calls(fresh)
+  if st.screen ~= 'calls' or not st.calls then
+    return fail 'not on the Calls screen'
+  end
+  local w, r = st.cwin, st.calls_rows
+  for _, k in ipairs { 'head', 'pin', 'list', 'code' } do
+    if not valid(w[k]) or api.nvim_win_get_buf(w[k]) ~= st.cbuf[k] then
+      return fail('the ' .. k .. ' window is not there with its buffer')
+    end
+  end
+  if #api.nvim_tabpage_list_wins(st.tab) ~= 4 then
+    fail(('%d windows on the Calls screen, not 4'):format(#api.nvim_tabpage_list_wins(st.tab)))
+  end
+  local pad = st.calls_pad or 0
+  if api.nvim_buf_line_count(st.cbuf.list) ~= pad + math.max(1, #r.rows) then
+    fail 'the list is not its rows'
+  end
+  local i = api.nvim_win_get_cursor(w.list)[1] - pad
+  local x = r.rows[i]
+  if #r.rows > 0 and not x then
+    return fail 'the cursor is off the rows'
+  end
+  if x and x.key ~= st.calls.cursor then
+    fail('the cursor is on ' .. x.key:gsub('\n', ' > ') .. ', the view on ' .. tostring(st.calls.cursor):gsub('\n', ' > '))
+  end
+  if x and x.id and x.from then
+    local lit = false
+    for _, mk in ipairs(api.nvim_buf_get_extmarks(st.cbuf.code, require('seam.draw').ns, 0, -1, { details = true })) do
+      lit = lit or mk[4].line_hl_group == 'SeamLit'
+    end
+    if not lit then
+      fail('no call lit in the code beside ' .. x.key:gsub('\n', ' > '))
+    end
+  end
+  if fresh and r.levels > 0 and #r.rows > api.nvim_win_get_height(w.list) then
+    fail(('the budget opened %d levels into %d rows, %d high'):format(r.levels, #r.rows, api.nvim_win_get_height(w.list)))
+  end
+  if st.calls.dir == 'up' and st.calls.anchor then
+    for j, y in ipairs(r.rows) do
+      if y.parent and y.parent <= j then
+        return fail 'going up, a caller sits below what it calls'
+      end
+    end
+    if #r.rows > 0 and r.rows[#r.rows].parent then
+      fail 'going up, the last row does not call the anchor'
+    end
+  end
+end
+
+do
+  local g = st.models[st.cur].graph
+  if not g then
+    fail 'the index has no call graph'
+  else
+    local function on_screen(c)
+      require('seam.draw.explorer').list()
+      st.shown = nil
+      api.nvim_set_current_win(st.win.list)
+      return screen.find(c.name, c.path)
+    end
+    local list = {}
+    for _, c in ipairs(st.models[st.cur].contracts) do
+      if g.nodes[c.id] and #(g.down[c.id] or {}) > 0 then
+        list[#list + 1] = c
+      end
+    end
+    local n = math.min(#list, max > 0 and max or #list)
+    for ci = 1, n do
+      local c = list[math.floor((ci - 1) * #list / n) + 1]
+      where = 'calls ' .. c.id
+      if on_screen(c) then
+        key 'c'
+        check_calls(true)
+        for _, k in ipairs { 'j', 'l', 'l', 'h', 'h', 'L', 'H', ']', '[', 'j', 'j', 'k', 'l' } do
+          where = 'calls ' .. c.id .. ' ' .. k
+          key(k)
+          check_calls(false)
+        end
+        for _, k in ipairs { '<CR>', '~' } do
+          where = 'calls ' .. c.id .. ' ' .. k
+          key(k)
+          check_calls(true)
+        end
+        for _, k in ipairs { 'k', 'l', 'k', 'L', ']', 'H', '[', '-', 'j', 'l', 'j' } do
+          where = 'calls ' .. c.id .. ' ' .. k
+          key(k)
+          check_calls(false)
+        end
+        where = 'calls ' .. c.id .. ' back'
+        for _ = 1, 10 do
+          if st.screen ~= 'calls' then
+            break
+          end
+          key '<BS>'
+        end
+        if st.screen ~= 'explorer' or st.shown ~= c then
+          fail(
+            ('<BS> came back to %s, not the explorer on %s'):format(st.screen == 'explorer' and (st.shown and st.shown.name or 'nothing') or st.screen, c.name)
+          )
+        end
+      end
+    end
+    where = 'calls from the top'
+    key 'C'
+    check_calls(true)
+    for _, k in ipairs { 'j', 'j', 'l', 'L', 'H', '<BS>' } do
+      key(k)
+    end
+    if st.screen ~= 'explorer' then
+      fail '<BS> from the top did not come back to the explorer'
+    end
+    -- the repository the design was drawn on: its facts, and on screen
+    local start = 'packages/core/src/run/run.ts:83:startRun'
+    if g.nodes[start] then
+      where = 'calls raf-run-redesign'
+      local callees = {}
+      for _, e in ipairs(g.down[start]) do
+        callees[e.to] = true
+      end
+      if vim.tbl_count(callees) ~= 29 then
+        fail(('startRun calls %d, not 29'):format(vim.tbl_count(callees)))
+      end
+      local hit = false
+      for _, u in ipairs(g.up['packages/core/src/run/run.ts:75:createRun'] or {}) do
+        hit = hit or (g.nodes[u.from].name == 'useOwnedRun' and u.line == 59 and g.nodes[u.from].path:match 'useRun%.ts$' ~= nil)
+      end
+      if not hit then
+        fail 'useOwnedRun does not call createRun at useRun.ts:59'
+      end
+      local main = g.down['apps/demo/app/main.tsx:0:'] or {}
+      if not (main[1] and g.nodes[main[1].to].name == 'App') then
+        fail "main.tsx's top does not call <App>"
+      end
+      if on_screen(st.models[st.cur].byid[start]) then
+        key 'c'
+        local top = 0
+        if not st.calls_rows then
+          fail 'c did not open the Calls screen on startRun'
+        end
+        for _, x in ipairs(st.calls_rows and st.calls_rows.rows or {}) do
+          top = top + (x.parent and 0 or 1)
+        end
+        if top ~= 29 then
+          fail(('startRun shows %d rows under it, not 29'):format(top))
+        end
+        key '<BS>'
+      end
+    end
+  end
+end
+
 -- every contract's page, or a spread of them
 local contracts = {}
 for _, c in pairs(st.models[st.cur].byid) do

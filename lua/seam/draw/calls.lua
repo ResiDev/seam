@@ -1,0 +1,426 @@
+-- The Calls screen drawn: its head, the anchor pinned above the tree going
+-- down and below it going up, the tree, and the code of the row under the
+-- cursor: where it is called, then its own body.
+local api = vim.api
+local calls = require 'seam.calls'
+local code = require 'seam.code'
+local draw = require 'seam.draw'
+local index = require 'seam.index'
+local theme = require 'seam.theme'
+local tree = require 'seam.tree'
+local M = {}
+
+local row, trunc, shape = draw.row, draw.trunc, draw.shape
+
+-- the tree's width, and where its columns end or start
+M.LW = 86
+local COUNT_END, USED_END, FILE_AT, LINE_AT = 52, 61, 64, 79
+
+local function base(path)
+  return path:match '[^/]+$' or path
+end
+
+local function label(node)
+  return node.kind == 'module' and base(node.path) or shape(node)
+end
+
+-- a node's name in the shape of its kind, coloured as its declaration is
+local function name(r, node, hl, room)
+  if node.kind == 'module' then
+    return r:add(trunc(base(node.path), room), hl)
+  end
+  local s = shape(node)
+  local pre, post = s:match('^(.-)' .. vim.pesc(node.name) .. '(.*)$')
+  if not pre or api.nvim_strwidth(s) > room then
+    return r:add(trunc(s, room), hl)
+  end
+  r:add(pre, hl)
+  code.add_name(r, node.path, node.line, node.name, hl, room)
+  return r:add(post, hl)
+end
+
+local function titles(view)
+  local r = row()
+  local word = view.dir == 'up' and 'above' or 'below'
+  r:to(COUNT_END - #word):add(word, 'SeamLabel')
+  r:to(USED_END - 7):add('used by', 'SeamLabel')
+  r:to(FILE_AT):add('file', 'SeamLabel')
+  r:to(LINE_AT):add('line', 'SeamLabel')
+  return r
+end
+
+-- callers or callees by name, then where, one after another to `w`: a
+-- caller where it makes the call, a callee where it is declared
+local function names(r, g, list, w, at_call)
+  for j, e in ipairs(list) do
+    local node = g.nodes[e.id]
+    local line = at_call and e.lines[1] or node.line
+    local where = ' ' .. base(node.path) .. (line > 0 and ':' .. line or '')
+    local need = api.nvim_strwidth(label(node)) + #where + (node.exported and 0 or 6) + 3
+    if r.w + need > w - 12 and j > 1 then
+      r:add(('   +%d more'):format(#list - j + 1), 'SeamLabel')
+      return
+    end
+    if j > 1 then
+      r:add(' · ', 'SeamLabel')
+    end
+    name(r, node, 'SeamName', w)
+    if not node.exported and node.kind ~= 'module' then
+      r:add(' local', 'SeamDim')
+    end
+    r:add(where, 'SeamPath')
+  end
+end
+
+--- The head: where it is, the budget, and the shared functions left folded.
+---@param buf integer
+---@param g seam.Graph
+---@param view seam.CallsView
+---@param r seam.CallRows
+---@param width integer
+function M.head(buf, g, view, r, width)
+  local m = index.model()
+  local visible = m.visible and function(p)
+    return m.visible(p, 'contracts')
+  end
+  local a = view.anchor and g.nodes[view.anchor]
+  local h = row():add(' Seams', 'SeamLabel'):add(' › ', 'SeamLabel')
+  local right
+  if a then
+    name(h, a, 'SeamBold', 60)
+    h:add('   ' .. (a.kind == 'module' and 'top of the file' or a.kind) .. ' in ', 'SeamLabel')
+    draw.path(h, a.path, a.line > 0 and a.line or nil)
+    local n = view.dir == 'up' and calls.above(g, a.id, visible) or calls.below(g, a.id, visible)
+    right = ('budget %d rows  ·  depth %d shown  ·  %d %s'):format(view.height or 0, r.levels + 1, n, view.dir == 'up' and 'above' or 'below')
+  else
+    h:add('from the top', 'SeamBold'):add('   every place the code starts, and what each one calls', 'SeamLabel')
+    local roots = calls.roots(g, visible)
+    right = ('budget %d rows  ·  %s open  ·  %d starts'):format(view.height or 0, r.levels == 0 and 'none' or draw.plural(r.levels, 'level'), #roots)
+  end
+  h:to(width - 2 - api.nvim_strwidth(right)):add(right, 'SeamLabel')
+  local t = row():add('  '):add(' Calls ', 'SeamTab'):add '    '
+  if #r.shared > 0 then
+    t:add('shared, never opened: ', 'SeamLabel')
+    for j, id in ipairs(r.shared) do
+      local node = g.nodes[id]
+      local add = label(node) .. ' ' .. calls.used_by(g, id, visible)
+      if t.w + api.nvim_strwidth(add) + 12 > width then
+        t:add(('  +%d more'):format(#r.shared - j + 1), 'SeamLabel')
+        break
+      end
+      if j > 1 then
+        t:add '   '
+      end
+      name(t, node, 'SeamName', 40)
+      t:add(' ' .. calls.used_by(g, id, visible), 'SeamLabel')
+    end
+  end
+  local rows = { h, t }
+  if view.dir == 'up' and view.anchor then
+    rows[3] = titles(view)
+  end
+  draw.put(buf, rows)
+  return #rows
+end
+
+--- The anchor pinned: going down, who calls it, it, then the column titles;
+--- going up, it, then what it calls. From the top, what the roots are.
+---@param buf integer
+---@param g seam.Graph
+---@param view seam.CallsView
+---@return integer rows
+function M.pin(buf, g, view)
+  local m = index.model()
+  local visible = m.visible and function(p)
+    return m.visible(p, 'contracts')
+  end
+  local rows = {}
+  local a = view.anchor and g.nodes[view.anchor]
+  if not a then
+    rows = { row():add('where the code starts: nothing calls these', 'SeamLabel'), titles(view) }
+    draw.put(buf, rows)
+    return #rows
+  end
+  local function others(dir, word, none)
+    local r = row()
+    local list, tests = calls.kids(g, a.id, dir, visible)
+    vim.list_extend(list, tests)
+    if #list == 0 then
+      return r:add(none, 'SeamLabel')
+    end
+    r:add(word, 'SeamLabel')
+    names(r, g, list, M.LW, dir == 'up')
+    return r
+  end
+  local me = row():add('━ ', 'SeamTitle')
+  name(me, a, 'SeamBold', 50)
+  local where = a.line > 0 and (':' .. a.line .. '-' .. a.end_line) or ''
+  me:add('  ' .. base(a.path) .. where, 'SeamPath')
+  if view.dir == 'up' then
+    local n = calls.used_by(g, a.id, visible)
+    me:add(('   called by %d  ·  %d above'):format(n, calls.above(g, a.id, visible)), 'SeamLabel')
+    rows = { me, others('down', '↓ calls ', '↓ calls nothing') }
+  else
+    local kids = calls.kids(g, a.id, 'down', visible)
+    me:add(('   calls %d  ·  %d below'):format(#kids, calls.below(g, a.id, visible)), 'SeamLabel')
+    rows = { others('up', '↑ called by ', '↑ nothing calls it'), me, titles(view) }
+  end
+  draw.put(buf, rows)
+  return #rows
+end
+
+-- the guides down the left, from its parents' places among their siblings
+local function guides(r, rows, x, up, anchored)
+  local chain, p = {}, x.parent
+  while p do
+    table.insert(chain, 1, rows[p])
+    p = rows[p].parent
+  end
+  for j = anchored and 1 or 2, #chain do
+    r:add(chain[j].last and '  ' or '│ ', 'SeamDim')
+  end
+  if anchored or x.parent then
+    r:add(x.last and (up and '┌ ' or '└ ') or '├ ', 'SeamDim')
+  end
+end
+
+local function columns(r, x)
+  if x.fold == 'also' then
+    r:to(FILE_AT):add('↑ also at :' .. (x.also_line or '?'), 'SeamLabel')
+    return r:to(LINE_AT):add(':' .. x.lines[1], 'SeamPath')
+  end
+  if x.count and x.count > 0 then
+    local s = tostring(x.count)
+    r:to(COUNT_END - #s):add(s, 'SeamText')
+  end
+  if x.used_by and x.used_by > 0 then
+    local s = tostring(x.used_by)
+    r:to(USED_END - #s):add(s, 'SeamText')
+  end
+  if x.show_file and x.path and not x.id:match ':0:$' then
+    r:to(FILE_AT):add(trunc(base(x.path), LINE_AT - FILE_AT - 1), 'SeamPath')
+  end
+  local l = x.lines[1]
+  if l and l > 0 then
+    r:to(LINE_AT):add(':' .. l, 'SeamPath')
+  end
+end
+
+--- The tree: a row each, `pad` empty rows over it.
+---@param buf integer
+---@param g seam.Graph
+---@param view seam.CallsView
+---@param r seam.CallRows
+---@param pad integer
+function M.list(buf, g, view, r, pad)
+  local m = index.model()
+  local up, anchored = view.dir == 'up' and view.anchor ~= nil, view.anchor ~= nil
+  local out = {}
+  for _ = 1, pad do
+    out[#out + 1] = row()
+  end
+  for i, x in ipairs(r.rows) do
+    local node = x.id and g.nodes[x.id]
+    local pkg = x.pkg or (x.path and index.pkg_of(m, x.path))
+    local d = row { i = i, key = x.key }
+    if x.kind == 'dir' and not x.touched then
+      d:add ' '
+    else
+      tree.bar(d, pkg)
+    end
+    guides(d, r.rows, x, up, anchored)
+    local folded = x.fold == 'folded' or (x.kind == 'dir' and not x.touched)
+    d:add(x.fold == 'open' and '▾ ' or folded and '▸ ' or '  ', 'SeamLabel')
+    local room = COUNT_END - 6 - d.w
+    if x.kind == 'dir' then
+      if not x.touched then
+        d:add(x.segs[1] .. '/', 'SeamDim')
+      else
+        for j, sg in ipairs(x.segs) do
+          d:add(sg .. '/', j == 1 and x.ispkg and theme.hue(x.pkg).name or 'SeamPath')
+        end
+      end
+    elseif x.kind == 'tests' then
+      d:add('tests', 'SeamTest'):add('  ' .. draw.plural(x.files, 'file'), 'SeamLabel')
+    elseif x.kind == 'file' and not node then
+      d:add(trunc(base(x.path), room), index.is_test(x.path) and 'SeamTest' or 'SeamPath')
+    else
+      name(d, node, node.test and 'SeamTest' or 'SeamName', room)
+      if x.n > 1 then
+        d:add(' ×' .. x.n, 'SeamLabel')
+      end
+      if node.kind == 'module' then
+        d:add('  top of the file', 'SeamLabel')
+      elseif not node.exported then
+        d:add(' local', 'SeamDim')
+      end
+      columns(d, x)
+    end
+    out[#out + 1] = d
+  end
+  if #r.rows == 0 then
+    out[#out + 1] = row():add('  calls nothing', 'SeamLabel')
+  end
+  draw.put(buf, out)
+end
+
+-- lines s..e to show around `want`, `max` at most: those, and as many lines
+-- either side as fit
+local function around(s, e, want, max)
+  local ls = vim.tbl_keys(want)
+  table.sort(ls)
+  for radius = 3, 0, -1 do
+    local set, n = {}, 0
+    for _, l in ipairs(ls) do
+      for k = math.max(s, l - radius), math.min(e, l + radius) do
+        if not set[k] then
+          set[k], n = true, n + 1
+        end
+      end
+    end
+    if n <= max or radius == 0 then
+      return set
+    end
+  end
+end
+
+-- code rows of `path` for the lines in `set`, a ⋯ between runs; `lit`
+-- lines lit, with `mark(r, start, src, l)` underlining on each row
+local function code_rows(out, path, set, lit, mark)
+  local lines = vim.tbl_keys(set)
+  table.sort(lines)
+  local gw = math.max(3, #tostring(lines[#lines] or 1))
+  local P = code.file(path)
+  local first, prev
+  for _, l in ipairs(lines) do
+    if prev and l > prev + 1 then
+      out[#out + 1] = row():add(string.rep(' ', gw) .. '⋯', 'SeamLabel')
+    end
+    local cr = row { kind = 'code', lnum = l }
+    cr:add(string.format(' %' .. gw .. 'd  ', l), 'SeamGutter')
+    local start = cr.b
+    code.add(cr, path, l)
+    if lit[l] then
+      cr.line_hl = 'SeamLit'
+      first = first or #out + 1
+    end
+    mark(cr, start, P.lines[l] or '', l)
+    out[#out + 1] = cr
+    prev = l
+  end
+  return first
+end
+
+--- The code of row `i`: where it is called, lit, then its own body with what
+--- it calls underlined. Going up the call is in its own body, lit there.
+---@param buf integer
+---@param win integer|nil
+---@param g seam.Graph
+---@param view seam.CallsView
+---@param r seam.CallRows
+---@param i integer|nil
+function M.pane(buf, win, g, view, r, i)
+  local x = i and r.rows[i]
+  local out = { row() }
+  local function head(node)
+    local h = row():add ' '
+    name(h, node, 'SeamBold', 60)
+    if not node.exported and node.kind ~= 'module' then
+      h:add(' local', 'SeamDim')
+    end
+    h:add('   ' .. (node.kind == 'module' and 'top of the file' or node.kind) .. ' in ', 'SeamLabel')
+    draw.path(h, node.path, node.line > 0 and node.line or nil)
+    out[#out + 1] = h
+  end
+  local node = x and x.id and g.nodes[x.id] or (not x and view.anchor and g.nodes[view.anchor])
+  if not node then
+    if x and x.kind == 'tests' then
+      out[#out + 1] = row():add(' ' .. draw.plural(x.files, 'test file') .. ', each its own start', 'SeamLabel')
+    elseif x and x.path then
+      local h = row():add ' '
+      draw.path(h, x.path .. (x.kind == 'dir' and '/' or ''))
+      out[#out + 1] = h
+    end
+    draw.put(buf, out)
+    return
+  end
+  head(node)
+  local lit, under = {}, {}
+  local from = x and x.from and g.nodes[x.from]
+  local up = view.dir == 'up' and view.anchor
+  if from and not up then
+    -- where its caller calls it
+    out[#out + 1] = row():add(' ' .. label(from) .. ' calls it at ' .. base(from.path) .. ':' .. x.lines[1], 'SeamLabel')
+    out[#out + 1] = row()
+    local want = {}
+    for _, l in ipairs(x.lines) do
+      want[l] = true
+    end
+    local s, e = code.enclosing(from.path, x.lines[1], x.col or 1)
+    code_rows(out, from.path, around(s, e, want, 9), want, function(cr, start, src, l)
+      if want[l] then
+        code.underline(cr, start, src, node.name, l == x.lines[1] and x.col or nil)
+      end
+    end)
+    out[#out + 1] = row()
+    local w = win and api.nvim_win_is_valid(win) and api.nvim_win_get_width(win) or 80
+    out[#out + 1] = row():add(string.rep('─', w - 1), 'SeamSep')
+    out[#out + 1] = row()
+  elseif from and up then
+    out[#out + 1] = row():add(' calls ' .. label(from) .. ' at ' .. base(node.path) .. ':' .. x.lines[1], 'SeamLabel')
+    out[#out + 1] = row()
+    for _, l in ipairs(x.lines) do
+      lit[l] = true
+      under[l] = from.name
+    end
+  elseif x and x.root then
+    out[#out + 1] = row():add(' nothing calls it: the code starts here', 'SeamLabel')
+    out[#out + 1] = row()
+  else
+    out[#out + 1] = row()
+  end
+  -- its own body, each call in it underlined
+  local refs = {}
+  for _, c in ipairs(g.down[node.id] or {}) do
+    refs[c.line] = refs[c.line] or {}
+    table.insert(refs[c.line], { g.nodes[c.to].name, c.col })
+  end
+  local set
+  if node.kind == 'module' then
+    local want = {}
+    for l in pairs(refs) do
+      want[l] = true
+    end
+    for l in pairs(lit) do
+      want[l] = true
+    end
+    set = around(1, #code.file(node.path).lines, want, 60)
+  else
+    set = {}
+    local s, e = code.doc_start(node.path, node.line), math.max(node.end_line or node.line, node.line)
+    for l = s, e do
+      set[l] = true
+    end
+  end
+  local first = code_rows(out, node.path, set, lit, function(cr, start, src, l)
+    for _, ref in ipairs(refs[l] or {}) do
+      if ref[1] ~= under[l] then
+        code.underline(cr, start, src, ref[1], ref[2], 'SeamRef')
+      end
+    end
+    if under[l] then
+      code.underline(cr, start, src, under[l])
+    end
+  end)
+  draw.put(buf, out)
+  if win and api.nvim_win_is_valid(win) then
+    local h = api.nvim_win_get_height(win)
+    if first and first > h - 2 then
+      code.scroll_to(win, first, math.max(1, first - math.floor(h / 3)))
+    else
+      code.scroll_to(win, 1, 1)
+    end
+  end
+end
+
+return M

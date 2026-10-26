@@ -11,6 +11,7 @@ M.index = index.index
 M.find = screen.find
 M.on_move = screen.on_move
 M.open_page = screen.open_page
+M.open_calls = screen.open_calls
 M.overview = screen.overview
 M.lens_changed = screen.lens_changed
 M.open_lens = screen.open_lens
