@@ -4,7 +4,7 @@ STYLUA ?= $(HOME)/.local/share/nvim/mason/bin/stylua
 SEAM_REPO ?= $(CURDIR)/lab/excalidraw
 SEAM_MAX ?= 10
 
-.PHONY: check lint test
+.PHONY: check lint test view
 
 check: lint test
 
@@ -13,3 +13,8 @@ lint:
 
 test:
 	SEAM_REPO=$(SEAM_REPO) SEAM_MAX=$(SEAM_MAX) nvim --headless -c 'luafile tests/check.lua'
+
+# Drive it and see it: STEPS='j; j; <CR>' on REPO, and what it showed after
+# each, as text, a picture and seam.state (tests/view.lua says the rest).
+view:
+	@nvim --headless --clean -l tests/view.lua
