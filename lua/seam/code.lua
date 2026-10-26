@@ -115,6 +115,14 @@ end
 -- buffer row `row` at byte column `dst`.
 local function paint(buf, row, path, lnum, from, dst, len)
   local P = M.file(path)
+  if type(from) == 'string' then
+    -- a name: where its line names it, looked for only once it is in view
+    local at = (P.lines[lnum] or ''):find('%f[%w_$]' .. vim.pesc(from) .. '%f[^%w_$]')
+    if not at then
+      return
+    end
+    from = at - 1
+  end
   captures(P, lnum - 1, lnum - 1)
   local list = P.caps[lnum - 1]
   if not list then
@@ -146,6 +154,26 @@ function M.add(r, path, lnum, trim, maxw)
   r.code = { path, lnum, from, r.b, #text }
   r:add(text)
   return r
+end
+
+--- Add `name` to row `r` coloured as its declaration on line `lnum` of `path`
+--- is, from that line's captures, once in view; as `hl` until then, and where
+--- the line does not name it. Cut to `maxw` it is plain `hl`.
+---@param r table a draw row
+---@param path string|nil
+---@param lnum integer|nil
+---@param name string
+---@param hl string
+---@param maxw integer
+---@return table r
+function M.add_name(r, path, lnum, name, hl, maxw)
+  local w = api.nvim_strwidth(name)
+  if not (path and lnum) or w > maxw then
+    return r:add(w <= maxw and name or vim.fn.strcharpart(name, 0, maxw - 1) .. '…', hl)
+  end
+  r.code = { path, lnum, name, r.b, #name }
+  -- under the captures, for what they leave uncoloured
+  return r:add(name, hl, 90)
 end
 
 --- The rows of copied code now in `buf`, by 0-based row, none painted yet.

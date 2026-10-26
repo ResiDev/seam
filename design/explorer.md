@@ -58,10 +58,14 @@ contract's own package and tests are dimmed, so the bright rows are the uses
 that cross a boundary. `packages/shared` is left uncoloured: the place
 everything uses is the neutral one.
 
-Names are plain. Kind shows in the name's shape, from the LSP's SymbolKind:
-`fn()`, `<Component>`, `Type`. Colouring names by kind was tried and
-dropped: the code colours reuse the package hues, so a blue function read as
-"lives in core".
+Kind shows in the name's shape, from the LSP's SymbolKind: `fn()`,
+`<Component>`, `Type`. A name is coloured as its declaration is in the
+editor, from its line's treesitter captures: a type as a type, a function as a
+function, `UPPER_CASE` as a constant, a plain `const` plain. Colouring by kind
+was dropped once, because the code colours reuse the package hues and a blue
+function read as "lives in core". It came back on 2026-10-26: telling a type
+from a function at a glance was worth more. The clash stands: an orange
+package holds orange constants.
 
 ## Rejected along the way
 
