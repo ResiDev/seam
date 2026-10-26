@@ -357,6 +357,7 @@ local function code_moved(p)
   end
   local cur = api.nvim_win_get_cursor(win)
   p.at = cur
+  draw.cursor_line(win)
   local best, dist
   for i, r in ipairs(p.refs) do
     if r.row == cur[1] then
@@ -461,7 +462,7 @@ local function show_code(p, head)
   local left = split(p.buf.mid, head, 'below', true)
   api.nvim_win_set_height(head, 3)
   local right = split(p.buf.right, left, 'right')
-  winopts(left, true)
+  winopts(left)
   winopts(right)
   wrap(left)
   wrap(right)
@@ -515,6 +516,7 @@ local function show_code(p, head)
   else
     p.enter = nil
     page.empty(p)
+    draw.cursor_line(left)
   end
   paint()
   vim.cmd 'redrawstatus'
@@ -630,7 +632,7 @@ function M.next_use(n)
     return
   end
   local w = p.win.right
-  vim.wo[w].cursorline = true
+  draw.cursor_line(w)
   p.use_i = ((p.use_i or 0) + n - 1) % #p.lit_rows + 1
   local r = p.lit_rows[p.use_i]
   api.nvim_win_set_cursor(w, { r, 0 })
