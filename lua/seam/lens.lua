@@ -223,6 +223,7 @@ function M.apply(lens, m)
     return id and id:match '^(.-):%d+:'
   end
   m.contracts = {}
+  local hidden_files = {}
   for _, e in ipairs(m.exports) do
     e.all_uses = e.all_uses or e.uses
     e.all_deps = e.all_deps or e.deps
@@ -248,10 +249,16 @@ function M.apply(lens, m)
     e.uses, e.deps = uses, deps
     e.nusers, e.nbuilt = vim.tbl_count(files), vim.tbl_count(names)
     e.hidden_users, e.hidden_dep_files = vim.tbl_count(hidden), vim.tbl_count(hidden_deps)
-    if #e.all_uses > 0 and visible(e.path, 'contracts') then
-      m.contracts[#m.contracts + 1] = e
+    if #e.all_uses > 0 then
+      if visible(e.path, 'contracts') then
+        m.contracts[#m.contracts + 1] = e
+      else
+        hidden_files[e.path] = true
+      end
     end
   end
+  -- the files whose contracts the contracts column leaves out
+  m.hidden_files = vim.tbl_count(hidden_files)
 end
 
 --- Every file the index knows: where contracts live and where they are used.

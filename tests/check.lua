@@ -366,9 +366,16 @@ local function check_calls(fresh)
   if #head ~= (#r.shared > 0 and 2 or 1) or api.nvim_win_get_height(w.head) ~= #head then
     fail('the head is not the breadcrumb and the shared line: ' .. table.concat(head, ' | '))
   end
+  -- what the lens keeps out of the tree, on the head from the top, on the
+  -- anchor's line on an anchor; nothing when it keeps nothing out
+  local HIDDEN = '   %+(%d+) hidden  L lens$'
+  local hidden = calls.hidden(st.models[st.cur].graph, st.calls, st.models[st.cur])
   local crumb = not st.calls.anchor and 'where the code starts$' or st.calls.dir == 'up' and '  called by$' or '  calls$'
-  if not (head[1] or ''):match(crumb) then
+  if not (head[1] or ''):gsub(HIDDEN, ''):match(crumb) then
     fail('the breadcrumb does not end ' .. crumb .. ': ' .. tostring(head[1]))
+  end
+  if not st.calls.anchor and tonumber((head[1] or ''):match(HIDDEN) or 0) ~= hidden then
+    fail(('the head does not say %d hidden: %s'):format(hidden, tostring(head[1])))
   end
   if not st.calls.anchor and api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)[1]:match '^%s+below' == nil then
     fail 'from the top, the pin is not the column titles alone'
@@ -378,6 +385,9 @@ local function check_calls(fresh)
     local want = st.calls.dir == 'up' and '↓ calls' or '↑'
     if #pin ~= 3 or pin[1]:sub(1, #want) ~= want or not pin[2]:match '^━' then
       fail('the pin is not the other way, the anchor, the titles: ' .. table.concat(pin, ' | '))
+    end
+    if tonumber((pin[2] or ''):match(HIDDEN) or 0) ~= hidden then
+      fail(('the anchor does not say %d hidden: %s'):format(hidden, tostring(pin[2])))
     end
     local word = st.calls.dir == 'up' and 'above' or 'below'
     if not pin[3]:match(word) then
@@ -756,31 +766,43 @@ do
         check_code(ci)
         key '<BS>'
       end
-      -- a lens hiding react in used by: createRun's callers say one is hidden,
-      -- and the row opens to it
+      -- a lens hiding react in used by: createRun's callers leave useOwnedRun
+      -- out, no row says so, and the anchor counts what the tree lost;
+      -- built from hides nothing, so its calls count nothing
       where = 'calls raf-run-redesign lens'
       local L, saved = require 'seam.lens', st.lens
       st.lens = L.new()
       table.insert(st.lens.rules, { path = 'packages/react/', cols = { used = 'hide' } })
       seam.lens_changed()
-      seam.open_calls 'packages/core/src/run/run.ts:75:createRun'
-      key '~'
-      check_calls(true)
       local create = 'packages/core/src/run/run.ts:75:createRun'
-      local hi, h = find_row(create .. '\nhidden')
-      if not (h and h.kind == 'hidden' and h.fold == 'folded' and h.hidden == 1) then
-        fail "createRun's called by has no folded row of one hidden by the lens"
-      else
-        key(hi .. 'G')
-        key 'l'
-        check_calls(false)
-        local _, u = find_row(create .. '\nhidden\npackages/react/src/useRun.ts:39:useOwnedRun')
-        if not (u and u.hidden) then
-          fail 'l on the hidden row did not open to useOwnedRun'
+      local explorer = require 'seam.draw.explorer'
+      local cr = st.models[st.cur].byid[create]
+      if cr and st.view == 'trees' then
+        explorer.contract(cr)
+        local title = api.nvim_buf_get_lines(st.buf.right, 0, 1, false)[1] or ''
+        if not title:match('   %+' .. cr.hidden_users .. ' hidden  L lens$') or cr.hidden_users < 1 then
+          fail("createRun's used by does not say what the lens hides: " .. title)
+        end
+        if api.nvim_buf_get_lines(st.buf.mid, 0, 1, false)[1]:find 'hidden' then
+          fail "createRun's built from says the lens hides something"
         end
       end
-      if find_row(create .. '\npackages/react/src/useRun.ts:39:useOwnedRun') then
-        fail 'useOwnedRun is still among the callers shown'
+      seam.open_calls(create)
+      key '~'
+      check_calls(true)
+      for _, x in ipairs(st.calls_rows.rows) do
+        if x.id and st.models[st.cur].graph.nodes[x.id].path:match '^packages/react/' then
+          fail(x.key:gsub('\n', ' > ') .. ' is among the callers shown')
+          break
+        end
+      end
+      if calls.hidden(st.models[st.cur].graph, st.calls, st.models[st.cur]) < 1 then
+        fail "createRun's called by does not count useOwnedRun hidden"
+      end
+      key '~'
+      check_calls(true)
+      if api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)[2]:find 'hidden' then
+        fail "createRun's calls say the lens hides something"
       end
       key '<BS>'
       st.lens = saved

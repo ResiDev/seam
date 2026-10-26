@@ -85,7 +85,8 @@ end
 local function built_list(p)
   local c = p.c
   local entries, unresolved, nfiles, nnames = index.deps_by_file(c)
-  local rows = { row(), draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), row() }
+  local rows =
+    { row(), draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), draw.hidden(row(), c.hidden_dep_files or 0, nil, '') }
   vim.list_extend(
     rows,
     tree.rows(index.model(), entries, {
@@ -259,7 +260,8 @@ end
 function M.code(p)
   local c = p.c
   local entries, unresolved, nfiles, nnames = index.deps_by_file(c)
-  local rows = { row(), draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), row() }
+  local rows =
+    { row(), draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), draw.hidden(row(), c.hidden_dep_files or 0, nil, '') }
   local drows, s = decl_rows(c)
   local P = code.file(c.path)
   local refs = {}
@@ -294,7 +296,8 @@ end
 local function used_list(p)
   local c = p.c
   local entries, nfiles = index.uses_by_file(c)
-  local rows = { row(), draw.title('used by', plural(nfiles, 'file') .. ' · ' .. plural(#c.uses, 'reference')), row() }
+  local rows =
+    { row(), draw.title('used by', plural(nfiles, 'file') .. ' · ' .. plural(#c.uses, 'reference')), draw.hidden(row(), c.hidden_users or 0, nil, '') }
   vim.list_extend(
     rows,
     tree.rows(index.model(), entries, {

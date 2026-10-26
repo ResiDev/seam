@@ -71,6 +71,24 @@ function read as "lives in core". It came back on 2026-10-26: telling a type
 from a function at a glance was worth more. The clash stands: an orange
 package holds orange constants.
 
+## The lens
+
+![A lens on](mocks/lens-explorer.png)
+
+The lens (`L`) hides files per column. Each column it took something from
+says so on a line it already has, with one count however many rules there
+are, and `L lens` after it, the key that lists the rules:
+
+- **Contracts**: on the line under its title, `29 files hidden  L lens`, the
+  files whose contracts it leaves out.
+- **Built from** and **used by**: on the title, the files it leaves out of
+  the tree: `used by   3 files · 5 references   +3 hidden  L lens`.
+
+The count is a muted red, apart from the pink package hue; `L lens` is grey.
+A column the lens takes nothing from says nothing. Nothing hidden gets a row:
+the screen never lists the rules or what they hid, the panel does. The mock's
+source is `mocks/src/lens/`.
+
 ## Rejected along the way
 
 Matrices and DSM grids, footprint strips, glyph columns that need a legend,

@@ -178,6 +178,22 @@ function M.source(r)
   end
 end
 
+--- What the lens keeps out of a column, said on a line already there: `n`
+--- in red, `+n hidden` unless `what` words it, and the key that shows why.
+--- Nothing when it hides nothing.
+---@param r table
+---@param n integer
+---@param what? string
+---@param gap? string
+---@return table
+function M.hidden(r, n, what, gap)
+  if n > 0 then
+    r:add(gap or '   ')
+    r:add(what or ('+' .. n .. ' hidden'), 'SeamLensHidden'):add('  L lens', 'SeamLabel')
+  end
+  return r
+end
+
 ---@param text string
 ---@param rest string
 ---@return table

@@ -13,8 +13,10 @@ local ns = api.nvim_create_namespace 'seam.lens'
 ---@field changed fun()   -- the lens changed; filter and redraw behind the panel
 ---@field closed fun()    -- the panel closed
 
-api.nvim_set_hl(0, 'SeamLensOnly', { default = true, link = 'DiagnosticOk' })
-api.nvim_set_hl(0, 'SeamLensHide', { default = true, link = 'DiagnosticError' })
+-- plain for only and the muted red of what the lens hides for hide: green
+-- and bright red would read as package hues
+api.nvim_set_hl(0, 'SeamLensOnly', { default = true, fg = '#c0caf5', bold = true })
+api.nvim_set_hl(0, 'SeamLensHide', { default = true, fg = '#c45c5c' })
 api.nvim_set_hl(0, 'SeamLensOff', { default = true, link = 'Comment' })
 api.nvim_set_hl(0, 'SeamLensAction', { default = true, link = 'Function' })
 api.nvim_set_hl(0, 'SeamLensPattern', { default = true, link = 'Special' })

@@ -823,11 +823,7 @@ function M.calls_status()
   local crumb = {}
   local p = x
   while p do
-    table.insert(
-      crumb,
-      1,
-      p.id and calls_label(g.nodes[p.id]) or p.kind == 'tests' and 'tests' or p.kind == 'hidden' and 'hidden' or vim.fn.fnamemodify(p.path or '', ':t')
-    )
+    table.insert(crumb, 1, p.id and calls_label(g.nodes[p.id]) or p.kind == 'tests' and 'tests' or vim.fn.fnamemodify(p.path or '', ':t'))
     p = p.parent and r.rows[p.parent]
   end
   table.insert(crumb, 1, v.anchor and calls_label(g.nodes[v.anchor]) or 'where the code starts')

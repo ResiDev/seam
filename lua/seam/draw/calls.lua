@@ -6,7 +6,6 @@ local calls = require 'seam.calls'
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
-local lens = require 'seam.lens'
 local theme = require 'seam.theme'
 local tree = require 'seam.tree'
 local M = {}
@@ -89,6 +88,7 @@ function M.head(buf, g, view, r, width)
     h:add(view.dir == 'up' and '  called by' or '  calls', 'SeamTitle')
   else
     h:add('where the code starts', 'SeamBold')
+    draw.hidden(h, calls.hidden(g, view, index.model()))
   end
   local rows = { h }
   if #r.shared > 0 then
@@ -130,16 +130,13 @@ function M.pin(buf, g, view)
   end
   local function others(dir, word, none)
     local r = row()
-    local list, tests, hidden = calls.kids(g, a.id, dir, calls.visible(m, dir))
+    local list, tests = calls.kids(g, a.id, dir, calls.visible(m, dir))
     vim.list_extend(list, tests)
-    if #list + #hidden == 0 then
+    if #list == 0 then
       return r:add(none, 'SeamLabel')
     end
     r:add(word, 'SeamLabel')
-    names(r, g, list, M.LW - (#hidden > 0 and 24 or 0), dir == 'up')
-    if #hidden > 0 then
-      r:add((#list > 0 and '  ·  ' or '') .. #hidden .. ' hidden by the lens', 'SeamDim')
-    end
+    names(r, g, list, M.LW, dir == 'up')
     return r
   end
   local me = row():add('━ ', 'SeamTitle')
@@ -156,6 +153,7 @@ function M.pin(buf, g, view)
     me:add(('   calls %d  ·  %d below'):format(#kids, calls.below(g, a.id, down)), 'SeamLabel')
     rows = { others('up', '↑ called by ', '↑ nothing calls it'), me, titles(view) }
   end
+  draw.hidden(me, calls.hidden(g, view, m))
   draw.put(buf, rows)
   return #rows
 end
@@ -186,9 +184,6 @@ end
 
 local function columns(r, x)
   local text, path = 'SeamText', 'SeamPath'
-  if x.hidden then
-    text, path = 'SeamDim', 'SeamDim'
-  end
   if x.fold == 'also' then
     r:to(math.max(also_at(x), r.w + 2)):add(also(x), 'SeamLabel')
     return r:to(math.max(LINE_AT, r.w + 3)):add(':' .. x.lines[1], 'SeamPath')
@@ -242,13 +237,10 @@ function M.list(buf, g, view, r)
       end
     elseif x.kind == 'tests' then
       d:add('tests', 'SeamTest'):add('  ' .. draw.plural(x.files, 'file'), 'SeamLabel')
-    elseif x.kind == 'hidden' then
-      d:add(x.hidden .. ' hidden by the lens', 'SeamLabel')
     elseif x.kind == 'file' and not node then
       d:add(trunc(base(x.path), room), index.is_test(x.path) and 'SeamTest' or 'SeamPath')
     else
-      d.dim = x.hidden
-      name(d, node, x.hidden and 'SeamDim' or node.test and 'SeamTest' or 'SeamName', room)
+      name(d, node, node.test and 'SeamTest' or 'SeamName', room)
       if x.n > 1 then
         d:add(' ×' .. x.n, 'SeamLabel')
       end
@@ -434,10 +426,6 @@ function M.pane(buf, win, g, view, r, i)
   if not p then
     if x and x.kind == 'tests' then
       out[#out + 1] = row():add(' ' .. draw.plural(x.files, 'test file') .. ', each its own start', 'SeamLabel')
-    elseif x and x.kind == 'hidden' then
-      local way = (view.anchor or x.parent) and view.dir or 'top'
-      local what = draw.plural(x.hidden, ({ down = 'function', up = 'caller', top = 'start' })[way])
-      out[#out + 1] = row():add((' %s hidden by the lens, in its %s column'):format(what, lens.COL_NAME[calls.LENS[way]]), 'SeamLabel')
     elseif x and x.path then
       local h = row():add ' '
       draw.path(h, x.path .. (x.kind == 'dir' and '/' or ''))
