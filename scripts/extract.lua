@@ -1,7 +1,9 @@
 -- nvim --headless --clean -l extract.lua <repo> <out.json>
 -- The treesitter index of a TypeScript repo: every export, the files that
 -- use it and the names it is built from, resolved through relative paths,
--- every tsconfig's `paths` and workspace packages by name.
+-- every tsconfig's `paths` and workspace packages by name; and the call
+-- graph: each function, component and class, and each file's top, with the
+-- callables it names.
 local repo, out = arg[1], arg[2]
 local site = vim.fn.stdpath 'data' .. '/site/parser/'
 local function add_lang(lang)
@@ -335,6 +337,14 @@ for _, path in ipairs(files) do
     LIST[#LIST + 1] = e
   end
 
+  local function remember(n, decl, kind, span)
+    local name = text_of(n, src)
+    if kind == 'function' and lang == 'tsx' and name:match '^%u' then
+      kind = 'component'
+    end
+    f.top[name] = { node = n, decl = decl, kind = kind, span = span or decl }
+  end
+
   local function declare(decl, exported)
     if decl:type() == 'ambient_declaration' then
       decl = decl:named_child(0) or decl
@@ -343,7 +353,7 @@ for _, path in ipairs(files) do
     if kind then
       local n = decl:field('name')[1]
       if n then
-        f.top[text_of(n, src)] = { node = n, decl = decl, kind = kind }
+        remember(n, decl, kind)
         if exported then
           add_export(n, decl, kind)
         end
@@ -354,7 +364,7 @@ for _, path in ipairs(files) do
           local n, v = d:field('name')[1], d:field('value')[1]
           if n and n:type() == 'identifier' then
             local k = (v and (v:type() == 'arrow_function' or v:type() == 'function_expression' or v:type() == 'function')) and 'function' or 'const'
-            f.top[text_of(n, src)] = { node = n, decl = decl, kind = k }
+            remember(n, decl, k, d)
             if exported then
               add_export(n, decl, k)
             end
@@ -419,7 +429,16 @@ for _, path in ipairs(files) do
         end
       elseif decl and not is_default then
         declare(decl, true)
-      elseif not is_default then
+      elseif is_default then
+        -- `export default function App` and `export default App`: App, exported as default
+        local n = decl and decl:field('name')[1] or node:field('value')[1]
+        if decl then
+          declare(decl, false)
+        end
+        if n and (n:type() == 'identifier' or n:type() == 'type_identifier') then
+          f.local_exports[#f.local_exports + 1] = { name = text_of(n, src), as = 'default' }
+        end
+      else
         for c in node:iter_children() do
           if c:type() == 'export_clause' then
             for sp in c:iter_children() do
@@ -465,7 +484,7 @@ for _, path in ipairs(files) do
   end
   f.root = nil
   for k, v in pairs(f.top) do
-    f.top[k] = line_of(v.node)
+    f.top[k] = { line = line_of(v.node), kind = v.kind, span = { v.span:range() }, end_line = (select(1, v.decl:end_())) + 1 }
   end
   for _, e in pairs(f.exports) do
     e._decl = nil
@@ -497,8 +516,9 @@ local function find(path, name, depth)
   if not hit and f then
     for _, r in ipairs(f.reexports) do
       if r.star then
-        hit = find(resolve_spec(path, r.spec), name, depth + 1)
-      elseif r.as == name and r.name ~= '*' and r.name ~= 'default' then
+        -- `export *` leaves the default behind
+        hit = name ~= 'default' and find(resolve_spec(path, r.spec), name, depth + 1) or nil
+      elseif r.as == name and r.name ~= '*' then
         hit = find(resolve_spec(path, r.spec), r.name, depth + 1)
       end
       if hit then
@@ -572,6 +592,37 @@ local function role(node)
   return 'read'
 end
 
+local CALLABLE = { ['function'] = true, component = true, class = true }
+local function is_test(path)
+  return (path:find '%.test%.' or path:find '%.spec%.' or path:find '/__tests__/' or path:find '/tests/') ~= nil
+end
+-- an identifier that declares a name, or sits in `typeof`, names no call
+local function declares(node)
+  local p = node:parent()
+  if not p then
+    return false
+  end
+  local pt = p:type()
+  if pt == 'jsx_closing_element' or pt == 'required_parameter' or pt == 'optional_parameter' then
+    return true
+  end
+  local nm = p:field('name')[1]
+  if nm and nm:id() == node:id() and pt ~= 'jsx_opening_element' and pt ~= 'jsx_self_closing_element' then
+    return true
+  end
+  while p do
+    pt = p:type()
+    if pt == 'type_query' then
+      return true
+    elseif pt:match '_statement$' or pt:match '_declaration$' or pt == 'program' then
+      return false
+    end
+    p = p:parent()
+  end
+  return false
+end
+local NODES = {}
+
 local nuses = 0
 local done = 0
 for path, f in pairs(F) do
@@ -584,15 +635,15 @@ for path, f in pairs(F) do
       if target then
         if im.name == '*' then
           ns[localname] = target
-        elseif im.name ~= 'default' then
+        else
           bound[localname] = find(target, im.name)
         end
       end
     end
   end
   local own = {} -- same-file top-level names -> the export, or where it is declared
-  for name, line in pairs(f.top) do
-    own[name] = f.exports[name] or { id = path .. ':' .. line .. ':' .. name }
+  for name, t in pairs(f.top) do
+    own[name] = f.exports[name] or { id = path .. ':' .. t.line .. ':' .. name, kind = t.kind }
   end
 
   local q = Q[f.lang]
@@ -639,6 +690,75 @@ for path, f in pairs(F) do
       end
     end
   end
+  -- calls: each callable named in a value position, in source order
+  local function calls_in(node, out)
+    local sr, _, er = node:range()
+    local at
+    for cid, n in q:iter_captures(node, f.src, sr, er + 1) do
+      local cap = q.captures[cid]
+      local hit
+      if cap == 'id' and n:type() ~= 'type_identifier' then
+        local txt = text_of(n, f.src)
+        hit = bound[txt] or own[txt]
+      elseif cap == 'ns' then
+        at = ns[text_of(n, f.src)]
+      elseif cap == 'prop' and at then
+        hit, at = find(at, text_of(n, f.src)), nil
+      end
+      if hit and CALLABLE[hit.kind] and not declares(n) then
+        local l, c = n:start()
+        out[#out + 1] = { hit.id, l + 1, c + 1 }
+      end
+    end
+    return out
+  end
+  for name, t in pairs(f.top) do
+    if CALLABLE[t.kind] then
+      local s = t.span
+      local id = path .. ':' .. t.line .. ':' .. name
+      NODES[#NODES + 1] = {
+        id = id,
+        name = name,
+        kind = t.kind,
+        path = path,
+        line = t.line,
+        end_line = t.end_line,
+        exported = EXPORTS[id] ~= nil,
+        calls = calls_in(f.root:named_descendant_for_range(s[1], s[2], s[3], s[4]), {}),
+      }
+    end
+  end
+  -- the file's top: what runs when it loads, outside every callable
+  local calls = {}
+  local function owns(decl)
+    if decl:type() == 'lexical_declaration' or decl:type() == 'variable_declaration' then
+      for d in decl:iter_children() do
+        local v = d:type() == 'variable_declarator' and d:field('value')[1]
+        if v and not (v:type() == 'arrow_function' or v:type() == 'function_expression' or v:type() == 'function') then
+          calls_in(v, calls)
+        end
+      end
+    end
+  end
+  for node in f.root:iter_children() do
+    local ty = node:type()
+    if ty == 'export_statement' then
+      local decl, v = node:field('declaration')[1], node:field('value')[1]
+      if decl then
+        owns(decl)
+      elseif v and v:type() ~= 'identifier' then
+        calls_in(v, calls)
+      end
+    elseif ty == 'lexical_declaration' or ty == 'variable_declaration' then
+      owns(node)
+    elseif not (KIND[ty] or ty == 'import_statement' or ty == 'ambient_declaration' or ty == 'comment') then
+      calls_in(node, calls)
+    end
+  end
+  if #calls > 0 or is_test(path) then
+    local last = select(1, f.root:end_())
+    NODES[#NODES + 1] = { id = path .. ':0:', name = '', kind = 'module', path = path, line = 0, end_line = last + 1, exported = false, calls = calls }
+  end
   f.root, f.src = nil, nil
   done = done + 1
   if done % 400 == 0 then
@@ -666,14 +786,18 @@ table.sort(exports, function(a, b)
   return a.id < b.id
 end)
 local fh = assert(io.open(out, 'w'))
+table.sort(NODES, function(a, b)
+  return a.id < b.id
+end)
 fh:write(vim.json.encode {
   source = 'treesitter',
-  version = 2,
+  version = 3,
   repo = repo,
   ms = timing,
   packages = pkgs,
   exports = exports,
-  notes = { 'imports resolved by relative path and tsconfig paths only; a local that shadows an imported name still counts; default exports skipped' },
+  nodes = NODES,
+  notes = { 'imports resolved by relative path and tsconfig paths only; a local that shadows an imported or top-level name still counts' },
 })
 fh:close()
 local used = 0
@@ -683,5 +807,12 @@ for _, e in ipairs(exports) do
   end
 end
 io.stderr:write(
-  ('treesitter: %d files, %d exports, %d used outside their file, %d uses; %s\n'):format(#files, #exports, used, nuses, vim.inspect(timing):gsub('%s+', ' '))
+  ('treesitter: %d files, %d exports, %d used outside their file, %d uses, %d callables; %s\n'):format(
+    #files,
+    #exports,
+    used,
+    nuses,
+    #NODES,
+    vim.inspect(timing):gsub('%s+', ' ')
+  )
 )
