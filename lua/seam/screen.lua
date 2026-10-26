@@ -152,7 +152,7 @@ function M.status()
     end
     hints[#hints + 1] = '<Tab> ' .. (p.tab == 'built' and 'used by' or 'built from')
     if #st.stack > 0 then
-      hints[#hints + 1] = 'K ' .. shape(st.stack[#st.stack].c)
+      hints[#hints + 1] = 'K ' .. draw.trail(st.stack[#st.stack])
     end
     hints[#hints + 1] = (#st.stack > 0 and '- ' or 'K ') .. 'overview'
     right = table.concat(hints, '   ')
@@ -345,7 +345,7 @@ local function selected(p)
   vim.cmd 'redrawstatus'
 end
 
-local show_page
+local show_page, show_calls
 
 --- Is the page showing Built from as code, the contract read top to bottom?
 ---@param p table
@@ -676,23 +676,48 @@ function M.page_enter()
   end
 end
 
---- Open contract `c`'s page, over the page shown if there is one.
+-- What K comes back to from a page, kept in `st.stack` under it: another
+-- page, or the Calls screen as it was, each tagged with its kind.
+local function calls_entry()
+  local v = st.calls
+  local g = index.model().graph
+  local a = v.anchor and g.nodes[v.anchor]
+  local w = st.cwin and st.cwin.list
+  return {
+    kind = 'calls',
+    calls = v,
+    top = w and api.nvim_win_is_valid(w) and api.nvim_win_call(w, function()
+      return vim.fn.line 'w0'
+    end) or nil,
+    label = a and ('calls of ' .. (a.kind == 'module' and vim.fn.fnamemodify(a.path, ':t') or shape(a))) or 'calls from the top',
+  }
+end
+
+--- Open contract `c`'s page, over the page or Calls screen shown if there is one.
 ---@param c table
 function M.open_page(c)
   if st.page then
     st.stack[#st.stack + 1] = st.page
+  elseif st.screen == 'calls' and st.calls then
+    st.stack[#st.stack + 1] = calls_entry()
+    st.calls, st.calls_rows = nil, nil
   else
     st.explorer_at = st.shown
   end
   local tab = (st.sides == 'used' or #c.deps == 0) and c.nusers > 0 and 'used' or 'built'
-  st.page = { c = c, tab = tab, sel = {} }
+  st.page = { kind = 'page', c = c, tab = tab, sel = {} }
   show_page()
 end
 
---- Back: the previous page, or the explorer.
+--- Back: the previous page or Calls screen, or the explorer.
 function M.back()
-  if #st.stack > 0 then
-    st.page = table.remove(st.stack)
+  local e = table.remove(st.stack)
+  if e and e.kind == 'calls' then
+    st.page = nil
+    st.calls, st.calls_top = e.calls, e.top
+    show_calls()
+  elseif e then
+    st.page = e
     show_page()
   else
     st.page = nil
@@ -742,7 +767,9 @@ function M.switch()
       return
     end
     for _, sp in ipairs(st.stack) do
-      sp.c = find(sp.c) or sp.c
+      if sp.kind == 'page' then
+        sp.c = find(sp.c) or sp.c
+      end
     end
     if st.explorer_at then
       st.explorer_at = find(st.explorer_at) or st.explorer_at
@@ -757,8 +784,6 @@ function M.switch()
 end
 
 ---------------------------------------------------------------- calls
-
-local show_calls
 
 local function calls_valid()
   local w = st.cwin
@@ -815,11 +840,14 @@ function M.calls_status()
     table.sort(sibs)
     left = left .. ('  %d of %d'):format(vim.fn.index(sibs, i) + 1, #sibs)
   end
-  local hints = { 'j/k row', 'h fold', 'l open', '[ ] sibling', 'L open all', 'H as it opened' }
+  if calls_valid() and api.nvim_get_current_win() == st.cwin.code then
+    return left, table.concat({ '<Esc> the tree', 'K back', '- explorer', 'q close' }, '   ')
+  end
+  local hints = { 'j/k row', 'h fold', 'l open', 'J page', 'K back' }
   if v.anchor then
     hints[#hints + 1] = v.dir == 'up' and '~ calls' or '~ called by'
   end
-  vim.list_extend(hints, { '<CR> anchor here', '- from the top', '<BS> back' })
+  vim.list_extend(hints, { '<CR> anchor here', '[ ] sibling', 'L open all', 'H as it opened', '- explorer', 'C from the top' })
   return left, table.concat(hints, '   ')
 end
 
@@ -827,7 +855,7 @@ local function calls_layout()
   if st.screen == 'calls' and calls_valid() then
     return
   end
-  st.screen = 'calls'
+  st.screen, st.cwin = 'calls', nil
   local head = reset_tab()
   api.nvim_win_set_buf(head, st.cbuf.head)
   local list = split(st.cbuf.list, head, 'below', true)
@@ -897,9 +925,10 @@ show_calls = function()
   calls_draw.pin(st.cbuf.pin, g, v)
   local w = st.cwin.list
   local same = st.calls_drawn == (v.anchor or '') .. v.dir
-  local top = same and api.nvim_win_call(w, function()
+  local top = st.calls_top or same and api.nvim_win_call(w, function()
     return vim.fn.line 'w0'
   end) or nil
+  st.calls_top = nil
   st.drawing = true
   calls_draw.list(st.cbuf.list, g, v, r)
   api.nvim_win_call(w, function()
@@ -919,6 +948,31 @@ local function calls_leave()
   paint()
 end
 
+-- a contract the explorer lists and a page shows: an export used from another file
+local function contract_of(id)
+  local c = id and index.model().byid[id]
+  return c and (c.nusers or 0) > 0 and c or nil
+end
+
+-- straight to the explorer, on the anchor when it is a contract
+local function calls_overview()
+  st.explorer_at = contract_of(st.calls and st.calls.anchor) or st.explorer_at
+  calls_leave()
+end
+
+-- the contract page of the row's function; one line saying why when it has none
+local function calls_page()
+  local x = st.calls_rows and st.calls_rows.rows[calls_at()]
+  local id = x and x.id
+  local c = contract_of(id)
+  if c then
+    return M.open_page(c)
+  end
+  local node = id and index.model().graph.nodes[id]
+  local what = node and calls_label(node) or 'this row'
+  api.nvim_echo({ { what .. ' has no page: only exported functions used from another file do', 'SeamLabel' } }, false, {})
+end
+
 local function calls_keys(buf)
   local o = { buffer = buf, nowait = true, silent = true }
   local function press(k, times)
@@ -936,14 +990,15 @@ local function calls_keys(buf)
       end
     end
   end
-  for _, k in ipairs { 'l', 'h', 'L', 'H', ']', '[', '<CR>', '~', '<BS>', '-' } do
+  for _, k in ipairs { 'l', 'h', 'L', 'H', ']', '[', '<CR>', '~', '<BS>', 'K', 'C' } do
     vim.keymap.set('n', k, press(k), o)
   end
   vim.keymap.set('n', 'j', press('j', true), o)
   vim.keymap.set('n', 'k', press('k', true), o)
   vim.keymap.set('n', '<Down>', press 'j', o)
   vim.keymap.set('n', '<Up>', press 'k', o)
-  vim.keymap.set('n', 'K', '<Nop>', o)
+  vim.keymap.set('n', 'J', calls_page, o)
+  vim.keymap.set('n', '-', calls_overview, o)
   vim.keymap.set('n', 'gd', function()
     local g = index.model().graph
     local x = st.calls_rows and st.calls_rows.rows[calls_at()]
@@ -953,6 +1008,31 @@ local function calls_keys(buf)
       M.goto_decl { path = node.path, line = math.max(1, node.line) }
     end
   end, o)
+  vim.keymap.set('n', 'q', M.close, o)
+end
+
+-- the code beside the tree keeps the cursor, to scroll and search it; <Esc>
+-- gives it back to the tree, and the keys that leave work from it too
+local function calls_code_keys(buf)
+  local o = { buffer = buf, nowait = true, silent = true }
+  local function tree()
+    if calls_valid() then
+      api.nvim_set_current_win(st.cwin.list)
+      vim.cmd 'redrawstatus'
+    end
+  end
+  local function back()
+    tree()
+    local m = index.model()
+    if calls.key(m.graph, st.calls, st.calls_rows, calls_at(), '<BS>', calls_height(), m) == 'explorer' then
+      return calls_leave()
+    end
+    show_calls()
+  end
+  vim.keymap.set('n', '<Esc>', tree, o)
+  vim.keymap.set('n', 'K', back, o)
+  vim.keymap.set('n', '<BS>', back, o)
+  vim.keymap.set('n', '-', calls_overview, o)
   vim.keymap.set('n', 'q', M.close, o)
 end
 
@@ -974,9 +1054,27 @@ function M.open_calls(id)
   if not (st.cbuf and api.nvim_buf_is_valid(st.cbuf.list)) then
     st.cbuf = { head = draw.scratch 'calls-head', pin = draw.scratch 'calls-pin', list = draw.scratch 'calls', code = draw.scratch 'calls-code' }
     calls_keys(st.cbuf.list)
-    for _, b in ipairs { st.cbuf.head, st.cbuf.pin, st.cbuf.code } do
+    calls_code_keys(st.cbuf.code)
+    for _, b in ipairs { st.cbuf.head, st.cbuf.pin } do
       vim.keymap.set('n', 'q', M.close, { buffer = b, nowait = true, silent = true })
+      -- nothing to do in the head or the pin: the cursor goes back to the tree
+      api.nvim_create_autocmd('WinEnter', {
+        group = aug,
+        buffer = b,
+        callback = function()
+          if st.screen == 'calls' and calls_valid() then
+            api.nvim_set_current_win(st.cwin.list)
+          end
+        end,
+      })
     end
+    api.nvim_create_autocmd('WinEnter', {
+      group = aug,
+      buffer = st.cbuf.code,
+      callback = function()
+        vim.cmd 'redrawstatus'
+      end,
+    })
     api.nvim_create_autocmd('CursorMoved', { group = aug, buffer = st.cbuf.list, callback = calls_moved })
     api.nvim_create_autocmd('VimResized', {
       group = aug,

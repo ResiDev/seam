@@ -379,6 +379,85 @@ local function check_calls(fresh)
   end
 end
 
+local function find_row(k)
+  for i, x in ipairs(st.calls_rows and st.calls_rows.rows or {}) do
+    if x.key == k then
+      return i, x
+    end
+  end
+end
+
+-- J on a row that is a contract: its page over the tree, and K back to the
+-- tree as it was; on a row that is not, still the tree
+local function page_and_back()
+  local m = st.models[st.cur]
+  local pi, none
+  for i, x in ipairs(st.calls_rows.rows) do
+    local c = x.id and m.byid[x.id]
+    if c and c.nusers > 0 then
+      pi = pi or i
+    else
+      none = none or i
+    end
+  end
+  if none then
+    key(none .. 'G')
+    key 'J'
+    if st.screen ~= 'calls' then
+      fail 'J on a row with no page left the tree'
+    end
+  end
+  if not pi then
+    return
+  end
+  key(pi .. 'G')
+  local v = st.calls
+  local was = { v.anchor, v.dir, vim.deepcopy(v.open), v.cursor, #v.back }
+  local top = api.nvim_win_call(st.cwin.list, function()
+    return vim.fn.line 'w0'
+  end)
+  local want = m.byid[st.calls_rows.rows[pi].id]
+  key 'J'
+  local under = st.stack[#st.stack]
+  if st.screen ~= 'page' or st.page.c ~= want or not (under and under.kind == 'calls') then
+    return fail "J did not open the row's page over the tree"
+  end
+  check_page()
+  key 'K'
+  check_calls(false)
+  local now = st.calls
+  if not vim.deep_equal({ now.anchor, now.dir, now.open, now.cursor, #now.back }, was) then
+    fail 'K from the page did not come back to the tree as it was'
+  end
+  local top2 = api.nvim_win_call(st.cwin.list, function()
+    return vim.fn.line 'w0'
+  end)
+  if top2 ~= top then
+    fail(('K came back scrolled to %d, not %d'):format(top2, top))
+  end
+end
+
+-- the head and the pin give the cursor back to the tree; the code keeps it
+-- until <Esc>
+local function windows()
+  key '<C-w>k'
+  if api.nvim_get_current_win() ~= st.cwin.list then
+    fail 'the pin kept the cursor'
+  end
+  key '<C-w>t'
+  if api.nvim_get_current_win() ~= st.cwin.list then
+    fail 'the head kept the cursor'
+  end
+  key '<C-w>l'
+  if api.nvim_get_current_win() ~= st.cwin.code then
+    fail 'the code did not take the cursor'
+  end
+  key '<Esc>'
+  if api.nvim_get_current_win() ~= st.cwin.list then
+    fail '<Esc> in the code did not go back to the tree'
+  end
+end
+
 do
   local g = st.models[st.cur].graph
   if not g then
@@ -413,31 +492,83 @@ do
           key(k)
           check_calls(true)
         end
-        for _, k in ipairs { 'k', 'l', 'k', 'L', ']', 'H', '[', '-', 'j', 'l', 'j' } do
+        for _, k in ipairs { 'k', 'l', 'k', 'L', ']', 'H', '[', 'C', 'j', 'l', 'j' } do
           where = 'calls ' .. c.id .. ' ' .. k
           key(k)
           check_calls(false)
         end
+        where = 'calls ' .. c.id .. ' J'
+        page_and_back()
+        where = 'calls ' .. c.id .. ' windows'
+        windows()
         where = 'calls ' .. c.id .. ' back'
-        for _ = 1, 10 do
+        for j = 1, 10 do
           if st.screen ~= 'calls' then
             break
           end
-          key '<BS>'
+          -- the first from the code beside the tree
+          if j == 1 then
+            key '<C-w>l'
+          end
+          key(j % 2 == 0 and '<BS>' or 'K')
+          if st.screen == 'calls' and api.nvim_get_current_win() ~= st.cwin.list then
+            fail 'K from the code did not come back to the tree'
+          end
         end
         if st.screen ~= 'explorer' or st.shown ~= c then
           fail(
             ('<BS> came back to %s, not the explorer on %s'):format(st.screen == 'explorer' and (st.shown and st.shown.name or 'nothing') or st.screen, c.name)
           )
         end
+        -- - from deeper: straight to the explorer, on the anchor
+        where = 'calls ' .. c.id .. ' -'
+        on_screen(c)
+        key 'c'
+        local x = st.calls_rows.rows[1]
+        local xc = x and x.id and st.models[st.cur].byid[x.id]
+        if xc and xc.nusers > 0 then
+          key '<CR>'
+          key '-'
+          if st.screen ~= 'explorer' or st.shown ~= xc then
+            fail('- did not go to the explorer on ' .. x.id)
+          end
+        else
+          key '-'
+          if st.screen ~= 'explorer' or st.shown ~= c then
+            fail('- did not go to the explorer on ' .. c.name)
+          end
+        end
       end
     end
     where = 'calls from the top'
     key 'C'
     check_calls(true)
-    for _, k in ipairs { 'j', 'j', 'l', 'L', 'H', '<BS>' } do
+    for _, k in ipairs { 'j', 'j', 'l', 'L', 'H' } do
       key(k)
     end
+    -- h folds an open folder, l opens it again
+    where = 'calls from the top h'
+    local di
+    for i, x in ipairs(st.calls_rows.rows) do
+      di = di or (x.kind == 'dir' and x.fold == 'open' and #x.kids > 0 and i) or nil
+    end
+    if not di then
+      fail 'no open folder from the top'
+    else
+      local dkey, n = st.calls_rows.rows[di].key, #st.calls_rows.rows
+      key(di .. 'G')
+      key 'h'
+      check_calls(false)
+      local _, d = find_row(dkey)
+      if not (d and d.fold == 'folded' and #st.calls_rows.rows < n and st.calls.cursor == dkey) then
+        fail 'h on an open folder did not fold it'
+      end
+      key 'l'
+      if #st.calls_rows.rows ~= n then
+        fail 'l did not open the folder again as it was'
+      end
+    end
+    key '<BS>'
     if st.screen ~= 'explorer' then
       fail '<BS> from the top did not come back to the explorer'
     end
