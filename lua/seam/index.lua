@@ -37,9 +37,9 @@ function M.pkg_of(m, path)
   return p
 end
 
---- The extractor's format: 2 names every place a dependency is used, with its
---- column. An index older than this is made again when seam opens.
-M.VERSION = 2
+--- The extractor's format: 3 adds the call graph, `nodes` and their calls.
+--- An index older than this is made again when seam opens.
+M.VERSION = 3
 
 --- The format of the repo's treesitter index, 0 when there is none.
 ---@param root string
@@ -52,6 +52,41 @@ function M.version(root)
   local s = fh:read '*a'
   fh:close()
   return tonumber(s:match '"version":%s*(%d+)') or 1
+end
+
+--- The call graph from the JSON's nodes: what each calls as written, and who
+--- calls each, by the caller's path then line.
+---@param list table[]
+---@return seam.Graph
+local function graph_of(list)
+  local g = { nodes = {}, down = {}, up = {}, memo = {} }
+  for _, n in ipairs(list) do
+    n.test = M.is_test(n.path)
+    g.nodes[n.id] = n
+  end
+  for _, n in ipairs(list) do
+    local down = {}
+    for _, c in ipairs(n.calls or {}) do
+      if g.nodes[c[1]] then
+        down[#down + 1] = { to = c[1], line = c[2], col = c[3] }
+        local up = g.up[c[1]] or {}
+        g.up[c[1]] = up
+        up[#up + 1] = { from = n.id, line = c[2], col = c[3] }
+      end
+    end
+    g.down[n.id] = down
+    n.calls = nil
+  end
+  for _, up in pairs(g.up) do
+    table.sort(up, function(a, b)
+      local pa, pb = g.nodes[a.from].path, g.nodes[b.from].path
+      if pa ~= pb then
+        return pa < pb
+      end
+      return a.line < b.line or (a.line == b.line and a.col < b.col)
+    end)
+  end
+  return g
 end
 
 local function build(file)
@@ -69,6 +104,7 @@ local function build(file)
     pkgcache = {},
     ispkg = {},
     pkgsorted = {},
+    graph = d.nodes and graph_of(d.nodes) or nil,
   }
   for _, p in ipairs(m.packages) do
     if p ~= '.' and p ~= '' then
