@@ -322,7 +322,8 @@ function M.statement_at(path, line)
 end
 
 --- Underline `name` on a row of code: at byte `col` of its source line
---- `src` when it is there, else its first match on the line.
+--- `src` when it is there, else its first match on the line, else the name
+--- written at `col`.
 ---@param r table a draw row
 ---@param text_start integer the byte the source line starts at in the row
 ---@param src string
@@ -340,6 +341,16 @@ function M.underline(r, text_start, src, name, col, hl)
   end
   if not at then
     at = src:find('%f[%w_$]' .. vim.pesc(name) .. '%f[^%w_$]')
+  end
+  if not at and col then
+    -- imported under another name: the name written at `col`
+    for _, c in ipairs { col, col + 1 } do
+      local w = src:match('^[%a_$][%w_$]*', c)
+      if w and (c == 1 or not src:sub(c - 1, c - 1):match '[%w_$]') then
+        at, name = c, w
+        break
+      end
+    end
   end
   if at then
     r.h[#r.h + 1] = { text_start + at - 1, text_start + at - 1 + #name, hl or 'SeamUse', 320 }
@@ -359,6 +370,43 @@ function M.scroll_to(win, lnum, top)
   api.nvim_win_call(win, function()
     vim.fn.winrestview { topline = math.max(1, top or lnum), lnum = lnum }
   end)
+end
+
+--- The lines of s..e to show, 20 at most, keeping `uselines` in view.
+---@param s integer
+---@param e integer
+---@param uselines table<integer, true>
+---@return table<integer, true>
+function M.pick_rows(s, e, uselines)
+  local set = {}
+  if e - s + 1 <= 20 then
+    for l = s, e do
+      set[l] = true
+    end
+    return set
+  end
+  local ls = vim.tbl_keys(uselines)
+  table.sort(ls)
+  for radius = 4, 0, -1 do
+    set = { [s] = true }
+    local n = 1
+    for _, ul in ipairs(ls) do
+      for l = math.max(s, ul - radius), math.min(e, ul + radius) do
+        if not set[l] then
+          set[l] = true
+          n = n + 1
+        end
+      end
+    end
+    if n <= 20 then
+      return set
+    end
+  end
+  set = { [s] = true }
+  for i = 1, math.min(19, #ls) do
+    set[ls[i]] = true
+  end
+  return set
 end
 
 --- Where a doc comment above `line` starts.

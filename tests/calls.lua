@@ -247,6 +247,66 @@ do
   expect(ti == #r.rows and t.last, 'the tests row last, after the callers it follows')
 end
 
+-- the code beside the tree: where it is called, a place a caller and line,
+-- opening on the call the tree is about; or itself, its calls stepped through
+do
+  local function at(p)
+    local u = p.places[p.n]
+    return u and (u.from .. ':' .. u.line) or nil
+  end
+  eq(
+    vim.tbl_map(function(u)
+      return u.from .. ':' .. u.line
+    end, calls.places(g, B)),
+    { A .. ':2', A .. ':4', F .. ':2', TEST .. ':9' },
+    'b is called at four places: a calling it twice is two, the test last'
+  )
+  eq(calls.call_lines(g, A), { 2, 3, 4, 5, 6 }, 'a calls on lines 2 to 6')
+  local v = calls.new(A)
+  local r = calls.rows(g, v, 100, M)
+  local bi = find(r, k(A, B))
+  local p = calls.pane(g, v, r, bi, M)
+  eq({ p.code, at(p) }, { 'called', A .. ':2' }, 'b under a opens on where a calls it')
+  eq(calls.key(g, v, r, bi, ']]', 100, M), 'pane', ']] steps the place')
+  eq(at(calls.pane(g, v, r, bi, M)), A .. ':4', 'the next place: a again, on its other line')
+  calls.key(g, v, r, bi, ']]', 100, M)
+  calls.key(g, v, r, bi, ']]', 100, M)
+  calls.key(g, v, r, bi, ']]', 100, M)
+  eq(at(calls.pane(g, v, r, bi, M)), A .. ':2', ']] round the end to the first')
+  calls.key(g, v, r, bi, '[[', 100, M)
+  eq(at(calls.pane(g, v, r, bi, M)), TEST .. ':9', '[[ round the start to the last')
+  eq(calls.key(g, v, r, bi, '<Tab>', 100, M), 'pane', '<Tab> swaps')
+  p = calls.pane(g, v, r, bi, M)
+  eq({ v.code, p.code, p.lines, p.n }, { 'itself', 'itself', { 2 }, 0 }, 'itself: b, nothing lit until ]]')
+  calls.key(g, v, r, bi, ']]', 100, M)
+  eq(calls.pane(g, v, r, bi, M).n, 1, ']] in itself: its first call')
+  calls.key(g, v, r, bi, 'j', 100, M)
+  eq(calls.pane(g, v, r, bi + 1, M).code, 'itself', 'the view sticks on the next row')
+  calls.key(g, v, r, bi, '<CR>', 100, M)
+  eq(v.code, 'itself', 'and on another anchor')
+  calls.key(g, v, r, 1, '<BS>', 100, M)
+  eq(v.code, 'itself', 'and back')
+  calls.key(g, v, r, bi, '<Tab>', 100, M)
+  eq(at(calls.pane(g, v, r, bi, M)), A .. ':2', 'swapped back: the place the tree is about again')
+  -- nothing calls the file's top: itself, whatever was chosen
+  local top = calls.new(nil)
+  local tr = calls.rows(g, top, 100, M)
+  local mi = find(tr, 'file:src/main.ts')
+  p = calls.pane(g, top, tr, mi, M)
+  eq({ p.code, #p.places }, { 'itself', 0 }, "main's top: nothing calls it, itself")
+  eq(calls.pane(g, top, tr, find(tr, 'dir:src'), M), nil, 'a folder shows no code')
+  eq(calls.key(g, top, tr, find(tr, 'dir:src'), ']]', 100, M), nil, ']] on a folder does nothing')
+  -- going up the row is the caller: called at opens on its first place,
+  -- itself lights its call to the row above
+  local up = calls.new(B, 'up')
+  local ur = calls.rows(g, up, 100, M)
+  local ai = find(ur, k(B, A))
+  eq(at(calls.pane(g, up, ur, ai, M)), MAIN .. ':3', 'a going up: the first place a is called, not a test')
+  up.code = 'itself'
+  p = calls.pane(g, up, ur, ai, M)
+  eq({ p.code, p.lines[p.n] }, { 'itself', 2 }, 'itself going up: its call to b lit')
+end
+
 -- from the top: folders, a file whose top is a root is its row, tests last
 do
   local v = calls.new(nil)

@@ -840,10 +840,17 @@ function M.calls_status()
     table.sort(sibs)
     left = left .. ('  %d of %d'):format(vim.fn.index(sibs, i) + 1, #sibs)
   end
-  if calls_valid() and api.nvim_get_current_win() == st.cwin.code then
-    return left, table.concat({ '<Esc> the tree', 'K back', '- explorer', 'q close' }, '   ')
+  local p = calls.pane(g, v, r, x and i or nil, index.model())
+  local swap = {}
+  if p and #p.places > 0 then
+    swap = { '<Tab> ' .. (p.code == 'called' and 'itself' or 'called at'), ']]/[[ ' .. (p.code == 'called' and 'place' or 'call') }
+  elseif p and #p.lines > 0 then
+    swap = { ']]/[[ call' }
   end
-  local hints = { 'j/k row', 'h fold', 'l open', 'J page', 'K back' }
+  if calls_valid() and api.nvim_get_current_win() == st.cwin.code then
+    return left, table.concat(vim.list_extend(swap, { '<Esc> the tree', 'K back', '- explorer', 'q close' }), '   ')
+  end
+  local hints = vim.list_extend(swap, { 'j/k row', 'h fold', 'l open', 'J page', 'K back' })
   if v.anchor then
     hints[#hints + 1] = v.dir == 'up' and '~ calls' or '~ called by'
   end
@@ -973,28 +980,47 @@ local function calls_page()
   api.nvim_echo({ { what .. ' has no page: only exported functions used from another file do', 'SeamLabel' } }, false, {})
 end
 
-local function calls_keys(buf)
-  local o = { buffer = buf, nowait = true, silent = true }
-  local function press(k, times)
-    return function()
-      for _ = 1, times and vim.v.count1 or 1 do
-        local m = index.model()
-        local a = calls.key(m.graph, st.calls, st.calls_rows, calls_at(), k, calls_height(), m)
-        if a == 'redraw' then
-          show_calls()
-        elseif a == 'move' then
-          calls_cursor(st.calls.cursor)
-        elseif a == 'explorer' then
-          return calls_leave()
-        end
+-- the code beside the tree again, the row the same: another view or place
+local function calls_pane()
+  local i = calls_at()
+  local x = st.calls_rows.rows[i]
+  calls_draw.pane(st.cbuf.code, st.cwin.code, index.model().graph, st.calls, st.calls_rows, x and i)
+  paint()
+  vim.cmd 'redrawstatus'
+end
+
+local function calls_press(k, times)
+  return function()
+    for _ = 1, times and vim.v.count1 or 1 do
+      local m = index.model()
+      local a = calls.key(m.graph, st.calls, st.calls_rows, calls_at(), k, calls_height(), m)
+      if a == 'redraw' then
+        show_calls()
+      elseif a == 'move' then
+        calls_cursor(st.calls.cursor)
+      elseif a == 'pane' then
+        calls_pane()
+      elseif a == 'explorer' then
+        return calls_leave()
       end
     end
   end
-  for _, k in ipairs { 'l', 'h', 'L', 'H', ']', '[', '<CR>', '~', '<BS>', 'K', 'C' } do
+end
+
+local function calls_keys(buf)
+  local o = { buffer = buf, nowait = true, silent = true }
+  local press = calls_press
+  for _, k in ipairs { 'l', 'h', 'L', 'H', '<CR>', '~', '<BS>', 'K', 'C', '<Tab>' } do
     vim.keymap.set('n', k, press(k), o)
+  end
+  -- ] and [ wait for a second ] or [ rather than taking the sibling at once
+  for _, k in ipairs { ']', '[' } do
+    vim.keymap.set('n', k, press(k), { buffer = buf, silent = true })
   end
   vim.keymap.set('n', 'j', press('j', true), o)
   vim.keymap.set('n', 'k', press('k', true), o)
+  vim.keymap.set('n', ']]', press(']]', true), o)
+  vim.keymap.set('n', '[[', press('[[', true), o)
   vim.keymap.set('n', '<Down>', press 'j', o)
   vim.keymap.set('n', '<Up>', press 'k', o)
   vim.keymap.set('n', 'J', calls_page, o)
@@ -1030,6 +1056,9 @@ local function calls_code_keys(buf)
     show_calls()
   end
   vim.keymap.set('n', '<Esc>', tree, o)
+  vim.keymap.set('n', '<Tab>', calls_press '<Tab>', o)
+  vim.keymap.set('n', ']]', calls_press(']]', true), o)
+  vim.keymap.set('n', '[[', calls_press('[[', true), o)
   vim.keymap.set('n', 'K', back, o)
   vim.keymap.set('n', '<BS>', back, o)
   vim.keymap.set('n', '-', calls_overview, o)

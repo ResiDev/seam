@@ -14,6 +14,26 @@ It is one outline, the way a browser's devtools draw the DOM: a row per
 function, two spaces a level, the code of the row under the cursor in a pane
 on the right. The code is never inline.
 
+The pane shows one of two views, swapped with `<Tab>` as a page swaps its
+tabs. The choice stays while the cursor moves through the tree, and across
+anchors and `<BS>`.
+
+- **Called at.** Every place in the repo the row's function is called: each
+  caller and each line, a caller calling it twice two places, the tests'
+  after the rest. One at a time, as Used by draws a use: the caller's
+  function, 20 rows at most, the call lit and the name underlined. It opens
+  on the call the tree is about, the one its parent makes going down; going
+  up, where the row is the caller, on the first place. `]]` `[[` step
+  through them, round the ends. The head says where:
+  `called at  4 of 100  ·  useOwnedRun()  useRun.ts:59`.
+- **Itself.** Its own declaration, every call in it underlined. `]]` `[[`
+  light the lines that call something, one after another. Going up, its call
+  to the row above stands out, lit to start with.
+
+A row nothing calls (a start from the top, a file's top) shows itself,
+whatever was chosen, and says nothing calls it. Folders, files and the tests
+row show where they are.
+
 - **Anchored, calls.** `c` on a contract in the explorer. The anchor is pinned
   at the top, with one line for who calls it. Under it, what it calls in the
   order it is written, then what those call, and so on down.
@@ -81,6 +101,8 @@ way.
 | `K` `<BS>` | the previous anchor; from the first, the explorer |
 | `-` | straight to the explorer, on the anchor |
 | `C` | from the top |
+| `<Tab>` | the code beside: called at, itself |
+| `]]` `[[` | called at: the next or previous place; itself: the next or previous call |
 | `gd` | the declaration, in a normal window |
 | `q` | close |
 

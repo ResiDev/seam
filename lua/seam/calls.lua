@@ -37,6 +37,8 @@ local M = {}
 ---@field levels integer|nil the levels the budget opened
 ---@field cursor string|nil the key of the row under the cursor
 ---@field back table[] the views before each anchor, newest last
+---@field code 'called'|'itself' what the code beside the tree shows: where the row is called, or the row itself
+---@field step { key: string, code: string, n: integer }|nil the place or line `]]` and `[[` stepped to, on that row in that view
 
 ---@class seam.CallRow
 ---@field key string the ids from the top of the tree to it, one a line
@@ -526,7 +528,7 @@ end
 ---@param dir? seam.Dir
 ---@return seam.CallsView
 function M.new(anchor, dir)
-  return { anchor = anchor, dir = anchor and dir or 'down', open = {}, back = {} }
+  return { anchor = anchor, dir = anchor and dir or 'down', open = {}, back = {}, code = 'called' }
 end
 
 local function opener(view)
@@ -556,6 +558,94 @@ function M.rows(g, view, height, m)
   return { rows = rows, anchor = view.anchor, dir = view.dir, shared = shared, levels = view.levels or 0 }
 end
 
+---------------------------------------------------------------- the code
+
+--- Every place `id` is called: a caller and a line each, a caller calling
+--- it on two lines two places; by path then line, the tests' after.
+---@param g seam.Graph
+---@param id string
+---@param visible? fun(path: string): boolean
+---@return { from: string, line: integer, col: integer }[]
+function M.places(g, id, visible)
+  visible = visible or all
+  local out, tests, seen = {}, {}, {}
+  for _, u in ipairs(g.up[id] or {}) do
+    local k = u.from .. '\n' .. u.line
+    local by = g.nodes[u.from]
+    if not seen[k] and visible(by.path) then
+      seen[k] = true
+      table.insert(by.test and tests or out, u)
+    end
+  end
+  return vim.list_extend(out, tests)
+end
+
+--- The lines of `id` that call something, in order.
+---@param g seam.Graph
+---@param id string
+---@param visible? fun(path: string): boolean
+---@return integer[]
+function M.call_lines(g, id, visible)
+  visible = visible or all
+  local out, seen = {}, {}
+  for _, c in ipairs(g.down[id] or {}) do
+    if not seen[c.line] and visible(g.nodes[c.to].path) then
+      seen[c.line] = true
+      out[#out + 1] = c.line
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+---@class seam.CallsPane
+---@field node seam.Node
+---@field code 'called'|'itself' what is shown: itself when nothing calls it, whatever the view chose
+---@field places table[] where it is called
+---@field lines integer[] its lines that call something
+---@field n integer the place shown, or the line lit (0: none)
+
+--- What the code beside the tree shows for row `i` (nil: the anchor): the
+--- view's choice, on the place the tree is about until `]]` or `[[` moves
+--- it. Going down that is the call its parent makes; going up, the row is
+--- the caller and its own call to its parent is lit in itself. Nil for a
+--- folder, a file that is not a start, or tests.
+---@param g seam.Graph
+---@param view seam.CallsView
+---@param r seam.CallRows
+---@param i integer|nil
+---@param m? table
+---@return seam.CallsPane|nil
+function M.pane(g, view, r, i, m)
+  local visible = visibility(m)
+  local x = i and r.rows[i]
+  local id = x and x.id or (not x and view.anchor)
+  local node = id and g.nodes[id]
+  if not node then
+    return nil
+  end
+  local p = { node = node, places = M.places(g, id, visible), lines = M.call_lines(g, id, visible), n = 0 }
+  p.code = #p.places == 0 and 'itself' or view.code or 'called'
+  local key = x and x.key or ''
+  local s = view.step
+  if s and s.key == key and s.code == p.code then
+    p.n = s.n
+  elseif p.code == 'called' then
+    p.n = 1
+    if x and x.from and view.dir == 'down' then
+      for j, u in ipairs(p.places) do
+        if u.from == x.from and u.line == x.lines[1] then
+          p.n = j
+          break
+        end
+      end
+    end
+  elseif x and x.from and view.dir == 'up' then
+    p.n = vim.fn.index(p.lines, x.lines[1]) + 1
+  end
+  return p
+end
+
 ---------------------------------------------------------------- keys
 
 local function snapshot(view)
@@ -577,7 +667,7 @@ local function restore(view, s)
 end
 
 local function reset(view)
-  view.open, view.auto, view.height, view.levels, view.cursor = {}, nil, nil, nil, nil
+  view.open, view.auto, view.height, view.levels, view.cursor, view.step = {}, nil, nil, nil, nil, nil
 end
 
 -- the sibling of row `i` the `d`th on screen from it, down (1) or up (-1)
@@ -604,7 +694,7 @@ end
 
 --- What a key does to the view, the cursor on row `i` of `r`. Says what the
 --- screen does next: draw the rows again, move the cursor to `view.cursor`,
---- or go back to the explorer.
+--- draw the code beside the tree again, or go back to the explorer.
 ---@param g seam.Graph
 ---@param view seam.CallsView
 ---@param r seam.CallRows
@@ -612,7 +702,7 @@ end
 ---@param k string
 ---@param height integer
 ---@param m? table
----@return 'redraw'|'move'|'explorer'|nil
+---@return 'redraw'|'move'|'explorer'|'pane'|nil
 function M.key(g, view, r, i, k, height, m)
   local row = r.rows[i]
   local function go(j)
@@ -648,6 +738,23 @@ function M.key(g, view, r, i, k, height, m)
     view.dir = view.dir == 'down' and 'up' or 'down'
     reset(view)
     return 'redraw'
+  elseif k == '<Tab>' then
+    view.code = view.code == 'itself' and 'called' or 'itself'
+    return 'pane'
+  elseif k == ']]' or k == '[[' then
+    local p = M.pane(g, view, r, r.rows[i] and i or nil, m)
+    local list = p and (p.code == 'called' and p.places or p.lines) or {}
+    if #list == 0 then
+      return nil
+    end
+    local n = p.n
+    if k == ']]' then
+      n = n % #list + 1
+    else
+      n = n <= 1 and #list or n - 1
+    end
+    view.step = { key = r.rows[i] and r.rows[i].key or '', code = p.code, n = n }
+    return 'pane'
   end
   if not row then
     return nil
