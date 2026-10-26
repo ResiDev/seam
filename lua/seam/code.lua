@@ -95,6 +95,20 @@ local function captures(P, r0, r1)
       end
     end
   end
+  -- the later pattern wins a range, as in the highlighter; two marks of one
+  -- priority on one range are drawn in no promised order
+  for r = s, e do
+    local list, seen, keep = P.caps[r], {}, {}
+    for i = #list, 1, -1 do
+      local c = list[i]
+      local k = c[1] .. ':' .. c[2] .. ':' .. c[4]
+      if not seen[k] then
+        seen[k] = true
+        table.insert(keep, 1, c)
+      end
+    end
+    P.caps[r] = keep
+  end
 end
 
 -- Copy the captures of source line `lnum` (1-based) from byte `from` onto
