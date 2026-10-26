@@ -137,21 +137,23 @@ local function paint(buf, row, path, lnum, from, dst, len)
 end
 
 --- Append source line `lnum` of `path` to row `r`, from its first non-blank
---- when `trim`; its captures are painted when it comes into view.
+--- when `trim`, or from byte `trim` when it is a number; its captures are
+--- painted when it comes into view.
 ---@param r table a draw row
 ---@param path string
 ---@param lnum integer
----@param trim? boolean
+---@param trim? boolean|integer
 ---@param maxw? integer
 ---@return table r
 function M.add(r, path, lnum, trim, maxw)
   local src = M.file(path).lines[lnum] or ''
-  local from = trim and #(src:match '^%s*') or 0
+  local from = type(trim) == 'number' and trim or trim and #(src:match '^%s*') or 0
   local text = src:sub(from + 1)
   if maxw and #text > maxw then
     text = text:sub(1, maxw)
   end
-  r.code = { path, lnum, from, r.b, #text }
+  r.code = r.code or {}
+  r.code[#r.code + 1] = { path, lnum, from, r.b, #text }
   r:add(text)
   return r
 end
@@ -171,12 +173,13 @@ function M.add_name(r, path, lnum, name, hl, maxw)
   if not (path and lnum) or w > maxw then
     return r:add(w <= maxw and name or vim.fn.strcharpart(name, 0, maxw - 1) .. '…', hl)
   end
-  r.code = { path, lnum, name, r.b, #name }
+  r.code = r.code or {}
+  r.code[#r.code + 1] = { path, lnum, name, r.b, #name }
   -- under the captures, for what they leave uncoloured
   return r:add(name, hl, 90)
 end
 
---- The rows of copied code now in `buf`, by 0-based row, none painted yet.
+--- The spans of copied code now in `buf`, by 0-based row, none painted yet.
 ---@param buf integer
 ---@param rows table<integer, table>
 function M.track(buf, rows)
@@ -202,13 +205,14 @@ function M.paint_win(win)
   -- warm each file's range in one query run
   local ranges = {}
   for r0 = math.max(top - 1 - h, 0), bot - 1 + h do
-    local c = C.rows[r0]
-    if c and not C.painted[r0] then
-      local R = ranges[c[1]]
-      if not R then
-        ranges[c[1]] = { c[2], c[2] }
-      else
-        R[1], R[2] = math.min(R[1], c[2]), math.max(R[2], c[2])
+    if C.rows[r0] and not C.painted[r0] then
+      for _, c in ipairs(C.rows[r0]) do
+        local R = ranges[c[1]]
+        if not R then
+          ranges[c[1]] = { c[2], c[2] }
+        else
+          R[1], R[2] = math.min(R[1], c[2]), math.max(R[2], c[2])
+        end
       end
     end
   end
@@ -216,10 +220,11 @@ function M.paint_win(win)
     captures(M.file(path), R[1] - 1, R[2] - 1)
   end
   for r0 = math.max(top - 1 - h, 0), bot - 1 + h do
-    local c = C.rows[r0]
-    if c and not C.painted[r0] then
+    if C.rows[r0] and not C.painted[r0] then
       C.painted[r0] = true
-      paint(buf, r0, c[1], c[2], c[3], c[4], c[5])
+      for _, c in ipairs(C.rows[r0]) do
+        paint(buf, r0, c[1], c[2], c[3], c[4], c[5])
+      end
     end
   end
 end

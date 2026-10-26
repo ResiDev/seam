@@ -146,6 +146,33 @@ if os.getenv 'SEAM_LENS' then
   io.stdout:write(('with a lens: %d contracts\n'):format(#st.models[st.cur].contracts))
 end
 
+-- the explorer's head: its declaration in two rows, five beside used by
+-- alone, none wider than the head
+local function check_head(c)
+  local w = st.win.rhead
+  local lines = api.nvim_buf_get_lines(st.buf.rhead, 0, -1, false)
+  local most = 1 + (st.sides == 'used' and 5 or 2) + 1
+  if #lines > most then
+    fail(('%s: the head has %d rows, at most %d'):format(c.name, #lines, most))
+  end
+  if api.nvim_win_get_height(w) ~= #lines then
+    fail(('%s: the head is %d rows high for %d rows'):format(c.name, api.nvim_win_get_height(w), #lines))
+  end
+  for i = 2, #lines do
+    if vim.fn.strdisplaywidth(lines[i]) > api.nvim_win_get_width(w) then
+      fail(('%s: head row %d is wider than the head'):format(c.name, i))
+    end
+  end
+end
+for _, side in ipairs { 'u', 'u' } do
+  key(side)
+  for _, c in ipairs(st.models[st.cur].contracts) do
+    where = 'explorer head sides=' .. st.sides
+    require('seam.draw.explorer').contract_head(c)
+    check_head(c)
+  end
+end
+
 -- the explorer: every view and every side, moving in each
 where = 'explorer'
 for _, view in ipairs { 'v', 'V' } do

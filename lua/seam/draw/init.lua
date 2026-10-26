@@ -127,7 +127,9 @@ function M.put(buf, rows)
     if r.code then
       codes[row0] = r.code
       if r.dim then
-        api.nvim_buf_set_extmark(buf, M.ns, row0, r.code[4], { end_col = r.code[4] + r.code[5], hl_group = 'SeamCodeDim', priority = 300 })
+        for _, c in ipairs(r.code) do
+          api.nvim_buf_set_extmark(buf, M.ns, row0, c[4], { end_col = c[4] + c[5], hl_group = 'SeamCodeDim', priority = 300 })
+        end
       end
     end
   end
