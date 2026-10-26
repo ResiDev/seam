@@ -1,7 +1,7 @@
 # A contract's page
 
 `<CR>` on a contract in the explorer opens its page, full screen. The header
-names it, its kind and `path:line`, with a crumb back (`<BS>`). Under it two
+names it, its kind and `path:line`, with a crumb back (`K` or `<BS>`). Under it two
 tabs, Built from and Used by, `<Tab>` between them. It opens on Built from,
 or on Used by when the explorer shows only used by or the contract is built
 from nothing.
@@ -26,12 +26,24 @@ both, as `b` and `u` do in the explorer. Each tab keeps its own choice.
 
 ### Built from
 
+![Built from, read as code](mocks/contract-built-from-code.png)
+
+It opens as code: the contract down the left, every name it is built from
+underlined where it stands, a dashed line under one nothing resolves. The
+cursor moves through it as through any code. The name it is on, or the
+nearest on its line, is lit, and its declaration fills the right; on a line
+naming none, the last one stays. `n` and `N` go to the next or previous name.
+`J` or `<CR>` enters its page. Read top to bottom, the function says what each
+piece is as you reach it, which a list of 50 names sorted by file did not.
+
+`v` turns it into the list, on the same name, and back.
+
 ![Built from](mocks/contract-built-from.png)
 
-The left lists what it draws on. Above, the one under the cursor: its
+As a list, the left lists what it draws on. Above, the one under the cursor: its
 declaration in full, with how many files use it and what it is built from.
 Below, this contract, sized to fit, its unrelated lines dimmed and the line
-naming the dependency lit. `<CR>` enters the dependency's page.
+naming the dependency lit. `J` or `<CR>` enters the dependency's page.
 
 With the contract hidden (`s`), the dependency keeps the relation as one line
 under its title: `defineWalkthrough() uses it as  31  export function …`.

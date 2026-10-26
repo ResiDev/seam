@@ -22,8 +22,9 @@ Every fact comes from the language server, treesitter or git. No LLM.
   (anything else, such as an argument).
 - **User.** A file with at least one use.
 - **Dependency** (built from). A name inside a contract's declaration that
-  resolves to another declaration in the codebase, in any file. Locals,
-  builtins and `node_modules` are left out.
+  resolves to another top-level declaration in the codebase, in any file, its
+  own included. Each place it is named is one. Locals, builtins and
+  `node_modules` are left out.
 - **Member.** A field or method of an interface, type literal, class or enum.
   A function has none.
 - **Seam.** One dependency or one user, seen beside the contract.
@@ -181,7 +182,8 @@ The screens are locked in the design docs. The code must keep these rules:
     contract pane.
   - A gap is a `⋯` row.
 - **One seam at a time.** Built from and Used by show only the seam under
-  the cursor.
+  the cursor. Built from read as code shows the declaration of the name the
+  cursor is on.
 - **Snippets.** A use is shown in the function it sits in, 20 rows at most,
   keeping the lines with uses in view, as thread's caller code does.
 

@@ -329,7 +329,6 @@ for _, path in ipairs(files) do
       deps = {},
       _decl = decl,
       _range = { decl:range() },
-      _seen = {},
     }
     f.exports[name] = e
     EXPORTS[e.id] = e
@@ -453,7 +452,6 @@ for _, path in ipairs(files) do
         deps = {},
         _decl = top.decl,
         _range = { top.decl:range() },
-        _seen = {},
       }
       if not EXPORTS[e.id] then
         EXPORTS[e.id] = e
@@ -466,8 +464,8 @@ for _, path in ipairs(files) do
     end
   end
   f.root = nil
-  for k in pairs(f.top) do
-    f.top[k] = true
+  for k, v in pairs(f.top) do
+    f.top[k] = line_of(v.node)
   end
   for _, e in pairs(f.exports) do
     e._decl = nil
@@ -592,9 +590,9 @@ for path, f in pairs(F) do
       end
     end
   end
-  local own = {} -- same-file top-level names -> export or false
-  for name, top in pairs(f.top) do
-    own[name] = f.exports[name] or false
+  local own = {} -- same-file top-level names -> the export, or where it is declared
+  for name, line in pairs(f.top) do
+    own[name] = f.exports[name] or { id = path .. ':' .. line .. ':' .. name }
   end
 
   local q = Q[f.lang]
@@ -618,7 +616,7 @@ for path, f in pairs(F) do
     end
   end
 
-  -- deps: names inside each exported declaration
+  -- deps: names inside each exported declaration, every place each is named
   for _, e in pairs(f.exports) do
     if e.path == path and not e._deps_done then
       e._deps_done = true
@@ -627,14 +625,14 @@ for path, f in pairs(F) do
       for cid, node in q:iter_captures(decl, f.src, r[1], r[3] + 1) do
         if q.captures[cid] == 'id' then
           local txt = text_of(node, f.src)
-          if txt ~= e.name and not e._seen[txt] then
+          if txt ~= e.name then
             local target = bound[txt]
             if target == nil and own[txt] ~= nil then
               target = own[txt]
             end
             if target ~= nil then
-              e._seen[txt] = true
-              e.deps[#e.deps + 1] = { name = txt, line = line_of(node), target = target and target.id or vim.NIL }
+              local l, c = node:start()
+              e.deps[#e.deps + 1] = { name = txt, line = l + 1, col = c + 1, target = target and target.id or vim.NIL }
             end
           end
         end
@@ -661,7 +659,7 @@ end
 table.sort(pkgs)
 local exports = {}
 for _, e in ipairs(LIST) do
-  e._decl, e._seen, e._deps_done, e._range = nil, nil, nil, nil
+  e._decl, e._deps_done, e._range = nil, nil, nil
   exports[#exports + 1] = e
 end
 table.sort(exports, function(a, b)
@@ -670,6 +668,7 @@ end)
 local fh = assert(io.open(out, 'w'))
 fh:write(vim.json.encode {
   source = 'treesitter',
+  version = 2,
   repo = repo,
   ms = timing,
   packages = pkgs,

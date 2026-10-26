@@ -1,5 +1,6 @@
--- The lens panel: pinned folders and hiding patterns, each with a mark per
--- column. c b u mark a column, Space all three. Snacks only to pick folders.
+-- The lens panel: one row a rule, and in each column what it does there,
+-- `only` or `hide`. c b u turn a column, Space all three. Rules come from a
+-- picker: folders, files, or a pattern typed and its matches listed live.
 local L = require 'seam.lens'
 local M = {}
 local api = vim.api
@@ -8,10 +9,12 @@ local ns = api.nvim_create_namespace 'seam.lens'
 ---@class seam.LensHost
 ---@field lens fun(): seam.Lens
 ---@field model fun(): table
+---@field root fun(): string  -- the repo, for previewing its files
 ---@field changed fun()   -- the lens changed; filter and redraw behind the panel
 ---@field closed fun()    -- the panel closed
 
-api.nvim_set_hl(0, 'SeamLensOn', { default = true, link = 'DiagnosticOk' })
+api.nvim_set_hl(0, 'SeamLensOnly', { default = true, link = 'DiagnosticOk' })
+api.nvim_set_hl(0, 'SeamLensHide', { default = true, link = 'DiagnosticError' })
 api.nvim_set_hl(0, 'SeamLensOff', { default = true, link = 'Comment' })
 api.nvim_set_hl(0, 'SeamLensAction', { default = true, link = 'Function' })
 api.nvim_set_hl(0, 'SeamLensPattern', { default = true, link = 'Special' })
@@ -45,25 +48,18 @@ local function line()
   return l
 end
 
-local function marks(l, cols, dim)
+local WAY_HL = { only = 'SeamLensOnly', hide = 'SeamLensHide' }
+
+--- each column's way, the word under its name; a column left be, a dot
+local function ways(l, cols)
   for _, c in ipairs(L.COLS) do
-    local on = cols[c]
-    l.at(MARK[c], on and '●' or '○', on and 'SeamLensOn' or 'SeamLensOff')
-  end
-  if dim then
-    l.marks[#l.marks + 1] = { 0, #l.text, 'SeamLensOff' }
+    local way = cols[c]
+    l.at(way and MARK[c] - 2 or MARK[c], way or '·', way and WAY_HL[way] or 'SeamLensOff')
   end
 end
 
-local function contracts_in(m, dir)
-  local n = 0
-  for _, e in ipairs(m.exports) do
-    if #(e.all_uses or e.uses) > 0 and e.path:sub(1, #dir) == dir then
-      n = n + 1
-    end
-  end
-  return n
-end
+--- the next way a column turns to: left be, only, hide
+local NEXT = { [''] = 'only', only = 'hide', hide = nil }
 
 local HELP = {
   { '*.test.*', 'file names like run.test.ts' },
@@ -84,43 +80,33 @@ local function rows()
     out[#out + 1] = l
   end
   push(line())
-  push(line().at(MARK.contracts - 4, 'contracts', 'SeamLensOff').at(MARK.built - 5, 'built from', 'SeamLensOff').at(MARK.used - 3, 'used by', 'SeamLensOff'))
-  push(line().at(1, 'Show only inside', 'SeamLensHead').at(COUNT_END - 9, 'contracts', 'SeamLensOff'))
-  for i, p in ipairs(lens.pins) do
-    local n = tostring(contracts_in(m, p.dir))
-    local l = line().at(3, p.dir, 'Directory').at(COUNT_END - #n, n, 'SeamLensOff')
-    marks(l, p.cols)
-    push(l, { kind = 'pin', pin = p, i = i })
+  push(
+    line()
+      .at(COUNT_END - 5, 'files', 'SeamLensOff')
+      .at(MARK.contracts - 4, 'contracts', 'SeamLensOff')
+      .at(MARK.built - 5, 'built from', 'SeamLensOff')
+      .at(MARK.used - 3, 'used by', 'SeamLensOff')
+  )
+  for i, r in ipairs(lens.rules) do
+    local n = tostring(#L.rule_files(m, r))
+    local hl = not L.any(r.cols) and 'SeamLensOff' or r.path and 'Directory' or 'SeamLensPattern'
+    local l = line().at(3, L.label(r), hl).at(COUNT_END - #n, n, 'SeamLensOff')
+    ways(l, r.cols)
+    push(l, { kind = 'rule', rule = r, i = i })
   end
-  push(line().at(3, '+ pick folders', 'SeamLensAction'), { kind = 'pick' })
+  push(line().at(3, '+ add: pick folders and files, or type a pattern', 'SeamLensAction'), { kind = 'add' })
   push(line())
-  push(line().at(1, 'Hide', 'SeamLensHead').at(COUNT_END - 5, 'files', 'SeamLensOff'))
-  for i, h in ipairs(lens.hides) do
-    local files, err = L.matches(m, h.pattern)
-    local n = err and '?' or tostring(#files)
-    local l = line().at(3, h.pattern, L.any(h.cols) and 'SeamLensPattern' or 'SeamLensOff').at(COUNT_END - #n, n, 'SeamLensOff')
-    marks(l, h.cols)
-    push(l, { kind = 'hide', hide = h, i = i })
-  end
-  for _, sg in ipairs(L.suggestions(lens, m)) do
-    local n = tostring(sg.n)
-    local l = line().at(3, sg.pattern).at(COUNT_END - #n, n)
-    marks(l, L.none(), true)
-    push(l, { kind = 'suggest', pattern = sg.pattern })
-  end
-  push(line().at(3, '+ add a pattern', 'SeamLensAction'), { kind = 'add' })
-  push(line())
-  -- what the row under the cursor, or the pattern being typed, matches
-  local cur = P.typing and { kind = 'typing' } or (out[P.cursor or 0] or {}).meta or {}
-  local pattern = P.typing or (cur.hide and cur.hide.pattern) or cur.pattern
-  if pattern then
-    local files, err = L.matches(m, pattern)
-    local head = line().at(1, pattern ~= '' and pattern or ' ', 'SeamLensPattern')
-    if err then
-      head.add('   ' .. err, 'DiagnosticError')
-    else
-      head.add('   ' .. L.describe(pattern) .. ' · ' .. plural(#files, 'file'), 'SeamLensOff')
+  -- what the row under the cursor, or the pattern being typed, holds
+  local cur = (out[P.cursor or 0] or {}).meta or {}
+  local rule = P.typing and { pattern = P.typing } or cur.rule or (cur.pattern and { pattern = cur.pattern })
+  if rule then
+    local files, err = L.matches(m, rule.pattern or '')
+    if rule.path then
+      files, err = L.rule_files(m, rule), nil
     end
+    local what = rule.path and (rule.path:sub(-1) == '/' and 'that folder' or 'that file') or L.describe(rule.pattern)
+    local head = line().at(1, L.label(rule) ~= '' and L.label(rule) or ' ', rule.path and 'Directory' or 'SeamLensPattern')
+    head.add('   ' .. (err or (what .. ' · ' .. plural(#files, 'file'))), err and 'DiagnosticError' or 'SeamLensOff')
     push(head)
     for i, f in ipairs(files) do
       if i > MAX_MATCHES then
@@ -136,19 +122,12 @@ local function rows()
         push(line().at(3, h[1], 'SeamLensPattern').at(28, h[2], 'SeamLensOff'))
       end
     end
-  elseif cur.kind == 'pin' then
-    local dir = cur.pin.dir
-    push(line().at(1, dir, 'Directory').add('   ' .. plural(contracts_in(m, dir), 'contract') .. ' inside', 'SeamLensOff'))
   elseif cur.kind == 'add' then
-    for _, h in ipairs(HELP) do
-      push(line().at(3, h[1], 'SeamLensPattern').at(28, h[2], 'SeamLensOff'))
-    end
-  elseif cur.kind == 'pick' then
-    push(line().at(1, 'Pick one folder or several (⇥), in a picker.', 'SeamLensOff'))
+    push(line().at(1, 'A picker: folders or files, ⇥ for several, or type a pattern to see its matches.', 'SeamLensOff'))
   end
   push(line())
-  local keys = P.typing and { '⏎ add   esc cancel' }
-    or { 'c b u  mark a column   ␣  all three   C B U  clear a column   X  clear all', 'a add   e edit   d delete   p pick folders   q close' }
+  local keys = P.typing and { '⏎ done   esc cancel' }
+    or { 'c b u  turn a column: only, hide, neither   ␣  all three together', 'C B U  clear a column   X  clear all   a add   e edit   d delete   q close' }
   for _, k in ipairs(keys) do
     push(line().at(1, k, 'SeamLensOff'))
   end
@@ -230,41 +209,35 @@ local function changed(pred)
   end
 end
 
-local function toggle(col)
-  local cur, lens = current(), P.host.lens()
-  local cols
-  if cur.kind == 'pin' then
-    cols = cur.pin.cols
-  elseif cur.kind == 'hide' then
-    cols = cur.hide.cols
-  elseif cur.kind == 'suggest' then
-    local h = { pattern = cur.pattern, cols = L.none() }
-    table.insert(lens.hides, h)
-    cols = h.cols
-  else
+--- turn one column, or with none all three together: neither, only, hide
+local function turn(col)
+  local rule = current().rule
+  if not rule then
     return
   end
+  local cols = rule.cols
   if col then
-    cols[col] = not cols[col]
+    cols[col] = NEXT[cols[col] or '']
   else
-    local to = not L.any(cols)
+    local to = 'only'
+    if cols.contracts == cols.built and cols.built == cols.used then
+      to = NEXT[cols.contracts or '']
+    end
     for _, c in ipairs(L.COLS) do
       cols[c] = to
     end
   end
-  local key = cur.pin and cur.pin.dir or cur.pattern or cur.hide.pattern
   changed(function(meta)
-    return (meta.pin and meta.pin.dir == key) or (meta.hide and meta.hide.pattern == key)
+    return meta.rule == rule
   end)
 end
 
---- every mark in one column off, or in all three; the rules stay, to mark again
+--- one column cleared in every rule, or all three; the rules stay, to turn again
 local function clear(col)
-  local lens = P.host.lens()
-  for _, rule in ipairs(vim.list_extend(vim.list_extend({}, lens.pins), lens.hides)) do
+  for _, rule in ipairs(P.host.lens().rules) do
     for _, c in ipairs(L.COLS) do
       if not col or c == col then
-        rule.cols[c] = false
+        rule.cols[c] = nil
       end
     end
   end
@@ -275,14 +248,11 @@ local function clear(col)
 end
 
 local function delete()
-  local cur, lens = current(), P.host.lens()
-  if cur.kind == 'pin' then
-    table.remove(lens.pins, cur.i)
-  elseif cur.kind == 'hide' then
-    table.remove(lens.hides, cur.i)
-  else
+  local cur = current()
+  if cur.kind ~= 'rule' then
     return
   end
+  table.remove(P.host.lens().rules, cur.i)
   local at = P.cursor
   P.host.changed()
   draw()
@@ -297,15 +267,16 @@ local function delete()
   place(best)
 end
 
---- type a pattern in place; the bottom of the panel shows what it matches
+--- edit a rule's pattern in place; the bottom of the panel shows what it matches
+---@param editing seam.Rule
 local function input(editing)
   local r = P.cursor
   local buf = api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = 'wipe'
   -- a path completer would take the slashes of a regex, and its ⏎
   vim.b[buf].completion = false
-  api.nvim_buf_set_lines(buf, 0, -1, false, { editing and editing.pattern or '' })
-  P.typing = editing and editing.pattern or ''
+  api.nvim_buf_set_lines(buf, 0, -1, false, { editing.pattern })
+  P.typing = editing.pattern
   draw()
   local win =
     api.nvim_open_win(buf, true, { relative = 'win', win = P.win, row = r - 1, col = 2, width = COUNT_END - 12, height = 1, style = 'minimal', zindex = 60 })
@@ -321,14 +292,9 @@ local function input(editing)
       api.nvim_set_current_win(P.win)
     end
     if commit and text ~= '' and L.compile(text) then
-      local lens = P.host.lens()
-      if editing then
-        editing.pattern = text
-      else
-        table.insert(lens.hides, { pattern = text, cols = { contracts = true, built = true, used = true } })
-      end
+      editing.pattern = text
       return changed(function(meta)
-        return meta.hide and meta.hide.pattern == text
+        return meta.rule == editing
       end)
     end
     draw()
@@ -351,19 +317,42 @@ local function input(editing)
   vim.cmd 'startinsert!'
 end
 
---- Snacks, for picking folders only; ⇥ picks several
+--- Snacks, to add rules. Empty, it lists folders; typing lists what the
+--- pattern matches, live: the pattern itself first, to take all it matches,
+--- then its folders and files. ⇥ picks several. A new rule does nothing
+--- until a column is turned.
 local function pick()
   local Snacks = rawget(_G, 'Snacks')
+  local host = P.host
+  ---@return seam.Rule first the first rule added, or the one it already was
+  local function add(new)
+    local rules, first = host.lens().rules, nil
+    for _, r in ipairs(new) do
+      local have
+      for _, old in ipairs(rules) do
+        have = have or (L.label(old) == L.label(r) and old)
+      end
+      if not have then
+        r.cols = {}
+        table.insert(rules, r)
+      end
+      first = first or have or r
+    end
+    host.changed()
+    return first
+  end
   if not (Snacks and Snacks.picker) then
-    vim.ui.input({ prompt = 'Pin to folder: ' }, function(d)
-      if d and d ~= '' then
-        table.insert(P.host.lens().pins, { dir = d:gsub('/?$', '/'), cols = { contracts = true, built = false, used = false } })
-        changed()
+    vim.ui.input({ prompt = 'Add a pattern: ' }, function(text)
+      if text and L.compile(text) then
+        local r = add { { pattern = vim.trim(text) } }
+        seek(function(meta)
+          return meta.rule == r
+        end)
       end
     end)
     return
   end
-  local m, host = P.host.model(), P.host
+  local m, root = host.model(), host.root()
   local count = {}
   for _, e in ipairs(m.exports) do
     if #(e.all_uses or e.uses) > 0 then
@@ -377,43 +366,80 @@ local function pick()
       end
     end
   end
-  local items = {}
-  for d, n in pairs(count) do
-    items[#items + 1] = { text = d, dir = d, n = n }
+  local folders = vim.tbl_keys(count)
+  table.sort(folders)
+  local function list(files)
+    return { text = #files > 0 and table.concat(files, '\n') or 'nothing matches' }
   end
-  table.sort(items, function(a, b)
-    return a.dir < b.dir
-  end)
+  local function folder(d)
+    local inside = vim.tbl_filter(function(f)
+      return f:sub(1, #d) == d
+    end, L.files(m))
+    return { text = d, kind = 'folder', path = d, n = count[d], preview = list(inside) }
+  end
+  local function items(q)
+    if q == '' then
+      return vim.tbl_map(folder, folders)
+    end
+    local files, err = L.matches(m, q)
+    if err then
+      return { { text = q, kind = 'error', err = err, preview = { text = err } } }
+    end
+    local out = { { text = q, kind = 'pattern', pattern = q, n = #files, preview = list(files) } }
+    local fn = L.compile(q)
+    for _, d in ipairs(folders) do
+      if fn(d) then
+        out[#out + 1] = folder(d)
+      end
+    end
+    for _, f in ipairs(files) do
+      out[#out + 1] = { text = f, kind = 'file', path = f, file = root .. '/' .. f, preview = 'file' }
+    end
+    return out
+  end
+  local function split(path)
+    local parent, name = path:match '^(.*/)([^/]+/?)$'
+    return parent or '', name or path
+  end
   M.close(true)
   local picked = false
   Snacks.picker.pick {
-    title = 'Pin to folders',
-    items = items,
-    layout = { preset = 'select' },
-    format = function(item)
-      local parent, name = item.dir:match '^(.*/)([^/]+/)$'
-      return { { parent or '', 'SeamLensOff' }, { name or item.dir, 'Directory' }, { '  ' .. plural(item.n, 'contract'), 'SeamLensOff' } }
+    title = 'Add to the lens',
+    live = true,
+    finder = function(_, ctx)
+      return items(vim.trim(ctx.filter.search))
     end,
+    format = function(item)
+      if item.kind == 'pattern' then
+        return { { item.pattern, 'SeamLensPattern' }, { '   all ' .. plural(item.n, 'file') .. ' it matches · ' .. L.describe(item.pattern), 'SeamLensOff' } }
+      elseif item.kind == 'error' then
+        return { { item.text, 'SeamLensPattern' }, { '   ' .. item.err, 'DiagnosticError' } }
+      end
+      local parent, name = split(item.path)
+      local out = { { parent, 'SeamLensOff' }, { name, item.kind == 'folder' and 'Directory' or 'Normal' } }
+      if item.n then
+        out[#out + 1] = { '  ' .. plural(item.n, 'contract'), 'SeamLensOff' }
+      end
+      return out
+    end,
+    preview = 'preview',
     confirm = function(p)
-      local dirs = {}
+      local new = {}
       for _, it in ipairs(p:selected { fallback = true }) do
-        dirs[#dirs + 1] = it.dir
+        if it.kind == 'pattern' then
+          new[#new + 1] = { pattern = it.pattern }
+        elseif it.path then
+          new[#new + 1] = { path = it.path }
+        end
+      end
+      if #new == 0 then
+        return
       end
       picked = true
       p:close()
-      local lens = host.lens()
-      for _, d in ipairs(dirs) do
-        local have = false
-        for _, pin in ipairs(lens.pins) do
-          have = have or pin.dir == d
-        end
-        if not have then
-          table.insert(lens.pins, { dir = d, cols = { contracts = true, built = false, used = false } })
-        end
-      end
-      host.changed()
+      local first = add(new)
       vim.schedule(function()
-        M.open(host, dirs[1])
+        M.open(host, first)
       end)
     end,
     on_close = function()
@@ -441,7 +467,7 @@ function M.close(quiet)
 end
 
 ---@param host seam.LensHost
----@param at? string a folder or pattern to put the cursor on
+---@param at? seam.Rule the rule to put the cursor on
 function M.open(host, at)
   if P then
     return
@@ -484,36 +510,28 @@ function M.open(host, at)
     place(sel[#sel])
   end)
   map('c', function()
-    toggle 'contracts'
+    turn 'contracts'
   end)
   map('b', function()
-    toggle 'built'
+    turn 'built'
   end)
   map('u', function()
-    toggle 'used'
+    turn 'used'
   end)
-  local function all_or_act()
-    local k = current().kind
-    if k == 'add' then
-      input()
-    elseif k == 'pick' then
+  local function act()
+    if current().kind == 'add' then
       pick()
     else
-      toggle()
+      turn()
     end
   end
-  map('<Space>', all_or_act)
-  map('<CR>', all_or_act)
-  map('a', function()
-    seek(function(meta)
-      return meta.kind == 'add'
-    end)
-    input()
-  end)
+  map('<Space>', act)
+  map('<CR>', act)
+  map('a', pick)
   map('e', function()
-    local cur = current()
-    if cur.kind == 'hide' then
-      input(cur.hide)
+    local rule = current().rule
+    if rule and rule.pattern then
+      input(rule)
     end
   end)
   map('C', function()
@@ -527,8 +545,7 @@ function M.open(host, at)
   end)
   map('X', clear)
   map('d', delete)
-  map('p', pick)
-  for _, k in ipairs { 'q', '<Esc>', 'f' } do
+  for _, k in ipairs { 'q', '<Esc>', 'L' } do
     map(k, M.close)
   end
   api.nvim_create_autocmd('WinLeave', {
@@ -543,7 +560,7 @@ function M.open(host, at)
   })
   if at then
     seek(function(meta)
-      return (meta.pin and meta.pin.dir == at) or (meta.hide and meta.hide.pattern == at) or meta.pattern == at
+      return meta.rule == at
     end)
   else
     draw()

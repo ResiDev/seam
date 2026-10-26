@@ -32,13 +32,13 @@ function M.open(root)
 end
 
 --- Open seam on a repo (the current one by default), indexing it first when
---- it has no index yet or when asked to.
+--- it has no index yet, an older one, or when asked to.
 ---@param root? string
 ---@param opts? { reindex?: boolean }
 function M.start(root, opts)
   root = normal(root)
   opts = opts or {}
-  if opts.reindex or not vim.uv.fs_stat(index.dir(root) .. '/treesitter.json') then
+  if opts.reindex or index.version(root) < index.VERSION then
     if st.tab and api.nvim_tabpage_is_valid(st.tab) then
       screen.close()
     end
