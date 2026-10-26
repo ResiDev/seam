@@ -361,6 +361,18 @@ local function check_calls(fresh)
       return fail 'a row sits above the row it hangs from'
     end
   end
+  -- the head: the breadcrumb, and the shared line when there is one
+  local head = api.nvim_buf_get_lines(st.cbuf.head, 0, -1, false)
+  if #head ~= (#r.shared > 0 and 2 or 1) or api.nvim_win_get_height(w.head) ~= #head then
+    fail('the head is not the breadcrumb and the shared line: ' .. table.concat(head, ' | '))
+  end
+  local crumb = not st.calls.anchor and 'where the code starts$' or st.calls.dir == 'up' and '  called by$' or '  calls$'
+  if not (head[1] or ''):match(crumb) then
+    fail('the breadcrumb does not end ' .. crumb .. ': ' .. tostring(head[1]))
+  end
+  if not st.calls.anchor and api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)[1]:match '^%s+below' == nil then
+    fail 'from the top, the pin is not the column titles alone'
+  end
   if st.calls.anchor then
     local pin = api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)
     local want = st.calls.dir == 'up' and '↓ calls' or '↑'

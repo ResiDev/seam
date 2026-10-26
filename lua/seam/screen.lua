@@ -689,7 +689,7 @@ local function calls_entry()
     top = w and api.nvim_win_is_valid(w) and api.nvim_win_call(w, function()
       return vim.fn.line 'w0'
     end) or nil,
-    label = a and ('calls of ' .. (a.kind == 'module' and vim.fn.fnamemodify(a.path, ':t') or shape(a))) or 'calls from the top',
+    label = a and ('calls of ' .. (a.kind == 'module' and vim.fn.fnamemodify(a.path, ':t') or shape(a))) or 'where the code starts',
   }
 end
 
@@ -790,8 +790,13 @@ local function calls_valid()
   return w and api.nvim_win_is_valid(w.head) and api.nvim_win_is_valid(w.list) and api.nvim_win_is_valid(w.pin) and api.nvim_win_is_valid(w.code)
 end
 
+-- the rows the budget fills: the list's as if the head had its shared line,
+-- so opening a row that brings one does not budget the tree again
 local function calls_height()
-  return calls_valid() and api.nvim_win_get_height(st.cwin.list) or 40
+  if not calls_valid() then
+    return 40
+  end
+  return api.nvim_win_get_height(st.cwin.list) + api.nvim_win_get_height(st.cwin.head) - 2
 end
 
 -- the row under the list's cursor
@@ -825,7 +830,7 @@ function M.calls_status()
     )
     p = p.parent and r.rows[p.parent]
   end
-  table.insert(crumb, 1, v.anchor and calls_label(g.nodes[v.anchor]) or 'from the top')
+  table.insert(crumb, 1, v.anchor and calls_label(g.nodes[v.anchor]) or 'where the code starts')
   local left = table.concat(crumb, ' › ')
   if v.anchor then
     left = left .. '  ' .. (v.dir == 'up' and 'called by' or 'calls')
@@ -927,12 +932,10 @@ show_calls = function()
   local m = index.model()
   local g, v = m.graph, st.calls
   calls_layout()
-  api.nvim_win_set_height(st.cwin.head, 2)
-  api.nvim_win_set_height(st.cwin.pin, v.anchor and 3 or 2)
-  local h = calls_height()
-  local r = calls.rows(g, v, h, m)
+  api.nvim_win_set_height(st.cwin.pin, v.anchor and 3 or 1)
+  local r = calls.rows(g, v, calls_height(), m)
   st.calls_rows = r
-  calls_draw.head(st.cbuf.head, g, v, r, vim.o.columns)
+  api.nvim_win_set_height(st.cwin.head, calls_draw.head(st.cbuf.head, g, v, r, vim.o.columns))
   calls_draw.pin(st.cbuf.pin, g, v)
   local w = st.cwin.list
   local same = st.calls_drawn == (v.anchor or '') .. v.dir
