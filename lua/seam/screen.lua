@@ -167,14 +167,22 @@ function M.status()
   if srcs ~= '' and st.screen ~= 'calls' then
     right = right .. '   ' .. srcs
   end
+  -- a lens on is said in the same place on every screen, the far right, in its red
+  local n = st.lens and #st.lens.rules or 0
+  local mark = n > 0 and ('L lens ' .. n) or ''
   -- the keys that fit, the last ones dropped first
-  local room = vim.o.columns - 12 - api.nvim_strwidth(left)
-  local keys = vim.split(right, '   ', { plain = true })
+  local room = vim.o.columns - 12 - api.nvim_strwidth(left) - (n > 0 and #mark + 3 or 0)
+  local keys = vim.tbl_filter(function(k)
+    return n == 0 or k ~= 'L lens'
+  end, vim.split(right, '   ', { plain = true }))
   while #keys > 1 and api.nvim_strwidth(table.concat(keys, '   ')) > room do
     keys[#keys] = nil
   end
-  right = table.concat(keys, '   ')
-  return '%#SeamMode# NORMAL %#SeamStatus# ' .. left:gsub('%%', '%%%%') .. '%=' .. right:gsub('%%', '%%%%') .. ' '
+  right = table.concat(keys, '   '):gsub('%%', '%%%%')
+  if n > 0 then
+    right = right .. '   %#SeamStatusLens#' .. mark .. '%#SeamStatus#'
+  end
+  return '%#SeamMode# NORMAL %#SeamStatus# ' .. left:gsub('%%', '%%%%') .. '%=' .. right .. ' '
 end
 
 ---------------------------------------------------------------- explorer

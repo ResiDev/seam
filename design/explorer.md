@@ -85,7 +85,10 @@ are, and `L lens` after it, the key that lists the rules:
   the tree: `used by   3 files · 5 references   +3 hidden  L lens`.
 
 The count is a muted red, apart from the pink package hue; `L lens` is grey.
-A column the lens takes nothing from says nothing. Nothing hidden gets a row:
+A column the lens takes nothing from says nothing. So that a lens on is never
+out of mind, the status line's last word on every screen, the explorer, a
+page and the call tree, is `L lens 2`, the rules on, in the same red; with
+none it is the grey `L lens` among the other keys. Nothing hidden gets a row:
 the screen never lists the rules or what they hid, the panel does. The mock's
 source is `mocks/src/lens/`.
 

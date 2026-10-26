@@ -36,6 +36,7 @@ function M.setup()
   s('SeamSep', { fg = '#3b4261' })
   -- the lens: what it hides in a muted red, apart from the pink package hue
   s('SeamLensHidden', { fg = '#c45c5c' })
+  s('SeamStatusLens', { fg = '#c45c5c', bg = '#16161e' })
   for i, h in ipairs(HUES) do
     s('SeamHue' .. i, { fg = h, bold = true })
     s('SeamBar' .. i, { fg = h })
