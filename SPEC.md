@@ -211,10 +211,11 @@ lua/seam/
   draw/init.lua     rows, putting them in a buffer, the pieces both screens share
   draw/explorer.lua the contracts list, and the trees or diagram beside it
   draw/page.lua     the Built from and Used by tabs, the contract, the seam
-  calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does
+  calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does, what / lists
   draw/calls.lua    the Calls screen: its head, the pinned anchor, the tree, the call and the body
   diagram.lua       the v and V views, drawn by thread's flow renderer
   lens_panel.lua    the lens float and its keys
+  calls_picker.lua  the / float over the call tree: a prompt, every function, anchor on one
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own

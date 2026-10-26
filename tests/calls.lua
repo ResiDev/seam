@@ -403,5 +403,47 @@ do
   calls.forget(g)
 end
 
+-- the picker: every function, component and class but a file's top and the
+-- tests, the lens's contracts column applied, the most used first; typing
+-- narrows by name, the best match first
+do
+  local pg = index.graph {
+    node('src/p.ts:1:start', nil, {}),
+    node('src/p.ts:11:startRun', nil, { { 'src/p.ts:1:start', 12, 3 } }),
+    node('src/q.ts:1:Box', 'component', { { 'src/p.ts:11:startRun', 2, 3 }, { 'src/p.ts:1:start', 3, 3 } }),
+    node('src/q.ts:11:Store', 'class', { { 'src/p.ts:11:startRun', 12, 3 } }),
+    node('src/q.ts:0:', 'module', { { 'src/q.ts:1:Box', 30, 1 } }),
+    node('src/p.test.ts:1:startsTest', nil, { { 'src/p.ts:1:start', 2, 1 } }),
+    node('src/h.ts:1:stash', nil, { { 'src/p.ts:1:start', 2, 1 } }),
+  }
+  local function ids(list)
+    return vim.tbl_map(function(p)
+      return p.id:match '[^:]*$' .. ' ' .. p.used_by
+    end, list)
+  end
+  local all = calls.callables(pg, M)
+  eq(ids(all), { 'start 4', 'startRun 2', 'Box 1', 'Store 0', 'stash 0' }, 'callables: no top of a file, no test; by used by then name')
+  local H = lens { contracts = { ['src/h.ts'] = true }, used = { ['src/p.test.ts'] = true } }
+  calls.forget(pg)
+  eq(ids(calls.callables(pg, H)), { 'start 3', 'startRun 2', 'Box 1', 'Store 0' }, 'the lens: contracts hides stash, used by the test from the count')
+  calls.forget(pg)
+  eq(calls.fuzzy(pg, all, '  '), all, 'an empty query keeps them all, in order')
+  local got = calls.fuzzy(pg, all, 'sta')
+  eq(ids(got), { 'start 4', 'stash 0', 'startRun 2' }, 'sta: the best match first, used by between equals')
+  eq(got[1].pos, { 0, 1, 2 }, 'the letters matched')
+  eq(ids(calls.fuzzy(pg, all, 'zzz')), {}, 'nothing matches')
+
+  -- anchoring from it keeps the direction, and K comes back
+  local v = calls.new('src/p.ts:11:startRun', 'up')
+  calls.anchor(v, 'src/q.ts:1:Box')
+  eq({ v.anchor, v.dir, #v.back }, { 'src/q.ts:1:Box', 'up', 1 }, 'anchor keeps called by, the view before kept')
+  local r = calls.rows(pg, v, 100, M)
+  eq(calls.key(pg, v, r, 1, 'K', 100, M), 'redraw', 'K after a pick')
+  eq({ v.anchor, v.dir }, { 'src/p.ts:11:startRun', 'up' }, 'K comes back to the anchor before')
+  local top = calls.new(nil)
+  calls.anchor(top, 'src/p.ts:1:start')
+  eq({ top.anchor, top.dir }, { 'src/p.ts:1:start', 'down' }, 'from the top: calls')
+end
+
 io.stdout:write(('calls: %d checks, %d failures\n'):format(checks, #failures))
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')

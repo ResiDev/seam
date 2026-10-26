@@ -4,6 +4,7 @@
 local api = vim.api
 local calls = require 'seam.calls'
 local calls_draw = require 'seam.draw.calls'
+local calls_picker = require 'seam.calls_picker'
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local explorer = require 'seam.draw.explorer'
@@ -824,6 +825,9 @@ end
 --- the row under the cursor, then the keys.
 ---@return string left, string right
 function M.calls_status()
+  if calls_picker.is_open() then
+    return 'anchor on', calls_picker.KEYS
+  end
   local v, r = st.calls, st.calls_rows
   local g = index.model().graph
   local i = calls_at()
@@ -867,7 +871,7 @@ function M.calls_status()
   if v.anchor then
     hints[#hints + 1] = v.dir == 'up' and '~ calls' or '~ called by'
   end
-  vim.list_extend(hints, { 'L lens', '<CR> anchor here', '[ ] sibling', 'O open all', 'H as it opened', '- explorer', 'C from the top' })
+  vim.list_extend(hints, { 'L lens', '<CR> anchor here', '/ anchor on', '[ ] sibling', 'O open all', 'H as it opened', '- explorer', 'C from the top' })
   return left, table.concat(hints, '   ')
 end
 
@@ -1018,6 +1022,34 @@ local function calls_press(k, times)
   end
 end
 
+-- `/`: a float over the tree to anchor on any function, the direction kept
+local function calls_pick()
+  if not calls_valid() then
+    return
+  end
+  local w = st.cwin
+  calls_picker.open {
+    graph = function()
+      return index.model().graph
+    end,
+    model = index.model,
+    over = w.pin,
+    rows = api.nvim_win_get_height(w.pin) + api.nvim_win_get_height(w.list),
+    pick = function(id)
+      if st.screen == 'calls' and st.calls then
+        calls.anchor(st.calls, id)
+        show_calls()
+      end
+    end,
+    closed = function()
+      if calls_valid() then
+        api.nvim_set_current_win(w.list)
+      end
+      vim.cmd 'redrawstatus'
+    end,
+  }
+end
+
 local function calls_keys(buf)
   local o = { buffer = buf, nowait = true, silent = true }
   local press = calls_press
@@ -1025,6 +1057,7 @@ local function calls_keys(buf)
     vim.keymap.set('n', k, press(k), o)
   end
   vim.keymap.set('n', 'L', M.open_lens, o)
+  vim.keymap.set('n', '/', calls_pick, o)
   vim.keymap.set('n', 'j', press('j', true), o)
   vim.keymap.set('n', 'k', press('k', true), o)
   vim.keymap.set('n', 'n', press(']]', true), o)

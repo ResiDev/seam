@@ -863,11 +863,91 @@ function M.key(g, view, r, i, k, height, m)
     if not row.id then
       return nil
     end
-    view.back[#view.back + 1] = snapshot(view)
-    view.anchor = row.id
-    reset(view)
+    M.anchor(view, row.id)
     return 'redraw'
   end
+end
+
+--- Anchor the view on `id`, the way it reads kept (from the top, calls), the
+--- view before it kept for `K`.
+---@param view seam.CallsView
+---@param id string
+function M.anchor(view, id)
+  view.back[#view.back + 1] = snapshot(view)
+  view.anchor = id
+  reset(view)
+end
+
+---------------------------------------------------------------- the picker
+
+local CALLABLE = { ['function'] = true, component = true, class = true }
+
+---@class seam.Pick
+---@field id string
+---@field used_by integer distinct callers, as the tree's used by column counts them
+---@field pos integer[]|nil the name's matched characters, 0-based, when a query matched it
+
+--- What `/` can anchor on: every function, component and class, no file's
+--- top and no test, those the lens hides in its contracts column left out;
+--- the most used first, then by name, then where.
+---@param g seam.Graph
+---@param m? table the model, its lens in m.visible
+---@return seam.Pick[]
+function M.callables(g, m)
+  local top, up = M.visible(m, 'top'), M.visible(m, 'up')
+  local out = {}
+  for id, node in pairs(g.nodes) do
+    if CALLABLE[node.kind] and not node.test and top(node.path) then
+      out[#out + 1] = { id = id, used_by = M.used_by(g, id, up) }
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.used_by ~= b.used_by then
+      return a.used_by > b.used_by
+    end
+    local na, nb = g.nodes[a.id], g.nodes[b.id]
+    if na.name ~= nb.name then
+      return na.name < nb.name
+    end
+    if na.path ~= nb.path then
+      return na.path < nb.path
+    end
+    return na.line < nb.line
+  end)
+  return out
+end
+
+--- The picks whose name `query` fuzzily matches, the best match first and
+--- the order they came in between equal ones, each with the characters it
+--- matched. An empty query keeps them all, as they came.
+---@param g seam.Graph
+---@param picks seam.Pick[]
+---@param query string
+---@return seam.Pick[]
+function M.fuzzy(g, picks, query)
+  query = vim.trim(query)
+  if query == '' then
+    return picks
+  end
+  local names = {}
+  for i, p in ipairs(picks) do
+    names[i] = { i = i, text = g.nodes[p.id].name }
+  end
+  local got = vim.fn.matchfuzzypos(names, query, { key = 'text' })
+  local out = {}
+  for j, x in ipairs(got[1]) do
+    out[j] = { i = x.i, score = got[3][j], pos = got[2][j] }
+  end
+  table.sort(out, function(a, b)
+    if a.score ~= b.score then
+      return a.score > b.score
+    end
+    return a.i < b.i
+  end)
+  for j, x in ipairs(out) do
+    out[j] = { id = picks[x.i].id, used_by = picks[x.i].used_by, pos = x.pos }
+  end
+  return out
 end
 
 return M
