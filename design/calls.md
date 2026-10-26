@@ -23,10 +23,10 @@ anchors and `<BS>`.
   after the rest. One at a time, as Used by draws a use: the caller's
   function, 20 rows at most, the call lit and the name underlined. It opens
   on the call the tree is about, the one its parent makes going down; going
-  up, where the row is the caller, on the first place. `]]` `[[` step
+  up, where the row is the caller, on the first place. `n` `N` step
   through them, round the ends. The head says where:
   `called at  4 of 100  ·  useOwnedRun()  useRun.ts:59`.
-- **Itself.** Its own declaration, every call in it underlined. `]]` `[[`
+- **Itself.** Its own declaration, every call in it underlined. `n` `N`
   light the lines that call something, one after another. Going up, its call
   to the row above stands out, lit to start with.
 
@@ -102,7 +102,7 @@ way.
 | `-` | straight to the explorer, on the anchor |
 | `C` | from the top |
 | `<Tab>` | the code beside: called at, itself |
-| `]]` `[[` | called at: the next or previous place; itself: the next or previous call |
+| `n` `N` | called at: the next or previous place; itself: the next or previous call. In the code, `]]` `[[` |
 | `gd` | the declaration, in a normal window |
 | `q` | close |
 
