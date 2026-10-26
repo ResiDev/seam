@@ -683,9 +683,10 @@ local function snapshot(view)
   }
 end
 
+-- every field, a missing one too: the lens may have dropped its `auto`
 local function restore(view, s)
-  for k, v in pairs(s) do
-    view[k] = v
+  for _, k in ipairs { 'anchor', 'dir', 'open', 'auto', 'height', 'levels', 'cursor' } do
+    view[k] = s[k]
   end
 end
 
@@ -799,7 +800,7 @@ function M.key(g, view, r, i, k, height, m)
       return 'redraw'
     end
     return go(row.parent)
-  elseif k == 'L' then
+  elseif k == 'O' then
     if not (row.fold == 'folded' or row.fold == 'open') or not (row.id or row.kind == 'tests' or row.kind == 'hidden') then
       return nil
     end

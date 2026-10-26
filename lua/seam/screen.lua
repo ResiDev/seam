@@ -858,7 +858,7 @@ function M.calls_status()
   if v.anchor then
     hints[#hints + 1] = v.dir == 'up' and '~ calls' or '~ called by'
   end
-  vim.list_extend(hints, { '<CR> anchor here', '[ ] sibling', 'L open all', 'H as it opened', '- explorer', 'C from the top' })
+  vim.list_extend(hints, { 'L lens', '<CR> anchor here', '[ ] sibling', 'O open all', 'H as it opened', '- explorer', 'C from the top' })
   return left, table.concat(hints, '   ')
 end
 
@@ -1014,9 +1014,10 @@ end
 local function calls_keys(buf)
   local o = { buffer = buf, nowait = true, silent = true }
   local press = calls_press
-  for _, k in ipairs { 'l', 'h', 'L', 'H', '<CR>', '~', '<BS>', 'K', 'C', '<Tab>', ']', '[' } do
+  for _, k in ipairs { 'l', 'h', 'O', 'H', '<CR>', '~', '<BS>', 'K', 'C', '<Tab>', ']', '[' } do
     vim.keymap.set('n', k, press(k), o)
   end
+  vim.keymap.set('n', 'L', M.open_lens, o)
   vim.keymap.set('n', 'j', press('j', true), o)
   vim.keymap.set('n', 'k', press('k', true), o)
   vim.keymap.set('n', 'n', press(']]', true), o)
@@ -1127,8 +1128,18 @@ function M.lens_changed()
   for _, m in pairs(st.models) do
     lens.apply(st.lens, m)
   end
+  -- what the budget opened in a call tree was for the lens before: shown,
+  -- under a page, or an anchor back
+  local trees = { st.calls }
+  for _, e in ipairs(st.stack or {}) do
+    trees[#trees + 1] = e.kind == 'calls' and e.calls or nil
+  end
+  for _, v in ipairs(trees) do
+    for _, s in ipairs { v, unpack(v.back) } do
+      s.auto = nil
+    end
+  end
   if st.screen == 'calls' and st.calls then
-    st.calls.auto = nil
     show_calls()
   elseif st.screen == 'page' and st.page then
     if lens_panel.is_open() then

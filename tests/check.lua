@@ -527,6 +527,24 @@ local function page_and_back()
   end
 end
 
+-- L opens the lens over the tree; closing it leaves the tree as it was
+local function lens_and_back()
+  local v = st.calls
+  local was = { v.anchor, v.dir, vim.deepcopy(v.open), v.cursor }
+  key 'L'
+  if not require('seam.lens_panel').is_open() then
+    return fail 'L did not open the lens'
+  end
+  key 'q'
+  if require('seam.lens_panel').is_open() or api.nvim_get_current_win() ~= st.cwin.list then
+    fail 'q did not close the lens back to the tree'
+  end
+  check_calls(false)
+  if not vim.deep_equal({ v.anchor, v.dir, v.open, v.cursor }, was) then
+    fail 'the lens closed on another tree'
+  end
+end
+
 -- the head and the pin give the cursor back to the tree; the code keeps it
 -- until <Esc>
 local function windows()
@@ -572,7 +590,7 @@ do
       if on_screen(c) then
         key 'c'
         check_calls(true)
-        for _, k in ipairs { 'j', 'l', 'l', 'h', 'h', 'L', 'H', ']', '[', 'j', 'j', 'k', 'l' } do
+        for _, k in ipairs { 'j', 'l', 'l', 'h', 'h', 'O', 'H', ']', '[', 'j', 'j', 'k', 'l' } do
           where = 'calls ' .. c.id .. ' ' .. k
           key(k)
           check_calls(false)
@@ -586,11 +604,13 @@ do
         end
         where = 'calls ' .. c.id .. ' ~ swap'
         swap()
-        for _, k in ipairs { 'k', 'l', 'k', 'L', ']', 'H', '[', 'C', 'j', 'l', 'j' } do
+        for _, k in ipairs { 'k', 'l', 'k', 'O', ']', 'H', '[', 'C', 'j', 'l', 'j' } do
           where = 'calls ' .. c.id .. ' ' .. k
           key(k)
           check_calls(false)
         end
+        where = 'calls ' .. c.id .. ' L'
+        lens_and_back()
         where = 'calls ' .. c.id .. ' J'
         page_and_back()
         where = 'calls ' .. c.id .. ' windows'
@@ -637,7 +657,7 @@ do
     where = 'calls from the top'
     key 'C'
     check_calls(true)
-    for _, k in ipairs { 'j', 'j', 'l', 'L', 'H' } do
+    for _, k in ipairs { 'j', 'j', 'l', 'O', 'H' } do
       key(k)
     end
     -- h folds an open folder, l opens it again

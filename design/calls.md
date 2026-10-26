@@ -98,7 +98,7 @@ way.
 | `j` `k` | the next or previous row |
 | `l` | open the row one level; on an open row, its first child |
 | `h` | fold an open row, a folder or file too; on a folded or empty one, its parent |
-| `L` | open everything under the row until the budget runs out |
+| `O` | open everything under the row until the budget runs out |
 | `H` | fold back to what the budget opened |
 | `]` `[` | the next or previous sibling |
 | `<CR>` | anchor on the row |
@@ -107,6 +107,7 @@ way.
 | `K` `<BS>` | the previous anchor; from the first, the explorer |
 | `-` | straight to the explorer, on the anchor |
 | `C` | from the top |
+| `L` | the lens; closed, the tree redraws with it, as it was |
 | `<Tab>` | the code beside: called at, itself |
 | `n` `N` | called at: the next or previous place; itself: the next or previous call. In the code, `]]` `[[` |
 | `gd` | the declaration, in a normal window |
