@@ -724,6 +724,35 @@ do
         check_code(ci)
         key '<BS>'
       end
+      -- a lens hiding react in used by: createRun's callers say one is hidden,
+      -- and the row opens to it
+      where = 'calls raf-run-redesign lens'
+      local L, saved = require 'seam.lens', st.lens
+      st.lens = L.new()
+      table.insert(st.lens.rules, { path = 'packages/react/', cols = { used = 'hide' } })
+      seam.lens_changed()
+      seam.open_calls 'packages/core/src/run/run.ts:75:createRun'
+      key '~'
+      check_calls(true)
+      local create = 'packages/core/src/run/run.ts:75:createRun'
+      local hi, h = find_row(create .. '\nhidden')
+      if not (h and h.kind == 'hidden' and h.fold == 'folded' and h.hidden == 1) then
+        fail "createRun's called by has no folded row of one hidden by the lens"
+      else
+        key(hi .. 'G')
+        key 'l'
+        check_calls(false)
+        local _, u = find_row(create .. '\nhidden\npackages/react/src/useRun.ts:39:useOwnedRun')
+        if not (u and u.hidden) then
+          fail 'l on the hidden row did not open to useOwnedRun'
+        end
+      end
+      if find_row(create .. '\npackages/react/src/useRun.ts:39:useOwnedRun') then
+        fail 'useOwnedRun is still among the callers shown'
+      end
+      key '<BS>'
+      st.lens = saved
+      seam.lens_changed()
     end
   end
 end

@@ -53,7 +53,7 @@ The call tree of a function, component or class: what it calls all the way down,
 | Key | Does |
 |---|---|
 | `j` `k` | the next or previous row |
-| `l` | open the row one level; on an open row, its first child; on an `↑ also` row, where it is open |
+| `l` | open the row one level, a `tests` or `hidden by the lens` row too; on an open row, its first child; on an `↑ also` row, where it is open |
 | `h` | fold an open row, a folder or file too; on a folded or empty one, its parent |
 | `L` | open everything under the row until the budget runs out |
 | `H` | fold back to what the budget opened |

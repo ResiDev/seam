@@ -42,7 +42,7 @@ local M = {}
 
 ---@class seam.CallRow
 ---@field key string the ids from the top of the tree to it, one a line
----@field kind 'node'|'file'|'dir'|'tests'
+---@field kind 'node'|'file'|'dir'|'tests'|'hidden'
 ---@field id string|nil the node, for 'node', and 'file' when the file's top is a root
 ---@field path string|nil
 ---@field pkg string|nil
@@ -61,6 +61,7 @@ local M = {}
 ---@field used_by integer|nil distinct callers
 ---@field shared boolean|nil called by SHARED or more: the budget never opens it
 ---@field files integer|nil a tests row: how many test files
+---@field hidden integer|boolean|nil a hidden row: how many it holds; a row under it: true
 ---@field show_file boolean its file is not the file of the row it hangs from
 ---@field last boolean the last of its parent's rows, in the tree's order
 ---@field touched boolean|nil a dir row with roots under it
@@ -78,6 +79,22 @@ M.SHARED = 5
 
 local function all()
   return true
+end
+
+--- The lens column each way of reading the tree follows: what a function
+--- calls is what it is built from, what calls it is what uses it, and the
+--- starts from the top are the contracts. Every count and list goes by it.
+M.LENS = { down = 'built', up = 'used', top = 'contracts' }
+
+--- Whether a path shows, read `way`, under the model's lens.
+---@param m table|nil the model, its lens in m.visible
+---@param way seam.Dir|'top'
+---@return fun(path: string): boolean
+function M.visible(m, way)
+  local v, col = m and m.visible, M.LENS[way]
+  return v and function(path)
+    return v(path, col)
+  end or all
 end
 
 local function memo(g, what)
@@ -154,27 +171,25 @@ function M.used_by(g, id, visible)
   return c[id]
 end
 
---- What nothing calls, by id: where the code starts, and the tests apart. A
---- test calling a function does not make it any less a start.
+--- What nothing calls, by id: where the code starts, the tests apart, and
+--- apart again those `visible` hides. A test calling a function does not make
+--- it any less a start.
 ---@param g seam.Graph
 ---@param visible? fun(path: string): boolean
----@return string[] roots, string[] tests
+---@return string[] roots, string[] tests, string[] hidden
 function M.roots(g, visible)
   visible = visible or all
-  local roots, tests = {}, {}
+  local roots, tests, hidden = {}, {}, {}
   for id, node in pairs(g.nodes) do
-    if visible(node.path) then
-      local called = false
-      for _, u in ipairs(g.up[id] or {}) do
-        local by = g.nodes[u.from]
-        if u.from ~= id and not by.test and visible(by.path) then
-          called = true
-          break
-        end
+    local called = false
+    for _, u in ipairs(g.up[id] or {}) do
+      if u.from ~= id and not g.nodes[u.from].test then
+        called = true
+        break
       end
-      if not called then
-        table.insert(node.test and tests or roots, id)
-      end
+    end
+    if not called then
+      table.insert(not visible(node.path) and hidden or node.test and tests or roots, id)
     end
   end
   local function by_place(a, b)
@@ -186,19 +201,21 @@ function M.roots(g, visible)
   end
   table.sort(roots, by_place)
   table.sort(tests, by_place)
-  return roots, tests
+  table.sort(hidden, by_place)
+  return roots, tests, hidden
 end
 
 --- A node's rows one level on: the distinct functions it calls, in the order
---- first written, or that call it, by path then line; tests apart, going up.
+--- first written, or that call it, by path then line; tests apart, going up,
+--- and those `visible` hides apart.
 ---@param g seam.Graph
 ---@param id string
 ---@param dir seam.Dir
 ---@param visible? fun(path: string): boolean
----@return { id: string, n: integer, lines: integer[], col: integer }[] kids, table[] tests
+---@return { id: string, n: integer, lines: integer[], col: integer }[] kids, table[] tests, table[] hidden
 function M.kids(g, id, dir, visible)
   visible = visible or all
-  local kids, tests, at = {}, {}, {}
+  local kids, tests, hidden, at = {}, {}, {}, {}
   local edges, field = g.down[id] or {}, 'to'
   if dir == 'up' then
     edges, field = g.up[id] or {}, 'from'
@@ -206,7 +223,7 @@ function M.kids(g, id, dir, visible)
   for _, e in ipairs(edges) do
     local to = e[field]
     local node = g.nodes[to]
-    if node and visible(node.path) then
+    if node then
       local k = at[to]
       if k then
         k.n = k.n + 1
@@ -216,22 +233,15 @@ function M.kids(g, id, dir, visible)
       else
         k = { id = to, n = 1, lines = { e.line }, col = e.col }
         at[to] = k
-        local list = (dir == 'up' and node.test) and tests or kids
+        local list = not visible(node.path) and hidden or (dir == 'up' and node.test) and tests or kids
         list[#list + 1] = k
       end
     end
   end
-  return kids, tests
+  return kids, tests, hidden
 end
 
 ---------------------------------------------------------------- the tree
-
-local function visibility(m)
-  local v = m and m.visible
-  return v and function(path)
-    return v(path, 'contracts')
-  end or all
-end
 
 local function test_files(g, list)
   local seen, n = {}, 0
@@ -250,38 +260,44 @@ end
 -- row with the rows under it (`sub`), flat in screen order. Also the rows one
 -- call from the top, where the budget starts.
 local function walk(g, view, is_open, m)
-  local visible = visibility(m)
   local dir = view.dir
+  local visible = M.visible(m, dir)
   local owner = {} -- id -> the row it opens at
   local first = {}
   local function node_row(key, k, from, depth)
     return { key = key, kind = 'node', id = k.id, n = k.n, lines = k.lines, col = k.col, from = from, root = from == nil or nil, depth = depth, sub = {} }
   end
-  local function tests_row(key, list, from, depth)
-    return { key = key, kind = 'tests', tests = list, files = test_files(g, list), from = from, depth = depth, sub = {} }
+  -- the tests, or what the lens hides, folded into one row
+  local function group_row(kind, key, list, from, depth)
+    return { key = key, kind = kind, list = list, files = kind == 'tests' and test_files(g, list) or nil, from = from, depth = depth, sub = {} }
   end
   local function grow(r)
-    if r.kind == 'tests' then
-      for _, k in ipairs(r.tests) do
-        r.sub[#r.sub + 1] = node_row(r.key .. '\n' .. k.id, k, r.from, r.depth + 1)
+    if r.list then
+      for _, k in ipairs(r.list) do
+        local s = node_row(r.key .. '\n' .. k.id, k, r.from, r.depth + 1)
+        s.hidden = r.kind == 'hidden' or nil
+        r.sub[#r.sub + 1] = s
       end
       return
     end
-    local kids, tests = M.kids(g, r.id, dir, visible)
+    local kids, tests, hidden = M.kids(g, r.id, dir, visible)
     for _, k in ipairs(kids) do
       r.sub[#r.sub + 1] = node_row(r.key .. '\n' .. k.id, k, r.id, r.depth + 1)
     end
     vim.list_extend(r.sub, r.extra or {})
     if #tests > 0 then
-      r.sub[#r.sub + 1] = tests_row(r.key .. '\ntests', tests, r.id, r.depth + 1)
+      r.sub[#r.sub + 1] = group_row('tests', r.key .. '\ntests', tests, r.id, r.depth + 1)
+    end
+    if #hidden > 0 then
+      r.sub[#r.sub + 1] = group_row('hidden', r.key .. '\nhidden', hidden, r.id, r.depth + 1)
     end
   end
   local function has_kids(r)
-    if r.kind == 'tests' or (r.extra and #r.extra > 0) then
+    if r.list or (r.extra and #r.extra > 0) then
       return true
     end
-    local kids, tests = M.kids(g, r.id, dir, visible)
-    return #kids + #tests > 0
+    local kids, tests, hidden = M.kids(g, r.id, dir, visible)
+    return #kids + #tests + #hidden > 0
   end
 
   local top = {}
@@ -294,7 +310,7 @@ local function walk(g, view, is_open, m)
     grow(a)
     top, first = a.sub, a.sub
   else
-    local roots, tests = M.roots(g, visible)
+    local roots, tests, hidden = M.roots(g, M.visible(m, 'top'))
     local entries = {}
     for _, id in ipairs(roots) do
       local p = g.nodes[id].path
@@ -352,14 +368,17 @@ local function walk(g, view, is_open, m)
         end
       end
     end
-    if #tests > 0 then
-      local list = {}
-      for _, id in ipairs(tests) do
-        list[#list + 1] = { id = id, n = 1, lines = { g.nodes[id].line } }
+    for _, kind in ipairs { 'tests', 'hidden' } do
+      local ids = kind == 'tests' and tests or hidden
+      if #ids > 0 then
+        local list = {}
+        for _, id in ipairs(ids) do
+          list[#list + 1] = { id = id, n = 1, lines = { g.nodes[id].line } }
+        end
+        local t = group_row(kind, kind, list, nil, 0)
+        top[#top + 1] = t
+        first[#first + 1] = t
       end
-      local t = tests_row('tests', list, nil, 0)
-      top[#top + 1] = t
-      first[#first + 1] = t
     end
   end
 
@@ -369,8 +388,8 @@ local function walk(g, view, is_open, m)
   while qi <= #queue do
     local r = queue[qi]
     qi = qi + 1
-    local mine = r.kind == 'tests' or not owner[r.id]
-    if r.kind ~= 'tests' then
+    local mine = r.list or not owner[r.id]
+    if not r.list then
       owner[r.id] = owner[r.id] or r
     end
     if not has_kids(r) then
@@ -405,8 +424,7 @@ end
 
 -- The rows as the screen draws them: indices for parents and kids, counts.
 local function finish(g, view, flat, m)
-  local visible = visibility(m)
-  local count = view.dir == 'up' and M.above or M.below
+  local down, up = M.visible(m, 'down'), M.visible(m, 'up')
   local rows, shared, seen = {}, {}, {}
   for i, r in ipairs(flat) do
     local row = {
@@ -425,6 +443,7 @@ local function finish(g, view, flat, m)
       root = r.root,
       fold = r.fold or (#r.sub > 0 and 'open' or 'leaf'),
       files = r.files,
+      hidden = r.kind == 'hidden' and #r.list or r.hidden,
       touched = r.touched,
       segs = r.segs,
       ispkg = r.ispkg,
@@ -436,8 +455,8 @@ local function finish(g, view, flat, m)
     end
     if r.id then
       row.path = g.nodes[r.id].path
-      row.count = count(g, r.id, visible)
-      row.used_by = M.used_by(g, r.id, visible)
+      row.count = view.dir == 'up' and M.above(g, r.id, up) or M.below(g, r.id, down)
+      row.used_by = M.used_by(g, r.id, up)
       row.shared = row.used_by >= M.SHARED
       local from = r.parent_row and (r.parent_row.id and g.nodes[r.parent_row.id].path or r.parent_row.path) or (view.anchor and g.nodes[view.anchor].path)
       row.show_file = r.kind == 'node' and row.path ~= from
@@ -456,11 +475,11 @@ local function finish(g, view, flat, m)
 end
 
 -- What the budget opens: whole levels, breadth first, while every row fits
--- in `height`; never a shared node, a tests row or an also row. From the
--- top of the tree, or with `start` from that row, its rows alone counted,
--- the rest open as `base` says.
+-- in `height`; never a shared node, a tests or hidden row, or an also row.
+-- From the top of the tree, or with `start` from that row, its rows alone
+-- counted, the rest open as `base` says.
 local function budget(g, view, height, m, base, start)
-  local visible = visibility(m)
+  local visible, up = M.visible(m, view.dir), M.visible(m, 'up')
   local opened, levels = {}, 0
   local function is_open(key)
     local o = base and base[key]
@@ -504,11 +523,11 @@ local function budget(g, view, height, m, base, start)
     for _, r in ipairs(frontier) do
       if r.fold == 'open' then
         through[r.key] = true
-      elseif r.fold == 'folded' and r.kind ~= 'tests' and M.used_by(g, r.id, visible) < M.SHARED then
+      elseif r.fold == 'folded' and not r.list and M.used_by(g, r.id, up) < M.SHARED then
         cand[#cand + 1] = r
         through[r.key] = true
-        local kids, tests = M.kids(g, r.id, view.dir, visible)
-        cost = cost + #kids + (#tests > 0 and 1 or 0) + #(r.extra or {})
+        local kids, tests, hidden = M.kids(g, r.id, view.dir, visible)
+        cost = cost + #kids + (#tests > 0 and 1 or 0) + (#hidden > 0 and 1 or 0) + #(r.extra or {})
       end
     end
     if next(through) == nil or count + cost > height then
@@ -609,7 +628,7 @@ end
 --- view's choice, on the place the tree is about until `]]` or `[[` moves
 --- it. Going down that is the call its parent makes; going up, the row is
 --- the caller and its own call to its parent is lit in itself. Nil for a
---- folder, a file that is not a start, or tests.
+--- folder, a file that is not a start, tests or what the lens hides.
 ---@param g seam.Graph
 ---@param view seam.CallsView
 ---@param r seam.CallRows
@@ -617,14 +636,18 @@ end
 ---@param m? table
 ---@return seam.CallsPane|nil
 function M.pane(g, view, r, i, m)
-  local visible = visibility(m)
   local x = i and r.rows[i]
   local id = x and x.id or (not x and view.anchor)
   local node = id and g.nodes[id]
   if not node then
     return nil
   end
-  local p = { node = node, places = M.places(g, id, visible), lines = M.call_lines(g, id, visible), n = 0 }
+  local places = M.places(g, id, M.visible(m, 'up'))
+  if #places == 0 then
+    -- the lens hides every caller: still not where the code starts
+    places = M.places(g, id)
+  end
+  local p = { node = node, places = places, lines = M.call_lines(g, id, M.visible(m, 'down')), n = 0 }
   p.code = #p.places == 0 and 'itself' or view.code or 'called'
   local key = x and x.key or ''
   local s = view.step
@@ -777,7 +800,7 @@ function M.key(g, view, r, i, k, height, m)
     end
     return go(row.parent)
   elseif k == 'L' then
-    if not (row.fold == 'folded' or row.fold == 'open') or not (row.id or row.kind == 'tests') then
+    if not (row.fold == 'folded' or row.fold == 'open') or not (row.id or row.kind == 'tests' or row.kind == 'hidden') then
       return nil
     end
     local base = vim.deepcopy(view.open)

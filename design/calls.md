@@ -81,7 +81,13 @@ way.
   `shared, never opened: useStore 5 · noChange 9`. `l` still opens one.
 - **Tests fold to one row** among callers and roots: `tests  16 files`. `l`
   opens it.
-- **The lens** hides the same files here as everywhere else.
+- **The lens** is read the way the tree goes: what a function calls follows
+  its **built from** column, what calls it its **used by** column, and the
+  starts from the top its **contracts** column. The counts go by the same
+  columns. What it hides is never dropped in silence: under each row it folds
+  into one, `▸ 2 hidden by the lens`, last among the starts from the top. Like
+  the tests row the budget never opens it; `l` does, its rows dimmed, and the
+  chain goes on from them.
 
 ![From the top](mocks/calls-top.png)
 

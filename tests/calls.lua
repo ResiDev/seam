@@ -342,5 +342,83 @@ do
   eq({ calls.rows(g, calls.new(nil), 14, M).levels, calls.rows(g, calls.new(nil), 15, M).levels }, { 0, 1 }, 'the budget pays for the folders too')
 end
 
+-- the lens: each way reads its own column. Calls follow built from, callers
+-- used by, the starts contracts; what one hides folds into one row under its
+-- parent, which the budget never opens and l does
+local function lens(hide)
+  return {
+    ispkg = {},
+    pkgsorted = {},
+    visible = function(path, col)
+      return not (hide[col] and hide[col][path])
+    end,
+  }
+end
+do
+  local L = lens { built = { ['src/e.ts'] = true } }
+  calls.forget(g)
+  local v = calls.new(B, 'down')
+  local r = calls.rows(g, v, 100, L)
+  eq(keys(r), { k(B, 'hidden') }, 'b calls e, hidden in built from: one row says so')
+  local hi, h = find(r, k(B, 'hidden'))
+  eq({ h.kind, h.hidden, h.fold }, { 'hidden', 1, 'folded' }, 'the hidden row: how many, folded though it fits')
+  eq(calls.pane(g, v, r, hi, L), nil, 'the hidden row shows no code')
+  eq(calls.key(g, v, r, hi, 'l', 100, L), 'redraw', 'l opens it')
+  r = calls.rows(g, v, 100, L)
+  local ei, e = find(r, k(B, 'hidden', E))
+  eq({ e and e.hidden, e and e.fold, e and e.from }, { true, 'folded', B }, 'e under it, hidden, called by b')
+  calls.key(g, v, r, ei, 'l', 100, L)
+  r = calls.rows(g, v, 100, L)
+  local _, f = find(r, k(B, 'hidden', E, F))
+  eq(f and f.hidden, nil, 'the chain goes on from e: f, not hidden')
+  calls.forget(g)
+  local LU = lens { used = { ['src/a.ts'] = true, ['src/f.ts'] = true, ['src/a.test.ts'] = true } }
+  local pb = calls.pane(g, calls.new(B, 'up'), calls.rows(g, calls.new(B, 'up'), 100, LU), nil, LU)
+  eq({ pb.code, #pb.places }, { 'called', 4 }, 'every caller hidden: the code beside still shows where it is called')
+  calls.forget(g)
+  v = calls.new(B, 'down')
+  r = calls.rows(g, v, 100, L)
+  calls.key(g, v, r, 1, 'L', 100, L)
+  expect(find(calls.rows(g, v, 100, L), k(B, 'hidden', E, F)) ~= nil, 'L opens the hidden row and on down')
+  local _, ab = find(calls.rows(g, calls.new(A, 'down'), 100, L), k(A, B))
+  eq({ ab.count, ab.used_by }, { 0, 3 }, 'below b counts what built from shows; used by is not built from')
+  local _, fe = find(calls.rows(g, calls.new(F, 'up'), 100, L), k(F, E))
+  eq({ fe.kind, fe.hidden }, { 'node', nil }, 'built from hides nothing going up: e calls f')
+
+  L = lens { used = { ['src/a.ts'] = true } }
+  calls.forget(g)
+  r = calls.rows(g, calls.new(B, 'up'), 100, L)
+  eq(
+    vim.tbl_map(
+      function(x)
+        return x.key
+      end,
+      vim.tbl_filter(function(x)
+        return not x.parent
+      end, r.rows)
+    ),
+    { k(B, F), k(B, 'tests'), k(B, 'hidden') },
+    'b called by f, the test, and a hidden in used by, last'
+  )
+  _, h = find(r, k(B, 'hidden'))
+  eq({ h.hidden, h.fold }, { 1, 'folded' }, 'a folded into it, not opened')
+  _, ab = find(calls.rows(g, calls.new(A, 'down'), 100, L), k(A, B))
+  eq({ ab.kind, ab.used_by }, { 'node', 2 }, 'used by hides nothing going down; b used by f and the test')
+
+  L = lens { contracts = { ['src/u.ts'] = true } }
+  calls.forget(g)
+  v = calls.new(nil)
+  r = calls.rows(g, v, 100, L)
+  eq({ find(r, 'file:src/u.ts'), r.rows[#r.rows - 1].key, r.rows[#r.rows].key }, { nil, 'tests', 'hidden' }, 'from the top, u.ts hidden: after the tests')
+  h = r.rows[#r.rows]
+  eq({ h.hidden, h.fold }, { 4, 'folded' }, 'its four starts in one row')
+  calls.key(g, v, r, #r.rows, 'l', 100, L)
+  r = calls.rows(g, v, 100, L)
+  local _, u1 = find(r, k('hidden', U[1]))
+  eq({ u1 and u1.hidden, u1 and u1.root }, { true, true }, 'l: u1, a start, hidden')
+  expect(find(r, k('file:src/main.ts', A, B)) ~= nil, 'contracts hides nothing going down')
+  calls.forget(g)
+end
+
 io.stdout:write(('calls: %d checks, %d failures\n'):format(checks, #failures))
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')
