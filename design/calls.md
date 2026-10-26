@@ -18,10 +18,11 @@ on the right. The code is never inline.
   at the top, with one line for who calls it. Under it, what it calls in the
   order it is written, then what those call, and so on down.
 - **Anchored, called by.** `~` flips the direction on the same anchor. The
-  anchor is pinned at the bottom and its callers grow upward: a caller sits
-  above what it calls, so reading down a branch reads like a stack trace,
-  from where it starts down to the anchor. Up in the code is up on the
-  screen.
+  anchor stays pinned at the top, its callers indented under it, then their
+  callers, and so on. What says it is the other way: the head reads
+  `createRun()  called by`, the pinned line names what it calls
+  (`↓ calls startRun() run.ts:83 · …`) where calls names who calls it, and
+  the count column is **above** instead of **below**.
 - **From the top.** `C` in the explorer, or `-` from any anchor. The roots are
   what nothing calls: an app's entry file, a module's top-level code, a
   package's public functions no one in the repo calls, test files. They sit
@@ -80,10 +81,6 @@ way.
 | `q` | close |
 
 ![Called by](mocks/calls-up.png)
-
-The mock above draws called by downward. The build draws it upward instead,
-because the user found "up in the call stack is still down through the tree"
-confusing.
 
 ## Where it comes from
 
