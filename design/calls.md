@@ -57,6 +57,24 @@ comes back to the tree as it was.
 
 ![Opened one level](mocks/calls-down-opened.png)
 
+## Anchor on anything
+
+`/` in the tree opens a float over it titled `anchor on`: a prompt,
+`> query`, with `5 of 382 functions` on its right, and under it every
+function, component and class in the repo, no file's top and no test, those
+the lens hides in its contracts column left out. Empty, the most used come
+first, then by name. Typing narrows them with Neovim's own fuzzy match, the
+best match first and the letters it matched underlined. A row is the name
+as the tree draws it, then where it is, `packages/core/src/run/` dim,
+`run.ts`, `:83` dim, then its used by under that column's title.
+
+`<C-n>` `<C-p>` (or `<Down>` `<Up>`) move, `<CR>` anchors on it the way the
+tree reads (from the top, calls) as `<CR>` on a row does, so `K` comes back;
+`<Esc>` closes it with nothing changed. The status line reads `anchor on`
+and the keys. In the code beside the tree `/` stays Vim's search.
+
+![/ to anchor on any function](mocks/calls-picker.png)
+
 ## What a row says
 
 Four columns after the name, in this order:
@@ -108,6 +126,7 @@ way.
 | `H` | fold back to what the budget opened |
 | `]` `[` | the next or previous sibling |
 | `<CR>` | anchor on the row |
+| `/` | anchor on any function: a float, typed to narrow, `<CR>` anchors, `<Esc>` back |
 | `~` | flip: calls, called by |
 | `J` | the page of the row's function, when it is a contract |
 | `K` `<BS>` | the previous anchor; from the first, the explorer |

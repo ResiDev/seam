@@ -676,6 +676,37 @@ do
         end
       end
     end
+    -- / anchors on any function: typed, <C-n> to the second, <CR>; the
+    -- direction kept, K back; <Esc> changes nothing and leaves no insert mode
+    if #list > 0 then
+      where = 'calls /'
+      local m = st.models[st.cur]
+      seam.open_calls(list[1].id)
+      key '~'
+      local q = m.graph.nodes[list[1].id].name:sub(1, 3)
+      local want = calls.fuzzy(m.graph, calls.callables(m.graph, m), q)
+      local was = st.calls.anchor
+      key('/' .. q .. '<C-n><CR>')
+      local to = want[math.min(2, #want)]
+      if require('seam.calls_picker').is_open() then
+        fail '<CR> did not close the picker'
+      elseif not to or st.calls.anchor ~= to.id or st.calls.dir ~= 'up' then
+        fail(('/%s<C-n><CR> anchored on %s %s, not %s up'):format(q, tostring(st.calls.anchor), st.calls.dir, to and to.id or 'nothing'))
+      end
+      check_calls(true)
+      key '/zzz<Esc>'
+      if require('seam.calls_picker').is_open() or api.nvim_get_mode().mode ~= 'n' or api.nvim_get_current_win() ~= st.cwin.list then
+        fail '<Esc> did not close the picker back to the tree in normal mode'
+      elseif to and st.calls.anchor ~= to.id then
+        fail '<Esc> changed the anchor'
+      end
+      key 'K'
+      if st.calls.anchor ~= was or st.calls.dir ~= 'up' then
+        fail('K after / came back to ' .. tostring(st.calls.anchor) .. ', not ' .. was)
+      end
+      check_calls(true)
+      key '<BS>'
+    end
     where = 'calls from the top'
     key 'C'
     check_calls(true)
@@ -741,6 +772,15 @@ do
         end
         if top ~= 29 then
           fail(('startRun shows %d rows under it, not 29'):format(top))
+        end
+        -- / on the design's repo: createRun by name, K back to startRun
+        key '/createRun<CR>'
+        if st.calls.anchor ~= 'packages/core/src/run/run.ts:75:createRun' then
+          fail('/createRun<CR> anchored on ' .. tostring(st.calls.anchor))
+        end
+        key 'K'
+        if st.calls.anchor ~= start then
+          fail('K after /createRun came back to ' .. tostring(st.calls.anchor))
         end
         key '<BS>'
       end

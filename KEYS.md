@@ -59,6 +59,7 @@ The call tree of a function, component or class: what it calls all the way down,
 | `H` | fold back to what the budget opened |
 | `]` `[` | the next or previous sibling |
 | `<CR>` | anchor on the row |
+| `/` | anchor on any function: a float lists every one the lens lets through in contracts, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` anchors on it, the direction kept (from the top, calls), and `K` comes back; `<Esc>` `<C-c>` close it, nothing changed |
 | `~` | flip: calls, called by |
 | `J` | the page of the row's function, when it is a contract; `K` on it comes back to the tree as it was |
 | `K` `<BS>` | back: the previous anchor; from the first, the explorer |

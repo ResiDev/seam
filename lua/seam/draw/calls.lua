@@ -39,6 +39,10 @@ local function name(r, node, hl, room)
   return r:add(post, hl)
 end
 
+--- A node's name as the tree draws it: `name()`, `<Name>`, coloured as its
+--- declaration is.
+M.name = name
+
 local function titles(view)
   local r = row()
   local word = view.dir == 'up' and 'above' or 'below'
