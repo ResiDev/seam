@@ -246,6 +246,22 @@ do
   eq(r.rows[#r.rows].fold, 'folded', 'and folded')
   local _, d = find(r, 'dir:src')
   eq(d.kind, 'dir', 'the folder')
+  -- h folds an open folder or file, and only a folded one goes to its parent
+  local di = find(r, 'dir:src')
+  eq({ calls.key(g, v, r, di, 'h', 100, M), v.cursor }, { 'redraw', 'dir:src' }, 'h on an open folder folds it')
+  r = calls.rows(g, v, 100, M)
+  eq(keys(r), { 'dir:src', 'tests' }, 'the folder folded: nothing under it drawn')
+  eq(r.rows[1].fold, 'folded', 'and drawn folded')
+  eq(calls.key(g, v, r, 1, 'h', 100, M), nil, 'h on a folded folder at the top: nowhere to go')
+  calls.key(g, v, r, 1, 'l', 100, M)
+  r = calls.rows(g, v, 100, M)
+  expect(find(r, k('file:src/main.ts', A)) ~= nil, 'l opens it again, as it was')
+  local ui = find(r, 'file:src/u.ts')
+  calls.key(g, v, r, ui, 'h', 100, M)
+  r = calls.rows(g, v, 100, M)
+  eq({ select(2, find(r, 'file:src/u.ts')).fold, find(r, k('file:src/u.ts', U[1])) }, { 'folded', nil }, 'h on an open file folds it')
+  ui = find(r, 'file:src/u.ts')
+  eq({ calls.key(g, v, r, ui, 'h', 100, M), v.cursor }, { 'move', 'dir:src' }, 'h on a folded file goes to its folder')
   -- 10 rows of skeleton, 5 more for the first level
   eq({ calls.rows(g, calls.new(nil), 14, M).levels, calls.rows(g, calls.new(nil), 15, M).levels }, { 0, 1 }, 'the budget pays for the folders too')
 end
