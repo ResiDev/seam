@@ -255,6 +255,31 @@ local function draw_diagram(c)
   end
 end
 
+-- the names of `list` from the `i`th on, after one another to column `w`; the
+-- index of the first left over, or nil once all are on or, when `last`, the
+-- one that does not fit is cut or, with no room for it, an ellipsis
+local function put_names(r, list, i, w, last)
+  local start = r.w
+  for j = i, #list do
+    local d = list[j]
+    local gap = r.w > start and 2 or 0
+    local nw = api.nvim_strwidth(d.name)
+    local fits = r.w + gap + nw <= w
+    if not fits and gap > 0 and not last then
+      return j
+    end
+    if not fits and r.w + gap + 2 > w then
+      r:add(r.w + 2 <= w and ' …' or '', 'SeamLabel')
+      return nil
+    end
+    r:add(string.rep(' ', gap))
+    code.add_name(r, index.id_path(d.target), index.id_line(d.target), d.name, 'SeamName', w - r.w)
+    if not fits then
+      return nil
+    end
+  end
+end
+
 --- The contract under the cursor: its head, then its trees or its diagram.
 ---@param c table
 function M.contract(c)
@@ -268,6 +293,8 @@ function M.contract(c)
   local rows = { draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), row() }
   local NAMECOL = 30
   local mw = st.win.mid and api.nvim_win_is_valid(st.win.mid) and api.nvim_win_get_width(st.win.mid) or M.MW
+  local rows_of_names = st.sides == 'both' and 2 or 5
+  local rest
   vim.list_extend(
     rows,
     tree.rows(m, entries, {
@@ -276,14 +303,17 @@ function M.contract(c)
       reserve = 1,
       file = function(r, _, e)
         r:to(NAMECOL)
-        for i, d in ipairs(e.list) do
-          if i > 1 then
-            if r.w + 3 > mw - 1 then
-              break
-            end
-            r:add '  '
-          end
-          code.add_name(r, index.id_path(d.target), index.id_line(d.target), d.name, 'SeamName', mw - 1 - r.w)
+        rest = put_names(r, e.list, 1, mw - 1, false)
+      end,
+      after = function(out, _, e, _, pkg)
+        local n = 1
+        while rest do
+          n = n + 1
+          local r = row()
+          tree.bar(r, pkg)
+          r:to(NAMECOL)
+          rest = put_names(r, e.list, rest, mw - 1, n == rows_of_names)
+          out[#out + 1] = r
         end
       end,
     })

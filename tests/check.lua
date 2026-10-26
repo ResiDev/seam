@@ -164,12 +164,32 @@ local function check_head(c)
     end
   end
 end
+-- built from's names: no row wider than its tree, wrapped to two rows, five
+-- beside it alone
+local function check_names()
+  if not valid(st.win.mid) then
+    return
+  end
+  local most, run = st.sides == 'both' and 2 or 5, 0
+  for i, l in ipairs(api.nvim_buf_get_lines(st.buf.mid, 0, -1, false)) do
+    if vim.fn.strdisplaywidth(l) > api.nvim_win_get_width(st.win.mid) then
+      fail(('built from row %d is wider than its tree'):format(i))
+    end
+    local under = vim.trim(vim.fn.strcharpart(l, 0, 30):gsub('▎', '')) == '' and vim.trim(l:gsub('▎', '')) ~= ''
+    run = under and run + 1 or 0
+    if run == most then
+      fail(("%s: a file's names take more than %d rows"):format(st.shown and st.shown.name or '?', most))
+    end
+  end
+end
+
 for _, side in ipairs { 'u', 'u', 'b', 'b' } do
   key(side)
   for _, c in ipairs(st.models[st.cur].contracts) do
     where = 'explorer head sides=' .. st.sides
-    require('seam.draw.explorer').contract_head(c)
+    require('seam.draw.explorer').contract(c)
     check_head(c)
+    check_names()
   end
 end
 
@@ -181,6 +201,7 @@ for _, view in ipairs { 'v', 'V' } do
     key(side)
     for _, k in ipairs { 'j', 'j', 'k' } do
       key(k)
+      check_names()
       if #api.nvim_buf_get_extmarks(st.buf.rhead, require('seam.code').ns, 0, -1, {}) == 0 then
         fail(k .. ' left the head uncoloured on ' .. (st.shown and st.shown.name or 'nothing'))
       end
