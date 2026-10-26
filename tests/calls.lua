@@ -210,13 +210,15 @@ do
   eq(calls.key(g, v, r, 1, '<BS>', 7, M), 'redraw', '<BS> goes back')
   eq({ v.anchor, v.cursor, keys(calls.rows(g, v, 7, M)) }, { A, k(A, D), keys(base) }, 'back on a, its rows and cursor as they were')
   eq(calls.key(g, v, r, 1, '<BS>', 7, M), 'explorer', '<BS> with nothing before: the explorer')
-  -- ~ flips; - goes to the top, and back
+  -- ~ flips; C goes to the top, and K back, as <BS> does
   calls.key(g, v, r, 1, '~', 7, M)
   eq({ v.dir, v.cursor }, { 'up', nil }, '~ flips to called by')
-  calls.key(g, v, r, 1, '-', 7, M)
-  eq({ v.anchor, v.dir }, { nil, 'down' }, '- from the top')
-  calls.key(g, v, r, 1, '<BS>', 7, M)
-  eq({ v.anchor, v.dir }, { A, 'up' }, '<BS> from the top: back where it was')
+  calls.key(g, v, r, 1, 'C', 7, M)
+  eq({ v.anchor, v.dir }, { nil, 'down' }, 'C from the top')
+  eq(calls.key(g, v, r, 1, '-', 7, M), nil, "- is not the model's: the screen takes it to the explorer")
+  eq(calls.key(g, v, r, 1, 'K', 7, M), 'redraw', 'K goes back')
+  eq({ v.anchor, v.dir }, { A, 'up' }, 'K from the top: back where it was')
+  eq(calls.key(g, v, r, 1, 'K', 7, M), 'explorer', 'K with nothing before: the explorer')
 end
 
 -- called by, drawn down from the anchor like calls: each caller under what it calls

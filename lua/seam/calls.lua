@@ -629,14 +629,14 @@ function M.key(g, view, r, i, k, height, m)
     return go(sibling(r, i, 1))
   elseif k == '[' then
     return go(sibling(r, i, -1))
-  elseif k == '<BS>' then
+  elseif k == '<BS>' or k == 'K' then
     local s = table.remove(view.back)
     if not s then
       return 'explorer'
     end
     restore(view, s)
     return 'redraw'
-  elseif k == '-' then
+  elseif k == 'C' then
     view.back[#view.back + 1] = snapshot(view)
     view.anchor, view.dir = nil, 'down'
     reset(view)

@@ -23,14 +23,16 @@ on the right. The code is never inline.
   `createRun()  called by`, the pinned line names what it calls
   (`↓ calls startRun() run.ts:83 · …`) where calls names who calls it, and
   the count column is **above** instead of **below**.
-- **From the top.** `C` in the explorer, or `-` from any anchor. The roots are
+- **From the top.** `C`, in the explorer or on any anchor. The roots are
   what nothing calls: an app's entry file, a module's top-level code, a
   package's public functions no one in the repo calls, test files. They sit
   in the file tree, under their packages, so the top of the codebase reads by
   where it lives.
 
-`<CR>` anchors on any row, in any of the three. `<BS>` goes back to the
-previous anchor, and from the first one back to the explorer.
+`<CR>` anchors on any row, in any of the three. `K` or `<BS>` goes back to
+the previous anchor, and from the first one back to the explorer; `-` goes
+straight there. `J` opens the page of the row's function, and `K` on it
+comes back to the tree as it was.
 
 ![Opened one level](mocks/calls-down-opened.png)
 
@@ -69,14 +71,16 @@ way.
 |---|---|
 | `j` `k` | the next or previous row |
 | `l` | open the row one level; on an open row, its first child |
-| `h` | fold the row; on a folded one, its parent |
+| `h` | fold an open row, a folder or file too; on a folded or empty one, its parent |
 | `L` | open everything under the row until the budget runs out |
 | `H` | fold back to what the budget opened |
 | `]` `[` | the next or previous sibling |
 | `<CR>` | anchor on the row |
 | `~` | flip: calls, called by |
-| `<BS>` | the previous anchor |
-| `-` | from the top |
+| `J` | the page of the row's function, when it is a contract |
+| `K` `<BS>` | the previous anchor; from the first, the explorer |
+| `-` | straight to the explorer, on the anchor |
+| `C` | from the top |
 | `gd` | the declaration, in a normal window |
 | `q` | close |
 

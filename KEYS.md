@@ -42,7 +42,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `J` | down a level: Built from, enter the page of the dependency shown. Nothing on Used by |
 | `<CR>` | Built from: enter the page of the dependency shown. Used by: open the file at the use |
 | `gd` | the declaration, in a normal window |
-| `K` `<BS>` | up a level: the previous page, or the explorer |
+| `K` `<BS>` | up a level: the previous page, the Calls screen it was opened from, or the explorer |
 | `-` | straight to the explorer from any depth, on this contract |
 | `L` | the lens |
 
@@ -54,16 +54,20 @@ The call tree of a function, component or class: what it calls all the way down,
 |---|---|
 | `j` `k` | the next or previous row |
 | `l` | open the row one level; on an open row, its first child; on an `↑ also` row, where it is open |
-| `h` | fold the row; on a folded one, its parent |
+| `h` | fold an open row, a folder or file too; on a folded or empty one, its parent |
 | `L` | open everything under the row until the budget runs out |
 | `H` | fold back to what the budget opened |
 | `]` `[` | the next or previous sibling |
 | `<CR>` | anchor on the row |
 | `~` | flip: calls, called by |
-| `<BS>` | the previous anchor; from the first, the explorer |
-| `-` | from the top |
+| `J` | the page of the row's function, when it is a contract; `K` on it comes back to the tree as it was |
+| `K` `<BS>` | back: the previous anchor; from the first, the explorer |
+| `-` | straight to the explorer, on the anchor when it is a contract |
+| `C` | from the top |
 | `gd` | the declaration, in a normal window |
 | `q` | close |
+
+The head and the pin give the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, and `K` `<BS>` `-` `q` do as in the tree.
 
 ## The lens
 
