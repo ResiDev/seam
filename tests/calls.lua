@@ -109,6 +109,20 @@ eq(
 )
 eq(#tests == 1 and tests[1].id, TEST, 'the test that calls b, apart')
 
+-- tests: by name, or in a test folder
+for path, want in pairs {
+  ['src/a.test.ts'] = true,
+  ['src/a.spec.tsx'] = true,
+  ['src/__tests__/a.ts'] = true,
+  ['packages/core/src/test/helpers.ts'] = true,
+  ['packages/core/tests/a.ts'] = true,
+  ['test/a.ts'] = true,
+  ['src/testing.ts'] = false,
+  ['src/attest/a.ts'] = false,
+} do
+  eq(index.is_test(path), want, 'is_test ' .. path)
+end
+
 -- roots: what nothing calls, tests apart
 local roots, troots = calls.roots(g)
 eq(roots, { MAIN, T, U[1], U[2], U[3], U[4] }, 'roots: what nothing calls, a test aside')
