@@ -37,6 +37,23 @@ function M.pkg_of(m, path)
   return p
 end
 
+--- The extractor's format: 2 names every place a dependency is used, with its
+--- column. An index older than this is made again when seam opens.
+M.VERSION = 2
+
+--- The format of the repo's treesitter index, 0 when there is none.
+---@param root string
+---@return integer
+function M.version(root)
+  local fh = io.open(M.dir(root) .. '/treesitter.json', 'r')
+  if not fh then
+    return 0
+  end
+  local s = fh:read '*a'
+  fh:close()
+  return tonumber(s:match '"version":%s*(%d+)') or 1
+end
+
 local function build(file)
   local fh = assert(io.open(file, 'r'))
   local s = fh:read '*a'

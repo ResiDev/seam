@@ -14,6 +14,7 @@ local theme = require 'seam.theme'
 local M = {}
 
 local aug = api.nvim_create_augroup('seam', { clear = true })
+local ns_at = api.nvim_create_namespace 'seam.at'
 local ORDERS = explorer.ORDERS
 local TABS = { built = 'built from', used = 'used by' }
 local shape = draw.shape
@@ -53,6 +54,20 @@ local function reset_tab()
   api.nvim_set_current_win(keep)
   vim.cmd 'silent! only!'
   return keep
+end
+
+-- a pane of code wraps, each wrapped part starting past the line number,
+-- under the code it continues
+local function wrap(win)
+  if not win then
+    return
+  end
+  local wo = vim.wo[win]
+  wo.wrap = true
+  wo.linebreak = true
+  wo.breakindent = true
+  wo.breakindentopt = 'list:-1,shift:2'
+  vim.bo[api.nvim_win_get_buf(win)].formatlistpat = [[^\s*\d\+\s\+]]
 end
 
 local function split(buf, win, dir, enter)
@@ -112,33 +127,49 @@ function M.status()
     local hints = {}
     local seam = p.tab == 'built' and 'dependency' or 'file'
     local panes = st.panes[p.tab]
-    if p.tab == 'built' then
+    if M.reading(p) then
+      hints[#hints + 1] = 'n/N next name'
+      if p.enter then
+        hints[#hints + 1] = 'J enter ' .. p.enter
+      end
+      hints[#hints + 1] = 'v list'
+    elseif p.tab == 'built' then
       hints[#hints + 1] = 'j/k next'
       if p.enter then
-        hints[#hints + 1] = '<CR> enter ' .. p.enter
+        hints[#hints + 1] = 'J enter ' .. p.enter
       end
+      hints[#hints + 1] = 'v code'
     else
       hints[#hints + 1] = 'j/k next file'
       hints[#hints + 1] = ']] next use'
       hints[#hints + 1] = '<CR> open'
     end
-    hints[#hints + 1] = panes == 'contract' and 'c both' or 'c contract'
-    hints[#hints + 1] = panes == 'seam' and 's both' or ('s ' .. seam)
+    if not M.reading(p) then
+      hints[#hints + 1] = panes == 'contract' and 'c both' or 'c contract'
+      hints[#hints + 1] = panes == 'seam' and 's both' or ('s ' .. seam)
+    end
     hints[#hints + 1] = '<Tab> ' .. (p.tab == 'built' and 'used by' or 'built from')
     if #st.stack > 0 then
-      hints[#hints + 1] = '<BS> ' .. shape(st.stack[#st.stack].c)
+      hints[#hints + 1] = 'K ' .. shape(st.stack[#st.stack].c)
     end
-    hints[#hints + 1] = (#st.stack > 0 and '- ' or '<BS> ') .. 'overview'
+    hints[#hints + 1] = (#st.stack > 0 and '- ' or 'K ') .. 'overview'
     right = table.concat(hints, '   ')
   else
     left = 'contracts  ' .. ORDERS[st.order].short
     local vw = st.view == 'diagram' and 'v trees   V map' or st.view == 'map' and 'v diagram   V trees' or 'v diagram   V map'
     local sd = st.sides == 'built' and 'b both   u used by' or st.sides == 'used' and 'b built from   u both' or 'b built from   u used by'
-    right = '<Tab> ' .. ORDERS[st.order % #ORDERS + 1].short .. '   ' .. vw .. '   ' .. sd .. '   f lens   / search   <CR> open'
+    right = '<Tab> ' .. ORDERS[st.order % #ORDERS + 1].short .. '   ' .. vw .. '   ' .. sd .. '   L lens   / search   J open'
   end
   if srcs ~= '' then
     right = right .. '   ' .. srcs
   end
+  -- the keys that fit, the last ones dropped first
+  local room = vim.o.columns - 12 - api.nvim_strwidth(left)
+  local keys = vim.split(right, '   ', { plain = true })
+  while #keys > 1 and api.nvim_strwidth(table.concat(keys, '   ')) > room do
+    keys[#keys] = nil
+  end
+  right = table.concat(keys, '   ')
   return '%#SeamMode# NORMAL %#SeamStatus# ' .. left:gsub('%%', '%%%%') .. '%=' .. right:gsub('%%', '%%%%') .. ' '
 end
 
@@ -301,11 +332,85 @@ local function selected(p)
   end
   page.seam(p, r.meta)
   p.sel[p.tab] = cur
+  if r.meta.dep then
+    p.focus = r.meta.dep.name .. ':' .. tostring(r.meta.dep.target)
+  end
   paint()
   vim.cmd 'redrawstatus'
 end
 
 local show_page
+
+--- Is the page showing Built from as code, the contract read top to bottom?
+---@param p table
+---@return boolean
+function M.reading(p)
+  return p.tab == 'built' and st.built_as == 'code'
+end
+
+-- the cursor moved in the code: the name it is on, or the nearest on its
+-- line, becomes the one shown; on a line naming none, the last one stays
+local function code_moved(p)
+  local win = p.win.mid
+  if not (win and api.nvim_win_is_valid(win)) then
+    return
+  end
+  local cur = api.nvim_win_get_cursor(win)
+  p.at = cur
+  local best, dist
+  for i, r in ipairs(p.refs) do
+    if r.row == cur[1] then
+      local d = cur[2] < r.s and r.s - cur[2] or cur[2] >= r.e and cur[2] - r.e + 1 or 0
+      if not dist or d < dist then
+        best, dist = i, d
+      end
+    end
+  end
+  if not best or best == p.index then
+    return
+  end
+  p.index = best
+  local r = p.refs[best]
+  p.focus = r.dep.name .. ':' .. tostring(r.dep.target)
+  api.nvim_buf_clear_namespace(p.buf.mid, ns_at, 0, -1)
+  api.nvim_buf_set_extmark(p.buf.mid, ns_at, r.row - 1, r.s, { end_col = r.e, hl_group = 'SeamRefAt', priority = 320 })
+  page.declaration(p, r.dep)
+  paint()
+  vim.cmd 'redrawstatus'
+end
+
+-- the cursor to the `n`th name after it in the code, or before; round the ends
+local function next_ref(p, n)
+  local refs = p.refs
+  if #refs == 0 then
+    return
+  end
+  local cur = api.nvim_win_get_cursor(p.win.mid)
+  local i
+  if n > 0 then
+    i = #refs + 1
+    for k, r in ipairs(refs) do
+      if r.row > cur[1] or (r.row == cur[1] and r.s > cur[2]) then
+        i = k
+        break
+      end
+    end
+    i = i + n - 1
+  else
+    i = 0
+    for k = #refs, 1, -1 do
+      local r = refs[k]
+      if r.row < cur[1] or (r.row == cur[1] and r.s < cur[2]) then
+        i = k
+        break
+      end
+    end
+    i = i + n + 1
+  end
+  i = (i - 1) % #refs + 1
+  api.nvim_win_set_cursor(p.win.mid, { refs[i].row, refs[i].s })
+  code_moved(p)
+end
 
 local function page_keys(buf)
   local o = { buffer = buf, nowait = true, silent = true }
@@ -322,9 +427,23 @@ local function page_keys(buf)
       show_page()
     end, o)
   end
+  -- Built from as code or as a list
+  vim.keymap.set('n', 'v', function()
+    if st.page.tab == 'built' then
+      st.built_as = st.built_as == 'code' and 'list' or 'code'
+      show_page()
+    end
+  end, o)
   vim.keymap.set('n', '<BS>', M.back, o)
+  vim.keymap.set('n', 'K', M.back, o)
+  -- down a level: into a dependency's page; a user file is another tab, which K could not leave
+  vim.keymap.set('n', 'J', function()
+    if st.page.tab == 'built' then
+      M.page_enter()
+    end
+  end, o)
   vim.keymap.set('n', '-', M.overview, o)
-  vim.keymap.set('n', 'f', M.open_lens, o)
+  vim.keymap.set('n', 'L', M.open_lens, o)
   vim.keymap.set('n', 'q', M.close, o)
   vim.keymap.set('n', 'S', M.switch, o)
   vim.keymap.set('n', 'gd', function()
@@ -334,6 +453,71 @@ local function page_keys(buf)
     index.load()
     show_page()
   end, o)
+end
+
+-- Built from as code: the contract on the left, the cursor moving through it
+-- as through any code, and the declaration of the name it is on beside it
+local function show_code(p, head)
+  local left = split(p.buf.mid, head, 'below', true)
+  api.nvim_win_set_height(head, 3)
+  local right = split(p.buf.right, left, 'right')
+  winopts(left, true)
+  winopts(right)
+  wrap(left)
+  wrap(right)
+  vim.wo[left].scrolloff = 4
+  p.win.mid, p.win.right = left, right
+  for _, b in ipairs { p.buf.mid, p.buf.right } do
+    page_keys(b)
+    local o = { buffer = b, nowait = true, silent = true }
+    vim.keymap.set('n', 'c', '<Nop>', o)
+    vim.keymap.set('n', 's', '<Nop>', o)
+  end
+  local o = { buffer = p.buf.mid, nowait = true, silent = true }
+  for _, k in ipairs { 'n', ']]' } do
+    vim.keymap.set('n', k, function()
+      next_ref(p, vim.v.count1)
+    end, o)
+  end
+  for _, k in ipairs { 'N', '[[' } do
+    vim.keymap.set('n', k, function()
+      next_ref(p, -vim.v.count1)
+    end, o)
+  end
+  vim.keymap.set('n', '<CR>', M.page_enter, o)
+  local width = page.code(p)
+  api.nvim_win_set_width(left, math.max(50, math.min(width + 2, math.floor(vim.o.columns * 0.6))))
+  p.count, p.index = #p.refs, nil
+  api.nvim_create_autocmd('CursorMoved', {
+    group = aug,
+    buffer = p.buf.mid,
+    callback = function(ev)
+      if st.page == p and p.buf.mid == ev.buf then
+        code_moved(p)
+      end
+    end,
+  })
+  -- back where it was, or on the name the list was on, or the first
+  local at
+  for _, r in ipairs(p.refs) do
+    if p.focus == r.dep.name .. ':' .. tostring(r.dep.target) then
+      at = at or { r.row, r.s }
+      if p.at and p.at[1] == r.row then
+        at = p.at
+        break
+      end
+    end
+  end
+  at = at or (p.refs[1] and { p.refs[1].row, p.refs[1].s }) or { 4, 0 }
+  api.nvim_win_set_cursor(left, { math.min(at[1], api.nvim_buf_line_count(p.buf.mid)), at[2] })
+  if #p.refs > 0 then
+    code_moved(p)
+  else
+    p.enter = nil
+    page.empty(p)
+  end
+  paint()
+  vim.cmd 'redrawstatus'
 end
 
 -- the page in `st.page`, laid out again in fresh buffers
@@ -353,7 +537,12 @@ show_page = function()
   winopts(keep)
   vim.wo[keep].winfixheight = true
   p.win = { head = keep }
-  p.buf.list, p.buf.mid, p.buf.right = draw.scratch 'list', draw.scratch 'contract', draw.scratch 'seam'
+  p.buf.mid, p.buf.right = draw.scratch 'contract', draw.scratch 'seam'
+  p.refs = nil
+  if M.reading(p) then
+    return show_code(p, keep)
+  end
+  p.buf.list = draw.scratch 'list'
   local list = split(p.buf.list, keep, 'below', true)
   api.nvim_win_set_height(keep, 3)
   -- the contract sits where the flow puts it: below what it is built
@@ -375,6 +564,7 @@ show_page = function()
   winopts(list, true)
   for _, w in pairs { right = right, mid = mid } do
     winopts(w)
+    wrap(w)
   end
   if right and mid then
     local upper = p.tab == 'built' and right or mid
@@ -415,6 +605,13 @@ show_page = function()
   })
   page.list(p)
   local want = p.sel[p.tab] or p.sel_rows[1]
+  for _, i in ipairs(p.tab == 'built' and p.sel_rows or {}) do
+    local d = p.rows[i].meta.dep
+    if p.focus == d.name .. ':' .. tostring(d.target) then
+      want = i
+      break
+    end
+  end
   if want then
     api.nvim_win_set_cursor(list, { want, 0 })
     selected(p)
@@ -446,6 +643,14 @@ end
 --- Built from: enter the dependency's page. Used by: open the file at the use.
 function M.page_enter()
   local p = st.page
+  if M.reading(p) then
+    local r = p.index and p.refs[p.index]
+    local t = r and r.dep.target and index.model().byid[r.dep.target]
+    if t and t.nusers > 0 then
+      M.open_page(t)
+    end
+    return
+  end
   local cur = api.nvim_win_get_cursor(p.win.list)[1]
   local r = p.rows[cur]
   if not r then
@@ -572,6 +777,9 @@ function M.open_lens()
       return st.lens
     end,
     model = index.model,
+    root = function()
+      return st.root
+    end,
     changed = M.lens_changed,
     closed = function()
       if st.page_stale and st.screen == 'page' and st.page then
@@ -624,16 +832,20 @@ local function explorer_keys(buf)
     st.sides = st.sides == 'used' and 'both' or 'used'
     M.set_view(st.view)
   end, o)
-  vim.keymap.set('n', '<CR>', function()
+  local function open()
     if st.shown then
       M.open_page(st.shown)
     end
-  end, o)
+  end
+  vim.keymap.set('n', '<CR>', open, o)
+  vim.keymap.set('n', 'J', open, o)
+  -- the top level: nothing above it, and no hover from another plugin's K
+  vim.keymap.set('n', 'K', '<Nop>', o)
   vim.keymap.set('n', 'gd', function()
     M.goto_decl(st.shown)
   end, o)
   vim.keymap.set('n', 'S', M.switch, o)
-  vim.keymap.set('n', 'f', M.open_lens, o)
+  vim.keymap.set('n', 'L', M.open_lens, o)
   vim.keymap.set('n', 'q', M.close, o)
   vim.keymap.set('n', 'R', function()
     index.load()

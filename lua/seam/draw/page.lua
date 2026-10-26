@@ -184,8 +184,12 @@ local function contract(p, lit, dim, unders, note)
   end
 end
 
--- a dependency: where the contract names it, and its declaration
-local function dependency(p, d)
+--- A dependency's declaration in the right pane: where it lives, its code,
+--- and who else uses it. Without the contract beside it, the lines naming it
+--- come first.
+---@param p table the page
+---@param d table|nil a dependency, as index.deps_by_file groups it
+function M.declaration(p, d)
   local m = index.model()
   local rows = { row() }
   local c = p.c
@@ -194,11 +198,6 @@ local function dependency(p, d)
     draw.put(p.buf.right, rows)
     return
   end
-  local lit = {}
-  for l in pairs(d.lines) do
-    lit[l] = true
-  end
-  contract(p, lit, true, nil, 'uses ' .. d.name)
   if not d.target then
     rows[#rows + 1] = row():add(' ' .. d.name, 'SeamBold'):add('   ' .. st.cur .. ' could not resolve it', 'SeamLabel')
     draw.put(p.buf.right, rows)
@@ -262,13 +261,62 @@ local function dependency(p, d)
   end
   draw.put(p.buf.right, rows)
   scroll_to(p.win.right, 1, 1)
-  -- a short dependency keeps the contract just under it
-  if p.win.mid and p.win.right then
-    local total = api.nvim_win_get_height(p.win.right) + api.nvim_win_get_height(p.win.mid)
-    local cs, ce = M.decl_range(c)
-    local need = math.min(ce - cs + 1 + 4, math.floor(total * 0.45))
-    api.nvim_win_set_height(p.win.right, math.min(#rows + 1, total - need))
+end
+
+-- a dependency on the list: the contract with the lines naming it lit, and
+-- its declaration above, as short as it is so the contract keeps the rest
+local function dependency(p, d)
+  if d then
+    local lit = {}
+    for l in pairs(d.lines) do
+      lit[l] = true
+    end
+    contract(p, lit, true, nil, 'uses ' .. d.name)
   end
+  M.declaration(p, d)
+  if d and p.win.mid and p.win.right then
+    local total = api.nvim_win_get_height(p.win.right) + api.nvim_win_get_height(p.win.mid)
+    local cs, ce = M.decl_range(p.c)
+    local need = math.min(ce - cs + 1 + 4, math.floor(total * 0.45))
+    api.nvim_win_set_height(p.win.right, math.min(api.nvim_buf_line_count(p.buf.right) + 1, total - need))
+  end
+end
+
+--- Built from, read as code: the contract down the left, each name it is
+--- built from marked where it stands. Leaves the names in `p.refs`, in reading
+--- order, each `{ row, s, e, dep }` with `row` 1-based and `s`..`e` its bytes.
+---@param p table the page
+function M.code(p)
+  local c = p.c
+  local entries, unresolved, nfiles, nnames = index.deps_by_file(c)
+  local rows = { row(), draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), row() }
+  local drows, s = decl_rows(c)
+  local P = code.file(c.path)
+  local refs = {}
+  for _, d in ipairs(c.deps) do
+    local path = index.id_path(d.target)
+    local dep = path and entries[path].names[d.name] or unresolved[d.name]
+    local r = drows[d.line - s + 1]
+    local src = P.lines[d.line] or ''
+    -- a source without columns names each once: its first match on the line
+    local at = d.col and src:sub(d.col, d.col + #d.name - 1) == d.name and d.col or src:find('%f[%w_$]' .. vim.pesc(d.name) .. '%f[^%w_$]')
+    if r and at then
+      local b = r.code[4] + at - 1
+      r.h[#r.h + 1] = { b, b + #d.name, dep.target and 'SeamRef' or 'SeamRefLost', 310 }
+      refs[#refs + 1] = { row = #rows + d.line - s + 1, s = b, e = b + #d.name, dep = dep }
+    end
+  end
+  table.sort(refs, function(a, b)
+    return a.row < b.row or (a.row == b.row and a.s < b.s)
+  end)
+  vim.list_extend(rows, drows)
+  draw.put(p.buf.mid, rows)
+  p.refs = refs
+  local width = 0
+  for _, r in ipairs(rows) do
+    width = math.max(width, r.w)
+  end
+  return width
 end
 
 -- Used by tab --------------------------------------------------------
@@ -507,10 +555,13 @@ function M.seam(p, meta)
   end
 end
 
---- A tab with nothing in its list: the contract alone.
+--- A tab with nothing in it: the contract alone, unless it is already shown
+--- as code.
 ---@param p table the page
 function M.empty(p)
-  contract(p)
+  if not p.refs then
+    contract(p)
+  end
   draw.put(p.buf.right, { row(), row():add(p.tab == 'built' and ' built from nothing in the repo' or ' no users', 'SeamLabel') })
 end
 

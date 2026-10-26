@@ -9,5 +9,6 @@ return {
   view = 'trees', -- the explorer's right side: 'trees', 'diagram' or 'map'
   sides = 'both', -- 'both', 'built' or 'used'
   panes = { built = 'both', used = 'seam' }, -- a page's panes per tab: 'both', 'contract' or 'seam'
+  built_as = 'code', -- Built from as 'code', the contract with its names marked, or as a 'list'
   stack = {}, -- the pages under the one shown
 }

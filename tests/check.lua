@@ -9,6 +9,7 @@ end
 vim.o.columns, vim.o.lines = 180, 50
 local api = vim.api
 local seam = require 'seam'
+local screen = require 'seam.screen'
 local function lens_any(c)
   return c.contracts or c.built or c.used
 end
@@ -51,8 +52,33 @@ local function check_page()
   if st.screen ~= 'page' or not p then
     return fail 'not on a page'
   end
-  local want = st.panes[p.tab]
   local mid, right = valid(p.win.mid), valid(p.win.right)
+  if screen.reading(p) then
+    if not (mid and right) or #api.nvim_tabpage_list_wins(st.tab) ~= 3 then
+      fail 'Built from as code: not the head, the code and the declaration'
+    end
+    local r = p.index and p.refs[p.index]
+    if r then
+      local cur = api.nvim_win_get_cursor(p.win.mid)
+      local named = table.concat(api.nvim_buf_get_lines(p.buf.right, 0, 3, false), '\n')
+      if not named:find(r.dep.name, 1, true) then
+        fail(('the declaration shown is not %s, the name at the cursor'):format(r.dep.name))
+      end
+      if
+        cur[1] == r.row
+        and #vim.tbl_filter(function(x)
+          return x.row == r.row and x.s <= cur[2] and cur[2] < x.e
+        end, p.refs) > 0
+        and not (r.s <= cur[2] and cur[2] < r.e)
+      then
+        fail 'the cursor is on one name, the declaration on another'
+      end
+    elseif #p.refs > 0 then
+      fail 'names in the code, but none shown'
+    end
+    return
+  end
+  local want = st.panes[p.tab]
   local ok = (want == 'both' and mid and right) or (want == 'contract' and mid and not p.win.right) or (want == 'seam' and right and not p.win.mid)
   if not ok then
     fail(('panes %s on %s, but contract window %s, seam window %s'):format(want, p.tab, tostring(mid), tostring(right)))
@@ -97,13 +123,12 @@ vim.api.nvim_create_autocmd('VimLeavePre', {
   end,
 })
 if os.getenv 'SEAM_LENS' then
-  local L = require 'seam.lens'
   st.lens = {
-    pins = { { dir = 'packages/', cols = { contracts = true, built = false, used = true } } },
-    hides = {
-      { pattern = '*.test.*', cols = L.everywhere() },
-      { pattern = 'tests/', cols = { contracts = false, built = false, used = true } },
-      { pattern = '/(fixtures|examples)/', cols = { contracts = false, built = true, used = false } },
+    rules = {
+      { path = 'packages/', cols = { contracts = 'only', used = 'only' } },
+      { pattern = '*.test.*', cols = require('seam.lens').all 'hide' },
+      { pattern = 'tests/', cols = { used = 'hide' } },
+      { pattern = '/(fixtures|examples)/', cols = { built = 'hide' } },
     },
   }
   seam.lens_changed()
@@ -128,9 +153,10 @@ for _ = 1, #seam.st.names + 3 do
   key '<Tab>'
 end
 
--- the lens panel, through its keys; then put the lens back
+-- the lens panel, through its keys and its picker; then put the lens back
 do
   local panel = require 'seam.lens_panel'
+  local L = require 'seam.lens'
   local saved = vim.deepcopy(st.lens)
   local function expect(ok, what)
     if not ok then
@@ -138,22 +164,67 @@ do
     end
   end
   local function last()
-    return st.lens.hides[#st.lens.hides]
+    return st.lens.rules[#st.lens.rules]
   end
   where = 'lens panel'
-  key 'f'
-  expect(panel.is_open(), 'f did not open the panel')
-  local n = #st.lens.hides
-  key 'G'
-  key 'k'
+  key 'L'
+  expect(panel.is_open(), 'L did not open the panel')
+  -- the picker: type, wait for the live list, take the row asked for
+  local function pick(query, want)
+    key 'a'
+    local Snacks = rawget(_G, 'Snacks')
+    local p = Snacks and Snacks.picker.get()[1]
+    expect(p, 'a opened no picker')
+    if not p then
+      return
+    end
+    p.input:set('', query)
+    p:find()
+    local items = {}
+    vim.wait(3000, function()
+      items = p:items()
+      return items[1] and items[1].text == query
+    end)
+    for i, it in ipairs(items) do
+      if want(it) then
+        p.list:view(i)
+        p:action 'confirm'
+        vim.wait(1000, panel.is_open)
+        return it
+      end
+    end
+    fail('the picker listed nothing wanted for ' .. query)
+    p:close()
+    vim.wait(1000, panel.is_open)
+  end
+  local n2 = #st.lens.rules
+  pick([[/\.(test|spec)\./]], function(it)
+    return it.kind == 'pattern'
+  end)
+  expect(#st.lens.rules == n2 + 1 and last().pattern == [[/\.(test|spec)\./]], 'the picker did not add the regex')
+  expect(#L.rule_files(st.models[st.cur], last()) > 0, 'the regex holds no file')
+  expect(panel.is_open() and vim.bo.filetype == 'seamlens', 'the panel did not come back after the picker')
   key 'c'
-  expect(#st.lens.hides == n + 1 and last().cols.contracts and not last().cols.used, 'c on a suggestion did not make a pattern for contracts')
+  expect(last().cols.contracts == 'only' and not last().cols.used, 'c on the picked rule did not turn contracts to only')
+  key 'c'
+  expect(last().cols.contracts == 'hide', 'c again did not turn contracts to hide')
+  key 'c'
+  expect(last().cols.contracts == nil, 'c a third time did not leave contracts be')
   key 'u'
-  expect(last().cols.used, 'u did not mark used by')
+  expect(last().cols.used == 'only', 'u did not turn used by')
   key '<Space>'
-  expect(not lens_any(last().cols), 'space did not clear all three')
+  expect(last().cols.contracts == 'only' and last().cols.built == 'only' and last().cols.used == 'only', 'space on a mixed rule did not make all three only')
   key '<Space>'
-  expect(last().cols.contracts and last().cols.built and last().cols.used, 'space did not mark all three')
+  expect(last().cols.contracts == 'hide' and last().cols.built == 'hide' and last().cols.used == 'hide', 'space did not turn all three to hide')
+  key '<Space>'
+  expect(not lens_any(last().cols), 'space did not leave all three be')
+  local folder = pick('src', function(it)
+    return it.kind == 'folder'
+  end)
+  expect(folder and last().path == folder.path, 'the picker did not add a folder')
+  local before = #st.lens.rules
+  key 'd'
+  expect(#st.lens.rules == before - 1, 'd did not delete')
   local function type_in(keys, text)
     key(keys)
     local buf = api.nvim_get_current_buf()
@@ -161,30 +232,28 @@ do
     api.nvim_buf_set_lines(buf, 0, -1, false, { text })
     key '<CR>'
   end
-  type_in('a', [[/\.(test|spec)\./]])
-  expect(last().pattern == [[/\.(test|spec)\./]], 'a did not add the regex: ' .. tostring(last().pattern))
-  expect(#require('seam.lens').matches(st.models[st.cur], last().pattern) > 0, 'the regex matches no file')
+  key 'k'
   type_in('e', 'tests/')
   expect(last().pattern == 'tests/', 'e did not edit it: ' .. tostring(last().pattern))
-  local before = #st.lens.hides
-  key 'd'
-  expect(#st.lens.hides == before - 1, 'd did not delete')
-  local L = require 'seam.lens'
-  st.lens.pins = { { dir = 'packages/', cols = L.everywhere() } }
-  st.lens.hides =
-    { { pattern = '*.test.*', cols = L.everywhere() }, { pattern = [[/\.(test|spec)\./]], cols = { contracts = false, built = true, used = true } } }
+  st.lens.rules = {
+    { path = 'packages/', cols = L.all 'only' },
+    { pattern = '**/src/**', cols = { contracts = 'only' } },
+    { pattern = '*.test.*', cols = L.all 'hide' },
+    { pattern = [[/\.(test|spec)\./]], cols = { built = 'hide', used = 'only' } },
+  }
   seam.lens_changed()
   local back = L.load(st.root)
   expect(vim.deep_equal(back, st.lens), 'the lens did not come back from ' .. L.file(st.root) .. ': ' .. vim.inspect(back))
+  local r = st.lens.rules
   key 'U'
-  expect(not st.lens.pins[1].cols.used and not st.lens.hides[2].cols.used and st.lens.hides[2].cols.built, 'U did not clear used by alone')
+  expect(not r[1].cols.used and not r[4].cols.used and r[4].cols.built == 'hide', 'U did not clear used by alone')
   key 'C'
-  expect(not st.lens.hides[1].cols.contracts and st.lens.hides[1].cols.built, 'C did not clear contracts alone')
+  expect(not r[3].cols.contracts and r[3].cols.built == 'hide', 'C did not clear contracts alone')
   key 'B'
-  expect(not lens_any(st.lens.pins[1].cols), 'B did not clear built from')
-  st.lens.hides[1].cols = L.everywhere()
+  expect(not lens_any(r[1].cols), 'B did not clear built from')
+  r[3].cols = L.all 'hide'
   key 'X'
-  expect(not lens_any(st.lens.hides[1].cols) and #st.lens.hides == 2, 'X did not clear every mark, keeping the rules')
+  expect(not lens_any(r[3].cols) and #r == 4, 'X did not clear every column, keeping the rules')
   key 'q'
   expect(not panel.is_open(), 'q did not close the panel')
   st.lens = saved
@@ -209,7 +278,9 @@ if max > 0 and #contracts > max then
   contracts = pick
 end
 
-local SEQ = { 'j', 'j', 'k', ']]', '[[', 'c', 'j', ']]', 'k', 'c', 's', 'j', ']]', 's', 'c', 's', 's', 'G', 'j', 'gg' }
+local SEQ = { 'j', 'j', 'k', ']]', '[[', 'c', 'j', ']]', 'k', 'c', 's', 'j', ']]', 's', 'c', 's', 's', 'G', 'j', 'gg', 'v', 'j', 'v' }
+-- Built from as code: the cursor moves as in any code, n and N go by names
+local READ = { 'n', 'n', 'N', '3n', 'j', 'j', 'w', 'w', 'k', 'G', 'n', 'gg', 'N', '$', 'b', ']]', '[[', 'c', 's' }
 for ci, c in ipairs(contracts) do
   if ci % 20 == 0 then
     io.stdout:write(('%d / %d contracts, %d keys, %d failures\n'):format(ci, #contracts, steps, #failures))
@@ -223,10 +294,35 @@ for ci, c in ipairs(contracts) do
       fail(tostring(err))
     else
       for _ = 1, 2 do
-        for _, k in ipairs(SEQ) do
-          where = ('%s %s panes=%s'):format(c.id, st.page.tab, st.panes[st.page.tab])
+        for _, k in ipairs(screen.reading(st.page) and READ or SEQ) do
+          where = ('%s %s panes=%s %s'):format(c.id, st.page.tab, st.panes[st.page.tab], screen.reading(st.page) and 'code' or 'list')
           key(k)
           check_page()
+        end
+        if screen.reading(st.page) then
+          -- n lands on a name, and the list then shows the same one
+          local p = st.page
+          if #p.refs > 0 then
+            key 'n'
+            local cur = api.nvim_win_get_cursor(p.win.mid)
+            local r = p.refs[p.index]
+            if not (r and cur[1] == r.row and cur[2] == r.s) then
+              fail 'n did not land on a name'
+            end
+            where = c.id .. ' code to list'
+            key 'v'
+            check_page()
+            local d = st.page.rows[api.nvim_win_get_cursor(st.page.win.list)[1]].meta.dep
+            if not d or d.name ~= r.dep.name then
+              fail(('v went to the list on %s, not %s'):format(d and d.name or 'nothing', r.dep.name))
+            end
+            for _, k in ipairs(SEQ) do
+              key(k)
+              check_page()
+            end
+            key 'v'
+            check_page()
+          end
         end
         -- the same keys from inside the stacked panes
         for _, w in ipairs { st.page.win.mid, st.page.win.right } do
@@ -243,15 +339,26 @@ for ci, c in ipairs(contracts) do
         if ci % 7 == 0 and st.page.tab == 'built' then
           where = c.id .. ' enter a dependency'
           local depth = #st.stack
-          key '<CR>'
+          key(ci % 2 == 0 and 'J' or '<CR>')
           if #st.stack > depth then
             check_page()
-            key '<BS>'
+            key(ci % 2 == 0 and 'K' or '<BS>')
+            if #st.stack ~= depth then
+              fail 'K or <BS> did not come back up from a dependency'
+            end
           end
         end
         where = c.id .. ' tab'
         key '<Tab>'
         check_page()
+      end
+      if st.page.tab == 'used' then
+        where = c.id .. ' J on used by'
+        local depth = #st.stack
+        key 'J'
+        if api.nvim_get_current_tabpage() ~= st.tab or #st.stack ~= depth or st.screen ~= 'page' then
+          fail 'J on used by left the page'
+        end
       end
       if ci % 11 == 0 and st.page.tab == 'used' then
         where = c.id .. ' open a user file'
@@ -278,9 +385,14 @@ for ci, c in ipairs(contracts) do
         seam.open_page(c)
       end
       where = c.id .. ' back'
-      key '<BS>'
+      local up = ci % 2 == 0 and 'K' or '<BS>'
+      key(up)
       if st.screen == 'page' then
-        fail '<BS> stayed on the page'
+        fail(up .. ' stayed on the page')
+      end
+      key 'K'
+      if st.screen ~= 'explorer' then
+        fail 'K in the explorer left it'
       end
     end
   end
