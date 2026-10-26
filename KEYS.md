@@ -64,10 +64,14 @@ The call tree of a function, component or class: what it calls all the way down,
 | `K` `<BS>` | back: the previous anchor; from the first, the explorer |
 | `-` | straight to the explorer, on the anchor when it is a contract |
 | `C` | from the top |
+| `<Tab>` | the code beside the tree: where the row's function is called, or itself. The choice stays as the cursor moves, across anchors and back; what nothing calls shows itself |
+| `]]` `[[` | Called at: the next or previous place it is called, round the ends. Itself: the next or previous line that calls something, lit. A count skips |
 | `gd` | the declaration, in a normal window |
 | `q` | close |
 
-The head and the pin give the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, and `K` `<BS>` `-` `q` do as in the tree.
+`]` and `[` wait for a second `]` or `[` before going to the sibling.
+
+The head and the pin give the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, `<Tab>` `]]` `[[` do as in the tree with the cursor on the line lit, and `K` `<BS>` `-` `q` do as in the tree.
 
 ## The lens
 

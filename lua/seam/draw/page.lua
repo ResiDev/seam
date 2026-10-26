@@ -312,39 +312,6 @@ local function used_list(p)
   return rows
 end
 
--- the lines of s..e to show, 20 at most, keeping the lines with uses in view
-local function pick_rows(s, e, uselines)
-  local set = {}
-  if e - s + 1 <= 20 then
-    for l = s, e do
-      set[l] = true
-    end
-    return set
-  end
-  local ls = vim.tbl_keys(uselines)
-  table.sort(ls)
-  for radius = 4, 0, -1 do
-    set = { [s] = true }
-    local n = 1
-    for _, ul in ipairs(ls) do
-      for l = math.max(s, ul - radius), math.min(e, ul + radius) do
-        if not set[l] then
-          set[l] = true
-          n = n + 1
-        end
-      end
-    end
-    if n <= 20 then
-      return set
-    end
-  end
-  set = { [s] = true }
-  for i = 1, math.min(19, #ls) do
-    set[ls[i]] = true
-  end
-  return set
-end
-
 -- a user: the members it reads, and its uses in the functions they sit in
 local function user(p, path)
   local c = p.c
@@ -428,7 +395,7 @@ local function user(p, path)
     end
   end
   for _, g in pairs(groups) do
-    for l in pairs(pick_rows(g.s, g.e, g.lines)) do
+    for l in pairs(code.pick_rows(g.s, g.e, g.lines)) do
       show[l] = true
     end
   end

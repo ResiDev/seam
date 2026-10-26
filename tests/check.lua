@@ -10,6 +10,7 @@ vim.o.columns, vim.o.lines = 180, 50
 local api = vim.api
 local seam = require 'seam'
 local screen = require 'seam.screen'
+local calls = require 'seam.calls'
 local function lens_any(c)
   return c.contracts or c.built or c.used
 end
@@ -322,6 +323,8 @@ do
   seam.lens_changed()
 end
 
+local check_code
+
 -- the call tree: its four windows on its own buffers, the list its rows with
 -- the cursor on the row the view says, the call lit beside it, the budget
 -- inside the window, the anchor on top either way and the pin saying which
@@ -349,15 +352,7 @@ local function check_calls(fresh)
   if x and x.key ~= st.calls.cursor then
     fail('the cursor is on ' .. x.key:gsub('\n', ' > ') .. ', the view on ' .. tostring(st.calls.cursor):gsub('\n', ' > '))
   end
-  if x and x.id and x.from then
-    local lit = false
-    for _, mk in ipairs(api.nvim_buf_get_extmarks(st.cbuf.code, require('seam.draw').ns, 0, -1, { details = true })) do
-      lit = lit or mk[4].line_hl_group == 'SeamLit'
-    end
-    if not lit then
-      fail('no call lit in the code beside ' .. x.key:gsub('\n', ' > '))
-    end
-  end
+  check_code(x and i or nil)
   if fresh and r.levels > 0 and #r.rows > api.nvim_win_get_height(w.list) then
     fail(('the budget opened %d levels into %d rows, %d high'):format(r.levels, #r.rows, api.nvim_win_get_height(w.list)))
   end
@@ -376,6 +371,101 @@ local function check_calls(fresh)
     if not pin[3]:match(word) then
       fail('the column is not ' .. word)
     end
+  end
+end
+
+-- the code beside the tree: the view chosen, or itself when nothing calls
+-- it; called at, one lit line that is a real call of a real caller, the
+-- name on it underlined; itself, the call `]]` stepped to lit
+check_code = function(i)
+  local g, m = st.models[st.cur].graph, st.models[st.cur]
+  local p = calls.pane(g, st.calls, st.calls_rows, i, m)
+  if not p then
+    return
+  end
+  local lines = api.nvim_buf_get_lines(st.cbuf.code, 0, -1, false)
+  local lit, used, marks = {}, {}, api.nvim_buf_get_extmarks(st.cbuf.code, require('seam.draw').ns, 0, -1, { details = true })
+  for _, mk in ipairs(marks) do
+    used[mk[2]] = used[mk[2]] or mk[4].hl_group == 'SeamUse'
+  end
+  for _, mk in ipairs(marks) do
+    if mk[4].line_hl_group == 'SeamLit' then
+      lit[#lit + 1] = tonumber((lines[mk[2] + 1] or ''):match '^%s*(%d+)')
+      lit.used = used[mk[2]]
+    end
+  end
+  local text = table.concat(lines, '\n')
+  local what = p.node.id .. ' (' .. p.code .. ')'
+  if #p.places == 0 then
+    if p.code ~= 'itself' or not text:find('nothing calls it', 1, true) then
+      fail(what .. ': nothing calls it, and the code does not say so')
+    end
+  elseif p.code ~= st.calls.code then
+    fail(what .. ': the code is not the view chosen, ' .. st.calls.code)
+  end
+  if p.code == 'called' then
+    local u = p.places[p.n]
+    local real = false
+    for _, e in ipairs(g.up[p.node.id] or {}) do
+      real = real or (u and e.from == u.from and e.line == u.line)
+    end
+    if not real or #lit ~= 1 or lit[1] ~= u.line or not lit.used then
+      fail(('%s: place %d of %d lit at %s, not a call of %s'):format(what, p.n, #p.places, tostring(lit[1]), p.node.name))
+    end
+    if not text:find(('called at  %d of %d'):format(p.n, #p.places), 1, true) then
+      fail(what .. ': the head does not say which place')
+    end
+  elseif p.n > 0 and (#lit ~= 1 or lit[1] ~= p.lines[p.n]) then
+    fail(('%s: call %d at %d, lit %s'):format(what, p.n, p.lines[p.n], tostring(lit[1])))
+  end
+  return p
+end
+
+-- <Tab> swaps the code and the choice sticks across j; ]] and [[ step
+-- round the places or calls, from the tree and from the code
+local function swap()
+  local function step(k, from_code)
+    local before = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, api.nvim_win_get_cursor(st.cwin.list)[1], st.models[st.cur])
+    if from_code then
+      key '<C-w>l'
+    end
+    key(k)
+    if from_code then
+      if api.nvim_get_current_win() ~= st.cwin.code then
+        fail(k .. ' in the code left it')
+      end
+      key '<Esc>'
+    elseif api.nvim_get_current_win() ~= st.cwin.list then
+      fail(k .. ' in the tree took the cursor')
+    end
+    check_calls(false)
+    local now = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, api.nvim_win_get_cursor(st.cwin.list)[1], st.models[st.cur])
+    local list = before and (before.code == 'called' and before.places or before.lines) or {}
+    if before and now and #list > 1 then
+      local want = k == ']]' and before.n % #list + 1 or (before.n <= 1 and #list or before.n - 1)
+      if now.n ~= want then
+        fail(('%s went from %d to %d of %d, not %d'):format(k, before.n, now.n, #list, want))
+      end
+    end
+  end
+  for _, code_ in ipairs { 'itself', 'called' } do
+    local was = st.calls.code
+    key '<Tab>'
+    if st.calls.code == was or st.calls.code ~= code_ then
+      fail('<Tab> did not swap to ' .. code_)
+    end
+    check_calls(false)
+    step ']]'
+    step ']]'
+    step '[['
+    step(']]', true)
+    step('[[', true)
+    key 'j'
+    if st.calls.code ~= code_ then
+      fail('j did not keep ' .. code_)
+    end
+    check_calls(false)
+    step '[['
   end
 end
 
@@ -487,11 +577,15 @@ do
           key(k)
           check_calls(false)
         end
+        where = 'calls ' .. c.id .. ' swap'
+        swap()
         for _, k in ipairs { '<CR>', '~' } do
           where = 'calls ' .. c.id .. ' ' .. k
           key(k)
           check_calls(true)
         end
+        where = 'calls ' .. c.id .. ' ~ swap'
+        swap()
         for _, k in ipairs { 'k', 'l', 'k', 'L', ']', 'H', '[', 'C', 'j', 'l', 'j' } do
           where = 'calls ' .. c.id .. ' ' .. k
           key(k)
@@ -606,6 +700,28 @@ do
         if top ~= 29 then
           fail(('startRun shows %d rows under it, not 29'):format(top))
         end
+        key '<BS>'
+      end
+      -- createRun under useOwnedRun: called at opens on useRun.ts:59, among
+      -- the places of its 7 callers
+      where = 'calls raf-run-redesign createRun'
+      seam.open_calls 'packages/react/src/useRun.ts:39:useOwnedRun'
+      local ci = find_row 'packages/react/src/useRun.ts:39:useOwnedRun\npackages/core/src/run/run.ts:75:createRun'
+      if not ci then
+        fail 'createRun is not a row under useOwnedRun'
+      else
+        key(ci .. 'G')
+        local p = check_code(ci)
+        local by = {}
+        for _, u in ipairs(p and p.places or {}) do
+          by[u.from] = true
+        end
+        local u = p and p.places[p.n]
+        if not (p and p.code == 'called' and vim.tbl_count(by) == 7 and u and u.line == 59 and u.from:match 'useRun%.ts:%d+:useOwnedRun$') then
+          fail(('createRun called at: %d callers, on %s, not 7 and useRun.ts:59'):format(vim.tbl_count(by), u and (u.from .. ':' .. u.line) or 'nothing'))
+        end
+        key ']]'
+        check_code(ci)
         key '<BS>'
       end
     end
