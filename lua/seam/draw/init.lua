@@ -160,11 +160,12 @@ function M.path(r, path, line)
   end
 end
 
---- The source shown and how long it took to index.
+--- The source shown, when there is another to switch to.
 ---@param r table
 function M.source(r)
-  r:add(st.cur, 'SeamBold')
-  r:add(string.format('  %s ms', tostring(index.model().ms.total or '?')), 'SeamLabel')
+  if #st.names > 1 then
+    r:add(st.cur, 'SeamBold')
+  end
 end
 
 ---@param text string

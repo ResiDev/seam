@@ -16,7 +16,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | Key | Does |
 |---|---|
 | `j` `k` | move; both trees follow the contract under the cursor |
-| `<Tab>` `<S-Tab>` | next or previous order: by folder, most used, most built from, by name |
+| `<Tab>` `<S-Tab>` | next or previous order: by folder, most used, most built from; the header lights the count it sorts by |
 | `b` | only the built-from tree; again, both trees |
 | `u` | only the used-by tree; again, both trees |
 | `/` | search names; the list narrows as you type |

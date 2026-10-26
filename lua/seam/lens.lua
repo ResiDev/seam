@@ -357,32 +357,4 @@ function M.any(cols)
   return cols.contracts or cols.built or cols.used
 end
 
---- `in run/ · 2 hiding` for the explorer's head.
-function M.summary(lens)
-  local parts, only, n = {}, {}, 0
-  for _, r in ipairs(lens.rules) do
-    local hides = false
-    for _, c in ipairs(M.COLS) do
-      if r.cols[c] == 'only' and not vim.tbl_contains(only, r) then
-        only[#only + 1] = r
-      end
-      hides = hides or r.cols[c] == 'hide'
-    end
-    n = n + (hides and 1 or 0)
-  end
-  if #only > 0 then
-    parts[#parts + 1] = 'in '
-      .. table.concat(
-        vim.tbl_map(function(r)
-          return r.pattern or ((r.path:gsub('/$', ''):match '[^/]+$' or r.path) .. (r.path:sub(-1) == '/' and '/' or ''))
-        end, only),
-        ' '
-      )
-  end
-  if n > 0 then
-    parts[#parts + 1] = n .. ' hiding'
-  end
-  return table.concat(parts, ' · ')
-end
-
 return M
