@@ -73,34 +73,27 @@ local function names(r, g, list, w, at_call)
   end
 end
 
---- The head: where it is, the budget, and the shared functions left folded.
+--- The head: where it is, then the shared functions left folded, when any.
 ---@param buf integer
 ---@param g seam.Graph
 ---@param view seam.CallsView
 ---@param r seam.CallRows
 ---@param width integer
+---@return integer rows
 function M.head(buf, g, view, r, width)
-  local m = index.model()
-  local visible = calls.visible(m, 'up')
+  local visible = calls.visible(index.model(), 'up')
   local a = view.anchor and g.nodes[view.anchor]
   local h = row():add(' Seams', 'SeamLabel'):add(' › ', 'SeamLabel')
-  local right
   if a then
     name(h, a, 'SeamBold', 60)
     h:add(view.dir == 'up' and '  called by' or '  calls', 'SeamTitle')
-    h:add('     ' .. (a.kind == 'module' and 'top of the file' or a.kind) .. ' in ', 'SeamLabel')
-    draw.path(h, a.path, a.line > 0 and a.line or nil)
-    local n = view.dir == 'up' and calls.above(g, a.id, visible) or calls.below(g, a.id, calls.visible(m, 'down'))
-    right = ('budget %d rows  ·  depth %d shown  ·  %d %s'):format(view.height or 0, r.levels + 1, n, view.dir == 'up' and 'above' or 'below')
   else
-    h:add('from the top', 'SeamBold'):add('   every place the code starts, and what each one calls', 'SeamLabel')
-    local roots = calls.roots(g, calls.visible(m, 'top'))
-    right = ('budget %d rows  ·  %s open  ·  %d starts'):format(view.height or 0, r.levels == 0 and 'none' or draw.plural(r.levels, 'level'), #roots)
+    h:add('where the code starts', 'SeamBold')
   end
-  h:to(width - 2 - api.nvim_strwidth(right)):add(right, 'SeamLabel')
-  local t = row():add('  '):add(' Calls ', 'SeamTab'):add '    '
+  local rows = { h }
   if #r.shared > 0 then
-    t:add('shared, never opened: ', 'SeamLabel')
+    local t = row():add('   shared, never opened: ', 'SeamLabel')
+    rows[2] = t
     for j, id in ipairs(r.shared) do
       local node = g.nodes[id]
       local add = label(node) .. ' ' .. calls.used_by(g, id, visible)
@@ -115,14 +108,13 @@ function M.head(buf, g, view, r, width)
       t:add(' ' .. calls.used_by(g, id, visible), 'SeamLabel')
     end
   end
-  local rows = { h, t }
   draw.put(buf, rows)
   return #rows
 end
 
 --- The anchor pinned over the tree: the other way from it (going down, who
 --- calls it; going up, what it calls), it, then the column titles. From the
---- top, what the roots are.
+--- top, the titles alone.
 ---@param buf integer
 ---@param g seam.Graph
 ---@param view seam.CallsView
@@ -132,7 +124,7 @@ function M.pin(buf, g, view)
   local rows = {}
   local a = view.anchor and g.nodes[view.anchor]
   if not a then
-    rows = { row():add('where the code starts: nothing calls these', 'SeamLabel'), titles(view) }
+    rows = { titles(view) }
     draw.put(buf, rows)
     return #rows
   end

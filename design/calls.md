@@ -43,7 +43,8 @@ row show where they are.
   `createRun()  called by`, the pinned line names what it calls
   (`↓ calls startRun() run.ts:83 · …`) where calls names who calls it, and
   the count column is **above** instead of **below**.
-- **From the top.** `C`, in the explorer or on any anchor. The roots are
+- **From the top.** `C`, in the explorer or on any anchor; the head reads
+  `where the code starts`. The roots are
   what nothing calls: an app's entry file, a module's top-level code, a
   package's public functions no one in the repo calls, test files. They sit
   in the file tree, under their packages, so the top of the codebase reads by
