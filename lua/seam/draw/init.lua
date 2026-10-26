@@ -8,6 +8,7 @@ local theme = require 'seam.theme'
 local M = {}
 
 M.ns = api.nvim_create_namespace 'seam'
+local ns_cursor = api.nvim_create_namespace 'seam.cursor'
 
 local function width(s)
   if s:find '[\128-\255]' then
@@ -110,6 +111,7 @@ function M.put(buf, rows)
   vim.bo[buf].modifiable = false
   api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
   api.nvim_buf_clear_namespace(buf, code.ns, 0, -1)
+  api.nvim_buf_clear_namespace(buf, ns_cursor, 0, -1)
   local codes = {}
   for i, r in ipairs(rows) do
     local row0 = i - 1
@@ -130,6 +132,16 @@ function M.put(buf, rows)
     end
   end
   code.track(buf, codes)
+end
+
+--- Light the line the cursor is on in `win`, every row it wraps to.
+--- 'cursorline' leaves the indent of a wrapped row dark.
+---@param win integer
+function M.cursor_line(win)
+  local buf = api.nvim_win_get_buf(win)
+  api.nvim_buf_clear_namespace(buf, ns_cursor, 0, -1)
+  local r = api.nvim_win_get_cursor(win)[1] - 1
+  api.nvim_buf_set_extmark(buf, ns_cursor, r, 0, { line_hl_group = 'CursorLine', priority = 95 })
 end
 
 --- A path with its package in the package's hue, and `:line` when given.

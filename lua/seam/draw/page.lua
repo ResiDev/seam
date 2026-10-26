@@ -520,9 +520,6 @@ local function user(p, path)
     prev = l
   end
   draw.put(p.buf.right, rows)
-  if p.win.right then
-    vim.wo[p.win.right].cursorline = false
-  end
   scroll_to(p.win.right, 1, 1)
 end
 
