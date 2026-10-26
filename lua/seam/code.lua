@@ -47,7 +47,7 @@ local function tree(P)
     P.root = false
     if P.lang then
       P.text = table.concat(P.lines, '\n')
-      local ok, parser = pcall(vim.treesitter.get_string_parser, P.text, P.lang)
+      local ok, parser = pcall(vim.treesitter.get_string_parser, P.text, P.lang, { injections = { [P.lang] = '' } })
       if ok then
         local okp, trees = pcall(parser.parse, parser)
         if okp and trees[1] then
