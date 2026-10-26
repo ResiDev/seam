@@ -183,10 +183,19 @@ local function guides(r, rows, x, anchored)
   end
 end
 
+local function also(x)
+  return '↑ also at :' .. (x.also_line or '?')
+end
+
+-- where an also row's note starts: three spaces clear of the line column
+local function also_at(x)
+  return LINE_AT - 3 - api.nvim_strwidth(also(x))
+end
+
 local function columns(r, x)
   if x.fold == 'also' then
-    r:to(FILE_AT):add('↑ also at :' .. (x.also_line or '?'), 'SeamLabel')
-    return r:to(LINE_AT):add(':' .. x.lines[1], 'SeamPath')
+    r:to(math.max(also_at(x), r.w + 2)):add(also(x), 'SeamLabel')
+    return r:to(math.max(LINE_AT, r.w + 3)):add(':' .. x.lines[1], 'SeamPath')
   end
   if x.count and x.count > 0 then
     local s = tostring(x.count)
@@ -226,7 +235,7 @@ function M.list(buf, g, view, r)
     guides(d, r.rows, x, anchored)
     local folded = x.fold == 'folded' or (x.kind == 'dir' and not x.touched)
     d:add(x.fold == 'open' and '▾ ' or folded and '▸ ' or '  ', 'SeamLabel')
-    local room = COUNT_END - 6 - d.w
+    local room = math.min(COUNT_END, x.fold == 'also' and also_at(x) or COUNT_END) - 6 - d.w
     if x.kind == 'dir' then
       if not x.touched then
         d:add(x.segs[1] .. '/', 'SeamDim')
