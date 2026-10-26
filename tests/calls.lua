@@ -191,13 +191,14 @@ do
   eq({ calls.key(g, v, r, i, ']', 7, M), v.cursor }, { 'move', k(A, C) }, '] the next sibling, past its rows')
   i = find(r, k(A, C))
   eq({ calls.key(g, v, r, i, '[', 7, M), v.cursor }, { 'move', k(A, B) }, '[ the previous sibling')
-  -- L opens the subtree the budget's way, H puts back what the budget opened
+  -- O opens the subtree the budget's way, H puts back what the budget opened
   v.open = {}
   r = calls.rows(g, v, 7, M)
   i = find(r, k(A, B))
-  calls.key(g, v, r, i, 'L', 7, M)
+  eq(calls.key(g, v, r, i, 'L', 7, M), nil, "L is not the model's: the screen opens the lens")
+  calls.key(g, v, r, i, 'O', 7, M)
   r = calls.rows(g, v, 7, M)
-  expect(find(r, k(A, B, E, F, B)) ~= nil, 'L opened all the way down from b')
+  expect(find(r, k(A, B, E, F, B)) ~= nil, 'O opened all the way down from b')
   i = find(r, k(A, B))
   calls.key(g, v, r, i, 'H', 7, M)
   eq(keys(calls.rows(g, v, 7, M)), keys(base), 'H gives back the rows the budget opened')
@@ -378,8 +379,8 @@ do
   calls.forget(g)
   v = calls.new(B, 'down')
   r = calls.rows(g, v, 100, L)
-  calls.key(g, v, r, 1, 'L', 100, L)
-  expect(find(calls.rows(g, v, 100, L), k(B, 'hidden', E, F)) ~= nil, 'L opens the hidden row and on down')
+  calls.key(g, v, r, 1, 'O', 100, L)
+  expect(find(calls.rows(g, v, 100, L), k(B, 'hidden', E, F)) ~= nil, 'O opens the hidden row and on down')
   local _, ab = find(calls.rows(g, calls.new(A, 'down'), 100, L), k(A, B))
   eq({ ab.count, ab.used_by }, { 0, 3 }, 'below b counts what built from shows; used by is not built from')
   local _, fe = find(calls.rows(g, calls.new(F, 'up'), 100, L), k(F, E))
