@@ -6,7 +6,6 @@ local code = require 'seam.code'
 local diagram = require 'seam.diagram'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
-local lens = require 'seam.lens'
 local st = require 'seam.state'
 local theme = require 'seam.theme'
 local tree = require 'seam.tree'
@@ -52,18 +51,13 @@ end
 local function head()
   local order = M.ORDERS[st.order]
   local rows = {}
-  local r = row():add('Seams', 'SeamTitle')
-  local on = #vim.tbl_filter(function(rule)
-    return lens.any(rule.cols)
-  end, st.lens.rules)
-  if on > 0 then
-    r:add('   ' .. on .. (on == 1 and ' filter applied' or ' filters applied'), 'SeamFilter')
-  end
-  rows[1] = r
-  r = row()
+  rows[1] = row():add('Seams', 'SeamTitle')
+  local r = row()
   if st.filter ~= '' then
     r:add('/ ', 'SeamLabel'):add(st.filter, 'SeamBold'):add('  ' .. #st.crows .. ' found', 'SeamLabel')
   end
+  local n = index.model().hidden_files or 0
+  draw.hidden(r, n, plural(n, 'file') .. ' hidden', r.w > 0 and '   ' or '')
   rows[2] = r
   r = row()
   draw.source(r)
@@ -290,7 +284,7 @@ function M.contract(c)
   end
   -- built from
   local entries, unresolved, nfiles, nnames = index.deps_by_file(c)
-  local rows = { draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), row() }
+  local rows = { draw.hidden(draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), c.hidden_dep_files or 0), row() }
   local NAMECOL = 30
   local mw = st.win.mid and api.nvim_win_is_valid(st.win.mid) and api.nvim_win_get_width(st.win.mid) or M.MW
   local rows_of_names = st.sides == 'both' and 2 or 5
@@ -326,10 +320,6 @@ function M.contract(c)
     rows[#rows + 1] = row()
     rows[#rows + 1] = row():add(' not resolved  ', 'SeamLabel'):add(trunc(table.concat(names, '  '), mw - 17), 'SeamText')
   end
-  if (c.hidden_dep_files or 0) > 0 then
-    rows[#rows + 1] = row()
-    rows[#rows + 1] = row():add(' ' .. plural(c.hidden_dep_files, 'file') .. ' hidden by the lens', 'SeamLabel')
-  end
   draw.put(st.buf.mid, rows)
   -- used by
   local uentries, nu = index.uses_by_file(c)
@@ -339,7 +329,7 @@ function M.contract(c)
   for _, us in pairs(uentries) do
     max = math.max(max, #us)
   end
-  rows = { draw.title('used by', plural(nu, 'file') .. ' · ' .. plural(#c.uses, 'reference')), row() }
+  rows = { draw.hidden(draw.title('used by', plural(nu, 'file') .. ' · ' .. plural(#c.uses, 'reference')), c.hidden_users or 0), row() }
   vim.list_extend(
     rows,
     tree.rows(m, uentries, {
@@ -357,10 +347,6 @@ function M.contract(c)
       end,
     })
   )
-  if (c.hidden_users or 0) > 0 then
-    rows[#rows + 1] = row()
-    rows[#rows + 1] = row():add(' ' .. plural(c.hidden_users, 'file') .. ' hidden by the lens', 'SeamLabel')
-  end
   draw.put(st.buf.right, rows)
   for _, w in ipairs { st.win.mid, st.win.right } do
     if w and api.nvim_win_is_valid(w) then

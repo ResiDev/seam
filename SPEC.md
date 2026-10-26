@@ -178,6 +178,9 @@ The screens are locked in the design docs. The code must keep these rules:
   - A name is coloured as its declaration is, from that line's treesitter
     captures, painted once in view. Its kind also shows in its shape:
     `fn()`, `<Component>`, `Type`.
+- **The lens.** A column it hides something from says how many on a line
+  it already has, `+3 hidden  L lens`, the count in `SeamLensHidden`, a
+  muted red. One count however many rules. No row for what it hides.
 - **Code panes.**
   - A code pane is a scratch buffer of copied lines. It keeps the source
     file's highlighting by copying that file's treesitter captures as marks,

@@ -85,10 +85,15 @@ way.
 - **The lens** is read the way the tree goes: what a function calls follows
   its **built from** column, what calls it its **used by** column, and the
   starts from the top its **contracts** column. The counts go by the same
-  columns. What it hides is never dropped in silence: under each row it folds
-  into one, `▸ 2 hidden by the lens`, last among the starts from the top. Like
-  the tests row the budget never opens it; `l` does, its rows dimmed, and the
-  chain goes on from them.
+  columns. What it hides is left out, with no row for it. It is never dropped
+  in silence: the anchor's line counts the distinct functions the tree would
+  hold without the lens and does not with it:
+  `━ createRun()  run.ts:75   called by 6 · 9 above   +17 hidden  L lens`.
+  From the top the head carries it:
+  `where the code starts   +308 hidden  L lens`. The count is muted red,
+  `L lens` grey, and nothing shows when the lens hides nothing.
+
+![A lens on, called by](mocks/lens-calls.png)
 
 ![From the top](mocks/calls-top.png)
 
@@ -108,7 +113,7 @@ way.
 | `K` `<BS>` | the previous anchor; from the first, the explorer |
 | `-` | straight to the explorer, on the anchor |
 | `C` | from the top |
-| `L` | the lens; closed, the tree redraws with it, as it was |
+| `L` | the lens; closed, the tree redraws with it, as it was, the count of what it hides on the anchor's line |
 | `<Tab>` | the code beside: called at, itself |
 | `n` `N` | called at: the next or previous place; itself: the next or previous call. In the code, `]]` `[[` |
 | `gd` | the declaration, in a normal window |
@@ -136,4 +141,4 @@ constants are left out.
   test calls what.
 
 The mocks are throwaway: `mocks/src/calls/tree.py` and `top.py`, with `lib.py`
-and `graphq.py` beside them.
+and `graphq.py` beside them; the lens ones `mocks/src/lens/`.

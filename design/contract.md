@@ -62,6 +62,13 @@ underlined, so what this file depends on reads straight down.
 
 ![Used by, with the contract](mocks/contract-used-by-both.png)
 
+## The lens
+
+Each list says what the lens hides from it as the explorer does,
+`+3 hidden  L lens` in muted red, on the empty line under its title: the
+list is too narrow for it beside the title. No row for what it hides
+(`mocks/lens-explorer.png`).
+
 ## Settled
 
 - Import lines are not uses: they are left out of the counts. Used by shows a
