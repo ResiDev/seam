@@ -84,11 +84,16 @@ it.
 | The function a use sits in | treesitter: nearest function, method or arrow assigned to a name; else the statement | per use |
 | Signature | `textDocument/hover` | per contract, on demand |
 | Code colours | treesitter captures of the source file | per pane |
+| The call graph | treesitter: each function, component and class at the top of a file, and each file's top-level code, with the callables it names outside type positions, resolved as built-from names are | per file, in the same pass |
 | Change line | `git log -L` on the declaration range | per contract, on demand |
 
 So treesitter answers everything inside one file and the language server
 answers everything across files. The only bulk work is references for every
 export.
+
+The call graph is names, not types: a local that shadows a top-level or
+imported name still counts as a call to it, and a method, a prop or a
+callback ends the tree without saying so.
 
 ## The swappable part
 
@@ -156,8 +161,9 @@ The screens are locked in the design docs. The code must keep these rules:
 
 - **Layout.** The explorer is three columns: contracts 46 wide, built from
   60, used by the rest. The page is three columns: the list 40, the contract
-  46, the seam the rest. Both need 150 columns. Narrower than that is not
-  designed. v1 says so and opens anyway.
+  46, the seam the rest. Calls is two: the tree 86, its code the rest. All
+  need 150 columns. Narrower than that is not designed. v1 says so and opens
+  anyway.
 - **Trees.** Every tree is built by one module, `tree.lua`, from paths. Two
   spaces a level. Directories end in `/`. A chain of lone directories shares
   one row. Files show by their name. Directories come before files, each
@@ -202,12 +208,15 @@ lua/seam/
   draw/init.lua     rows, putting them in a buffer, the pieces both screens share
   draw/explorer.lua the contracts list, and the trees or diagram beside it
   draw/page.lua     the Built from and Used by tabs, the contract, the seam
+  calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does
+  draw/calls.lua    the Calls screen: its head, the pinned anchor, the tree, the call and the body
   diagram.lua       the v and V views, drawn by thread's flow renderer
   lens_panel.lua    the lens float and its keys
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
 tests/
+  calls.lua         the call tree's specs, on a graph written by hand
   check.lua         every screen through its keys on a real repo
 ```
 

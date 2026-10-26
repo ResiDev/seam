@@ -44,25 +44,6 @@ local function decl_rows(c, opts)
   return rows, s, e
 end
 
--- underline the name at a use's column, or the first match on the line
-local function mark_name(r, text_start, src, name, col)
-  local at
-  if col then
-    local a = col
-    if src:sub(a, a + #name - 1) == name then
-      at = a
-    elseif src:sub(a + 1, a + #name) == name then
-      at = a + 1
-    end
-  end
-  if not at then
-    at = src:find('%f[%w_$]' .. vim.pesc(name) .. '%f[^%w_$]')
-  end
-  if at then
-    r.h[#r.h + 1] = { text_start + at - 1, text_start + at - 1 + #name, 'SeamUse', 320 }
-  end
-end
-
 --- The trail of pages, the contract, and the two tabs.
 ---@param p table the page
 function M.head(p)
@@ -97,17 +78,6 @@ function M.head(p)
   rows[2] = r
   rows[3] = row():add(string.rep('─', vim.o.columns), 'SeamSep')
   draw.put(p.buf.head, rows)
-end
-
-local function scroll_to(win, lnum, top)
-  if not (win and api.nvim_win_is_valid(win)) then
-    return
-  end
-  local n = api.nvim_buf_line_count(api.nvim_win_get_buf(win))
-  lnum = math.max(1, math.min(lnum, n))
-  api.nvim_win_call(win, function()
-    vim.fn.winrestview { topline = math.max(1, top or lnum), lnum = lnum }
-  end)
 end
 
 -- Built from tab --------------------------------------------------------
@@ -163,7 +133,7 @@ local function contract(p, lit, dim, unders, note)
       if names then
         local src = code.file(c.path).lines[r.meta.lnum] or ''
         for name in pairs(names) do
-          mark_name(r, r.code[1][4], src, name)
+          code.underline(r, r.code[1][4], src, name)
         end
       end
     end
@@ -178,9 +148,9 @@ local function contract(p, lit, dim, unders, note)
   if first then
     local at = 3 + first - s + 1
     local h = api.nvim_win_is_valid(p.win.mid) and api.nvim_win_get_height(p.win.mid) or 40
-    scroll_to(p.win.mid, at, at < h - 2 and 1 or math.max(1, at - math.floor(h / 2)))
+    code.scroll_to(p.win.mid, at, at < h - 2 and 1 or math.max(1, at - math.floor(h / 2)))
   else
-    scroll_to(p.win.mid, 1, 1)
+    code.scroll_to(p.win.mid, 1, 1)
   end
 end
 
@@ -260,7 +230,7 @@ function M.declaration(p, d)
     rows[#rows + 1] = rr
   end
   draw.put(p.buf.right, rows)
-  scroll_to(p.win.right, 1, 1)
+  code.scroll_to(p.win.right, 1, 1)
 end
 
 -- a dependency on the list: the contract with the lines naming it lit, and
@@ -476,10 +446,10 @@ local function user(p, path)
     code.add(cr, path, l)
     if is_lit then
       cr.line_hl = 'SeamLit'
-      mark_name(cr, start, P.lines[l] or '', c.name, cols[l])
+      code.underline(cr, start, P.lines[l] or '', c.name, cols[l])
     end
     for _, mu in ipairs(memat[l] or {}) do
-      mark_name(cr, start, P.lines[l] or '', mu[1], mu[2])
+      code.underline(cr, start, P.lines[l] or '', mu[1], mu[2])
     end
     rows[#rows + 1] = cr
     return cr
@@ -520,7 +490,7 @@ local function user(p, path)
     prev = l
   end
   draw.put(p.buf.right, rows)
-  scroll_to(p.win.right, 1, 1)
+  code.scroll_to(p.win.right, 1, 1)
 end
 
 -- the page --------------------------------------------------------

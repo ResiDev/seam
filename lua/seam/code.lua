@@ -321,6 +321,46 @@ function M.statement_at(path, line)
   return line, line
 end
 
+--- Underline `name` on a row of code: at byte `col` of its source line
+--- `src` when it is there, else its first match on the line.
+---@param r table a draw row
+---@param text_start integer the byte the source line starts at in the row
+---@param src string
+---@param name string
+---@param col? integer
+---@param hl? string SeamUse unless given
+function M.underline(r, text_start, src, name, col, hl)
+  local at
+  if col then
+    if src:sub(col, col + #name - 1) == name then
+      at = col
+    elseif src:sub(col + 1, col + #name) == name then
+      at = col + 1
+    end
+  end
+  if not at then
+    at = src:find('%f[%w_$]' .. vim.pesc(name) .. '%f[^%w_$]')
+  end
+  if at then
+    r.h[#r.h + 1] = { text_start + at - 1, text_start + at - 1 + #name, hl or 'SeamUse', 320 }
+  end
+end
+
+--- Line `lnum` of `win` under the cursor, `top` the first line in view.
+---@param win integer|nil
+---@param lnum integer
+---@param top? integer
+function M.scroll_to(win, lnum, top)
+  if not (win and api.nvim_win_is_valid(win)) then
+    return
+  end
+  local n = api.nvim_buf_line_count(api.nvim_win_get_buf(win))
+  lnum = math.max(1, math.min(lnum, n))
+  api.nvim_win_call(win, function()
+    vim.fn.winrestview { topline = math.max(1, top or lnum), lnum = lnum }
+  end)
+end
+
 --- Where a doc comment above `line` starts.
 function M.doc_start(path, line)
   local P = M.file(path)

@@ -60,6 +60,7 @@ local M = {}
 ---@field shared boolean|nil called by SHARED or more: the budget never opens it
 ---@field files integer|nil a tests row: how many test files
 ---@field show_file boolean its file is not the file of the row it hangs from
+---@field last boolean the last of its parent's rows, in the tree's order
 ---@field touched boolean|nil a dir row with roots under it
 ---@field segs string[]|nil a dir row's names
 
@@ -151,7 +152,8 @@ function M.used_by(g, id, visible)
   return c[id]
 end
 
---- What nothing calls, by id: where the code starts, and the tests apart.
+--- What nothing calls, by id: where the code starts, and the tests apart. A
+--- test calling a function does not make it any less a start.
 ---@param g seam.Graph
 ---@param visible? fun(path: string): boolean
 ---@return string[] roots, string[] tests
@@ -162,7 +164,8 @@ function M.roots(g, visible)
     if visible(node.path) then
       local called = false
       for _, u in ipairs(g.up[id] or {}) do
-        if u.from ~= id and visible(g.nodes[u.from].path) then
+        local by = g.nodes[u.from]
+        if u.from ~= id and not by.test and visible(by.path) then
           called = true
           break
         end
@@ -297,8 +300,17 @@ local function walk(g, view, is_open, m)
     end
     local dirs = {} -- the dir row open at each depth
     for _, it in ipairs(tree.walk(m, entries)) do
-      local r =
-        { key = it.kind .. ':' .. it.path, kind = it.kind, path = it.path, pkg = it.pkg, depth = it.depth, touched = it.touched, segs = it.segs, sub = {} }
+      local r = {
+        key = it.kind .. ':' .. it.path,
+        kind = it.kind,
+        path = it.path,
+        pkg = it.pkg,
+        depth = it.depth,
+        touched = it.touched,
+        segs = it.segs,
+        ispkg = it.ispkg,
+        sub = {},
+      }
       if it.kind == 'file' then
         table.sort(it.payload, function(a, b)
           return g.nodes[a].line < g.nodes[b].line
@@ -361,15 +373,15 @@ local function walk(g, view, is_open, m)
   end
 
   local flat = {}
-  local function emit(r, parent)
+  local function emit(r, parent, last)
     flat[#flat + 1] = r
-    r.parent_row = parent
-    for _, s in ipairs(r.sub) do
-      emit(s, r)
+    r.parent_row, r.last = parent, last
+    for j, s in ipairs(r.sub) do
+      emit(s, r, j == #r.sub)
     end
   end
-  for _, r in ipairs(top) do
-    emit(r, nil)
+  for j, r in ipairs(top) do
+    emit(r, nil, j == #top)
   end
   if dir == 'up' and view.anchor then
     -- every caller below its callers, so above what it calls
@@ -409,6 +421,8 @@ local function finish(g, view, flat, m)
       files = r.files,
       touched = r.touched,
       segs = r.segs,
+      ispkg = r.ispkg,
+      last = r.last,
       show_file = false,
     }
     for _, s in ipairs(r.sub) do
