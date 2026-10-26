@@ -243,9 +243,10 @@ local function test_files(g, list)
   return n
 end
 
--- The tree of a view, `is_open` saying which keys are open: every row with
--- the rows under it (`sub`), flat in screen order. Also the rows one call
--- from the top, where the budget starts.
+-- The tree of a view, `is_open` saying which keys are open (true), folded
+-- (false) or neither (nil: a folder or file is open, the rest folded): every
+-- row with the rows under it (`sub`), flat in screen order. Also the rows one
+-- call from the top, where the budget starts.
 local function walk(g, view, is_open, m)
   local visible = visibility(m)
   local dir = view.dir
@@ -299,43 +300,54 @@ local function walk(g, view, is_open, m)
       table.insert(entries[p], id)
     end
     local dirs = {} -- the dir row open at each depth
+    local shut -- the depth of a folder folded by hand: what is deeper is in it
     for _, it in ipairs(tree.walk(m, entries)) do
-      local r = {
-        key = it.kind .. ':' .. it.path,
-        kind = it.kind,
-        path = it.path,
-        pkg = it.pkg,
-        depth = it.depth,
-        touched = it.touched,
-        segs = it.segs,
-        ispkg = it.ispkg,
-        sub = {},
-      }
-      if it.kind == 'file' then
-        table.sort(it.payload, function(a, b)
-          return g.nodes[a].line < g.nodes[b].line
-        end)
-        local rest = {}
-        for _, id in ipairs(it.payload) do
-          if g.nodes[id].kind == 'module' then
-            r.id, r.root, r.lines = id, true, { 0 }
-          else
-            rest[#rest + 1] = node_row(r.key .. '\n' .. id, { id = id, n = 1, lines = { g.nodes[id].line } }, nil, it.depth + 1)
-          end
-        end
-        if r.id then
-          -- the file's top is a root: the file is its row, and its other roots open with it
-          r.extra = rest
-          first[#first + 1] = r
-        else
-          r.sub = rest
-          vim.list_extend(first, rest)
-        end
+      if shut and it.depth <= shut then
+        shut = nil
       end
-      local parent = dirs[it.depth - 1]
-      table.insert(parent and parent.sub or top, r)
-      if it.kind == 'dir' then
-        dirs[it.depth] = r
+      if not shut then
+        local r = {
+          key = it.kind .. ':' .. it.path,
+          kind = it.kind,
+          path = it.path,
+          pkg = it.pkg,
+          depth = it.depth,
+          touched = it.touched,
+          segs = it.segs,
+          ispkg = it.ispkg,
+          sub = {},
+        }
+        local closed = is_open(r.key) == false
+        if it.kind == 'file' then
+          table.sort(it.payload, function(a, b)
+            return g.nodes[a].line < g.nodes[b].line
+          end)
+          local rest = {}
+          for _, id in ipairs(it.payload) do
+            if g.nodes[id].kind == 'module' then
+              r.id, r.root, r.lines = id, true, { 0 }
+            else
+              rest[#rest + 1] = node_row(r.key .. '\n' .. id, { id = id, n = 1, lines = { g.nodes[id].line } }, nil, it.depth + 1)
+            end
+          end
+          if r.id then
+            -- the file's top is a root: the file is its row, and its other roots open with it
+            r.extra = rest
+            first[#first + 1] = r
+          elseif closed then
+            r.fold = 'folded'
+          else
+            r.sub = rest
+            vim.list_extend(first, rest)
+          end
+        elseif closed and it.touched then
+          r.fold, shut = 'folded', it.depth
+        end
+        local parent = dirs[it.depth - 1]
+        table.insert(parent and parent.sub or top, r)
+        if it.kind == 'dir' then
+          dirs[it.depth] = r
+        end
       end
     end
     if #tests > 0 then
@@ -451,7 +463,7 @@ local function budget(g, view, height, m, base, start)
   local function is_open(key)
     local o = base and base[key]
     if o == nil then
-      return opened[key] or false
+      return opened[key]
     end
     return o
   end
@@ -521,7 +533,7 @@ local function opener(view)
   return function(key)
     local o = view.open[key]
     if o == nil then
-      return view.auto and view.auto[key] or false
+      return view.auto and view.auto[key] or nil
     end
     return o
   end
@@ -651,7 +663,7 @@ function M.key(g, view, r, i, k, height, m)
       return go(row.kids[1])
     end
   elseif k == 'h' then
-    if row.fold == 'open' and (row.id or row.kind == 'tests') then
+    if row.fold == 'open' then
       view.open[row.key] = false
       view.cursor = row.key
       return 'redraw'
