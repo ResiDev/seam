@@ -126,7 +126,7 @@ local function built_list(p)
           local r = row { kind = 'leaf', dep = d, select = true }
           tree.bar(r, pkg)
           r:add(string.rep(' ', depth * 2))
-          r:add(trunc(d.name, 38 - r.w), 'SeamName')
+          code.add_name(r, index.id_path(d.target), index.id_line(d.target), d.name, 'SeamName', 38 - r.w)
           out[#out + 1] = r
         end
       end,

@@ -37,7 +37,15 @@ local function contract_row(c, depth, flat)
   local r = row { kind = 'c', c = c }
   tree.bar(r, c.pkg)
   r:add(string.rep(' ', flat and 1 or depth * 2))
-  r:add(trunc(shape(c), USED_END - 5 - r.w), 'SeamName')
+  local s, room = shape(c), USED_END - 5 - r.w
+  local pre, post = s:match('^(.-)' .. vim.pesc(c.name) .. '(.*)$')
+  if api.nvim_strwidth(s) > room or not pre then
+    r:add(trunc(s, room), 'SeamName')
+  else
+    r:add(pre, 'SeamName')
+    code.add_name(r, c.path, c.line, c.name, 'SeamName', room)
+    r:add(post, 'SeamName')
+  end
   counts(r, c)
   return r
 end
@@ -55,7 +63,7 @@ local function head()
     r:add('/ search', 'SeamLabel')
   end
   local sum = lens.summary(st.lens)
-  r:add('   f ', 'SeamLabel'):add(sum ~= '' and sum or 'lens', sum ~= '' and 'SeamText' or 'SeamLabel')
+  r:add('   L ', 'SeamLabel'):add(sum ~= '' and sum or 'lens', sum ~= '' and 'SeamText' or 'SeamLabel')
   rows[2] = r
   r = row()
   draw.source(r)

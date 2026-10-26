@@ -169,8 +169,9 @@ The screens are locked in the design docs. The code must keep these rules:
   - Hues are assigned once and stored, so they don't move between sessions.
     Past eight packages, the rest are grey.
   - The contract's own package and its test files are dimmed.
-  - Names have no colour. Their kind shows in their shape: `fn()`,
-    `<Component>`, `Type`.
+  - A name is coloured as its declaration is, from that line's treesitter
+    captures, painted once in view. Its kind also shows in its shape:
+    `fn()`, `<Component>`, `Type`.
 - **Code panes.**
   - A code pane is a scratch buffer of copied lines. It keeps the source
     file's highlighting by copying that file's treesitter captures as marks,
