@@ -183,22 +183,62 @@ local function compare(c)
   return r
 end
 
---- The head over the trees: the contract, its first line, the sources.
+-- the declaration from its first line, `export` dropped, wrapped at spaces
+-- to `w` columns and cut to `max` rows
+local function signature(c, w, max)
+  local P = code.file(c.path)
+  local last = math.max(c.end_line or c.line, c.line)
+  local rows = {}
+  for l = c.line, last do
+    local src = P.lines[l] or ''
+    local from = l == c.line and #(src:match '^%s*export%s+' or src:match '^%s*') or 0
+    local cont = false
+    while true do
+      local r = row()
+      if cont then
+        r:add '  '
+        from = from + #(src:sub(from + 1):match '^%s*')
+      end
+      local room = w - r.w
+      local rest = #src - from
+      if #rows == max - 1 and (rest > room or l < last) then
+        code.add(r, c.path, l, from, math.min(rest, room - 1))
+        rows[#rows + 1] = r:add('…', 'SeamLabel')
+        return rows
+      end
+      local n = rest
+      if rest > room then
+        n = (src:sub(from + 1, from + room):match '^.*()%s') or room
+        if n <= room / 2 then
+          n = room
+        end
+      end
+      rows[#rows + 1] = code.add(r, c.path, l, from, n)
+      from, cont = from + n, true
+      if from >= #src then
+        break
+      end
+    end
+  end
+  return rows
+end
+
+--- The head over the trees: the contract, its declaration, the sources.
+--- Its declaration takes two rows, or five beside used by alone.
 ---@param c table
 function M.contract_head(c)
-  local rows = {}
+  local win = st.win.rhead
+  local w = win and api.nvim_win_is_valid(win) and api.nvim_win_get_width(win) or 120
   local r = row()
   r:add(shape(c), 'SeamBold'):add('   ' .. c.kind .. ' in ', 'SeamLabel')
   draw.path(r, c.path, c.line)
-  rows[1] = r
-  r = row()
-  if c.kind == 'function' or c.kind == 'component' or c.kind == 'const' then
-    local l = vim.trim(code.file(c.path).lines[c.line] or ''):gsub('^export%s+', '')
-    r:add(trunc(l, 120), 'SeamText')
-  end
-  rows[2] = r
-  rows[3] = compare(c) or row()
+  local rows = { r }
+  vim.list_extend(rows, signature(c, w - 1, st.sides == 'used' and 5 or 2))
+  rows[#rows + 1] = compare(c)
   draw.put(st.buf.rhead, rows)
+  if win and api.nvim_win_is_valid(win) then
+    api.nvim_win_set_height(win, #rows)
+  end
 end
 
 local function draw_diagram(c)
@@ -227,6 +267,7 @@ function M.contract(c)
   local entries, unresolved, nfiles, nnames = index.deps_by_file(c)
   local rows = { draw.title('built from', plural(nfiles, 'file') .. ' · ' .. plural(nnames, 'name')), row() }
   local NAMECOL = 30
+  local mw = st.win.mid and api.nvim_win_is_valid(st.win.mid) and api.nvim_win_get_width(st.win.mid) or M.MW
   vim.list_extend(
     rows,
     tree.rows(m, entries, {
@@ -235,11 +276,15 @@ function M.contract(c)
       reserve = 1,
       file = function(r, _, e)
         r:to(NAMECOL)
-        local names = {}
-        for _, d in ipairs(e.list) do
-          names[#names + 1] = d.name
+        for i, d in ipairs(e.list) do
+          if i > 1 then
+            if r.w + 3 > mw - 1 then
+              break
+            end
+            r:add '  '
+          end
+          code.add_name(r, index.id_path(d.target), index.id_line(d.target), d.name, 'SeamName', mw - 1 - r.w)
         end
-        r:add(trunc(table.concat(names, '  '), M.MW - NAMECOL - 1), 'SeamName')
       end,
     })
   )
@@ -249,7 +294,7 @@ function M.contract(c)
       names[#names + 1] = d.name
     end
     rows[#rows + 1] = row()
-    rows[#rows + 1] = row():add(' not resolved  ', 'SeamLabel'):add(trunc(table.concat(names, '  '), M.MW - 17), 'SeamText')
+    rows[#rows + 1] = row():add(' not resolved  ', 'SeamLabel'):add(trunc(table.concat(names, '  '), mw - 17), 'SeamText')
   end
   if (c.hidden_dep_files or 0) > 0 then
     rows[#rows + 1] = row()

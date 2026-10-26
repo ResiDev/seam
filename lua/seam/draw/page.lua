@@ -163,7 +163,7 @@ local function contract(p, lit, dim, unders, note)
       if names then
         local src = code.file(c.path).lines[r.meta.lnum] or ''
         for name in pairs(names) do
-          mark_name(r, r.code[4], src, name)
+          mark_name(r, r.code[1][4], src, name)
         end
       end
     end
@@ -301,7 +301,7 @@ function M.code(p)
     -- a source without columns names each once: its first match on the line
     local at = d.col and src:sub(d.col, d.col + #d.name - 1) == d.name and d.col or src:find('%f[%w_$]' .. vim.pesc(d.name) .. '%f[^%w_$]')
     if r and at then
-      local b = r.code[4] + at - 1
+      local b = r.code[1][4] + at - 1
       r.h[#r.h + 1] = { b, b + #d.name, dep.target and 'SeamRef' or 'SeamRefLost', 310 }
       refs[#refs + 1] = { row = #rows + d.line - s + 1, s = b, e = b + #d.name, dep = dep }
     end
