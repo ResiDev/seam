@@ -27,12 +27,23 @@ end
 ---@field width? integer the columns a name may take
 ---@field reserve? integer columns kept free after a name
 
---- The rows of a tree of `entries`, path -> payload.
+---@class seam.TreeItem
+---@field kind 'dir'|'file'
+---@field path string
+---@field depth integer
+---@field pkg string|nil the package it is in
+---@field ispkg? boolean a directory that is a package
+---@field touched? boolean a directory with entries under it
+---@field segs? string[] a directory's names, a chain of lone directories joined
+---@field name? string a file's name
+---@field payload? any a file's entry
+
+--- The tree of `entries`, path -> payload, in the order it is drawn: what
+--- `rows` draws, with no drawing.
 ---@param m table the model
 ---@param entries table<string, any>
----@param o seam.TreeOpts
----@return table[]
-function M.rows(m, entries, o)
+---@return seam.TreeItem[]
+function M.walk(m, entries)
   local rootn = { dirs = {}, files = {}, path = '', touched = true }
   local function dir(parent, name)
     local n = parent.dirs[name]
@@ -58,35 +69,62 @@ function M.rows(m, entries, o)
       n = dir(n, seg)
     end
   end
-  local rows = {}
+  local items = {}
   local function emit(n, depth, pkg)
     local names = vim.tbl_keys(n.dirs)
     table.sort(names)
     for _, nm in ipairs(names) do
       local c = n.dirs[nm]
       local cpkg = c.pkg or pkg
-      local own = o.own and cpkg == o.own
-      local r = draw.row { kind = 'dir', path = c.path }
+      local it = { kind = 'dir', path = c.path, depth = depth, pkg = cpkg, ispkg = c.pkg ~= nil, touched = c.touched, segs = { nm } }
+      items[#items + 1] = it
       if c.touched then
-        M.bar(r, cpkg, own and o.dimown)
-      else
-        r:add ' '
-      end
-      r:add(string.rep(' ', depth * 2))
-      if not c.touched then
-        r:add('▸ ' .. nm .. '/', 'SeamDim')
-        rows[#rows + 1] = r
-      else
-        local cur, segs = c, { nm }
+        local cur = c
         while true do
           local ks = vim.tbl_keys(cur.dirs)
           if #ks == 1 and next(cur.files) == nil and not cur.dirs[ks[1]].pkg and cur.dirs[ks[1]].touched then
             cur = cur.dirs[ks[1]]
-            segs[#segs + 1] = ks[1]
+            it.segs[#it.segs + 1] = ks[1]
           else
             break
           end
         end
+        emit(cur, depth + 1, cpkg)
+      end
+    end
+    local fnames = vim.tbl_keys(n.files)
+    table.sort(fnames)
+    for _, fname in ipairs(fnames) do
+      local f = n.files[fname]
+      items[#items + 1] = { kind = 'file', path = f.path, depth = depth, pkg = pkg, name = fname, payload = f.payload }
+    end
+  end
+  emit(rootn, 0, nil)
+  return items
+end
+
+--- The rows of a tree of `entries`, path -> payload.
+---@param m table the model
+---@param entries table<string, any>
+---@param o seam.TreeOpts
+---@return table[]
+function M.rows(m, entries, o)
+  local rows = {}
+  for _, it in ipairs(M.walk(m, entries)) do
+    local own = o.own and it.pkg == o.own
+    local depth = it.depth
+    if it.kind == 'dir' then
+      local r = draw.row { kind = 'dir', path = it.path }
+      if it.touched then
+        M.bar(r, it.pkg, own and o.dimown)
+      else
+        r:add ' '
+      end
+      r:add(string.rep(' ', depth * 2))
+      if not it.touched then
+        r:add('▸ ' .. it.segs[1] .. '/', 'SeamDim')
+      else
+        local segs = vim.list_slice(it.segs)
         local room = (o.width or 60) + (o.reserve or 0) + 8 - r.w
         local total = #table.concat(segs, '/') + 1
         if total > room and #segs > 1 then
@@ -100,40 +138,33 @@ function M.rows(m, entries, o)
           end
         end
         for i, sg in ipairs(segs) do
-          if i == 1 and c.pkg then
-            r:add(sg, theme.hue(c.pkg).name)
+          if i == 1 and it.ispkg then
+            r:add(sg, theme.hue(it.path).name)
             r:add('/', 'SeamPath')
           else
             r:add(sg .. '/', 'SeamPath')
           end
         end
-        if c.pkg and own then
+        if it.ispkg and own then
           r:add('  its own folder', 'SeamLabel')
         end
-        rows[#rows + 1] = r
-        emit(cur, depth + 1, cpkg)
       end
-    end
-    local fnames = vim.tbl_keys(n.files)
-    table.sort(fnames)
-    for _, fname in ipairs(fnames) do
-      local f = n.files[fname]
-      local own = o.own and pkg == o.own
-      local r = draw.row { kind = 'file', path = f.path, payload = f.payload, select = o.select == 'file' }
-      M.bar(r, pkg, own and o.dimown)
+      rows[#rows + 1] = r
+    else
+      local r = draw.row { kind = 'file', path = it.path, payload = it.payload, select = o.select == 'file' }
+      M.bar(r, it.pkg, own and o.dimown)
       r:add(string.rep(' ', depth * 2))
-      local hl = index.is_test(f.path) and 'SeamTest' or o.file_hl or 'SeamName'
-      r:add(draw.trunc(fname, (o.width or 60) - r.w - (o.reserve or 0)), hl)
+      local hl = index.is_test(it.path) and 'SeamTest' or o.file_hl or 'SeamName'
+      r:add(draw.trunc(it.name, (o.width or 60) - r.w - (o.reserve or 0)), hl)
       if o.file then
-        o.file(r, f.path, f.payload, pkg)
+        o.file(r, it.path, it.payload, it.pkg)
       end
       rows[#rows + 1] = r
       if o.after then
-        o.after(rows, f.path, f.payload, depth + 1, pkg)
+        o.after(rows, it.path, it.payload, depth + 1, it.pkg)
       end
     end
   end
-  emit(rootn, 0, nil)
   return rows
 end
 

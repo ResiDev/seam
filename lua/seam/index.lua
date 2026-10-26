@@ -58,7 +58,7 @@ end
 --- calls each, by the caller's path then line.
 ---@param list table[]
 ---@return seam.Graph
-local function graph_of(list)
+function M.graph(list)
   local g = { nodes = {}, down = {}, up = {}, memo = {} }
   for _, n in ipairs(list) do
     n.test = M.is_test(n.path)
@@ -104,7 +104,7 @@ local function build(file)
     pkgcache = {},
     ispkg = {},
     pkgsorted = {},
-    graph = d.nodes and graph_of(d.nodes) or nil,
+    graph = d.nodes and M.graph(d.nodes) or nil,
   }
   for _, p in ipairs(m.packages) do
     if p ~= '.' and p ~= '' then

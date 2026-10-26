@@ -214,6 +214,11 @@ end
 --- the full lists beside them, so every screen follows the lens unchanged.
 function M.apply(lens, m)
   local visible = M.visibility(lens)
+  -- the call tree asks as it draws; its counts were for the lens before
+  m.visible = visible
+  if m.graph then
+    m.graph.memo = {}
+  end
   local id_path = function(id)
     return id and id:match '^(.-):%d+:'
   end
