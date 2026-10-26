@@ -185,7 +185,7 @@ end
 ---@param path string
 ---@return boolean
 function M.is_test(path)
-  return (path:find '%.test%.' or path:find '%.spec%.' or path:find '/__tests__/' or path:find '/tests/') ~= nil
+  return (path:find '%.test%.' or path:find '%.spec%.' or path:find '/__tests__/' or ('/' .. path):find '/tests?/') ~= nil
 end
 
 --- The path and line of an id, 'path:line:name'.
