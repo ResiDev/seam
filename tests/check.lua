@@ -146,12 +146,12 @@ if os.getenv 'SEAM_LENS' then
   io.stdout:write(('with a lens: %d contracts\n'):format(#st.models[st.cur].contracts))
 end
 
--- the explorer's head: its declaration in two rows, five beside used by
+-- the explorer's head: its declaration in two rows, five beside one tree
 -- alone, none wider than the head
 local function check_head(c)
   local w = st.win.rhead
   local lines = api.nvim_buf_get_lines(st.buf.rhead, 0, -1, false)
-  local most = 1 + (st.sides == 'used' and 5 or 2) + 1
+  local most = 1 + (st.sides == 'both' and 2 or 5) + 1
   if #lines > most then
     fail(('%s: the head has %d rows, at most %d'):format(c.name, #lines, most))
   end
@@ -164,7 +164,7 @@ local function check_head(c)
     end
   end
 end
-for _, side in ipairs { 'u', 'u' } do
+for _, side in ipairs { 'u', 'u', 'b', 'b' } do
   key(side)
   for _, c in ipairs(st.models[st.cur].contracts) do
     where = 'explorer head sides=' .. st.sides
@@ -179,9 +179,12 @@ for _, view in ipairs { 'v', 'V' } do
   for _, side in ipairs { 'b', 'b', 'u', 'u', 'b', 'u', 'u' } do
     where = ('explorer %s %s sides=%s'):format(view, st.view, st.sides)
     key(side)
-    key 'j'
-    key 'j'
-    key 'k'
+    for _, k in ipairs { 'j', 'j', 'k' } do
+      key(k)
+      if #api.nvim_buf_get_extmarks(st.buf.rhead, require('seam.code').ns, 0, -1, {}) == 0 then
+        fail(k .. ' left the head uncoloured on ' .. (st.shown and st.shown.name or 'nothing'))
+      end
+    end
   end
   key(view)
   where = ('explorer back from %s'):format(view)

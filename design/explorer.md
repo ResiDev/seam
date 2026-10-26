@@ -25,8 +25,7 @@ declaration.
 
 The cursor on a contract redraws both trees. A header across them names the
 contract, its kind and `path:line`, and its declaration in its own colours,
-wrapped and cut to two rows. Beside used by alone it takes five, standing in
-for the built from tree it hides. Names in the built from tree take their
+wrapped and cut to two rows. Beside one tree alone it takes five. Names in the built from tree take their
 declarations' colours and the tree's full width.
 
 ## The trees
