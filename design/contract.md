@@ -62,6 +62,18 @@ underlined, so what this file depends on reads straight down.
 
 ![Used by, with the contract](mocks/contract-used-by-both.png)
 
+## Another contract
+
+`/` opens the call tree's float over the left, titled `open`: a prompt,
+`> query` with `27 of 286 contracts` on its right, and every contract the
+lens lets through in its contracts column, types and constants as well as
+functions, the most used first and narrowed fuzzily as you type. A row is
+the name as the explorer draws it, then `path:line`, then its used by.
+`<CR>` opens that contract's page on the tab shown, Built from or Used by,
+the page left kept so `K` comes back, as `J` does; `<Esc>` changes nothing.
+It is the same in Built from read as code: `n` `N` go by names there, so
+Vim's search had no next to give.
+
 ## The lens
 
 Each list says what the lens hides from it as the explorer does,

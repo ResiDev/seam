@@ -4,7 +4,6 @@
 local api = vim.api
 local calls = require 'seam.calls'
 local calls_draw = require 'seam.draw.calls'
-local calls_picker = require 'seam.calls_picker'
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local explorer = require 'seam.draw.explorer'
@@ -12,6 +11,7 @@ local index = require 'seam.index'
 local lens = require 'seam.lens'
 local lens_panel = require 'seam.lens_panel'
 local page = require 'seam.draw.page'
+local picker = require 'seam.picker'
 local st = require 'seam.state'
 local theme = require 'seam.theme'
 local M = {}
@@ -121,7 +121,9 @@ end
 function M.status()
   local left, right = '', ''
   local srcs = #st.names > 1 and ('S ' .. st.names[(vim.fn.index(st.names, st.cur) + 1) % #st.names + 1]) or ''
-  if st.screen == 'page' and st.page then
+  if picker.is_open() then
+    left, right = picker.status()
+  elseif st.screen == 'page' and st.page then
     local p = st.page
     local pos = ''
     if p.count and p.count > 0 then
@@ -166,7 +168,7 @@ function M.status()
     local sd = st.sides == 'built' and 'b both   u used by' or st.sides == 'used' and 'b built from   u both' or 'b built from   u used by'
     right = '<Tab> ' .. ORDERS[st.order % #ORDERS + 1].short .. '   ' .. vw .. '   ' .. sd .. '   L lens   / search   J open   c calls   C from the top'
   end
-  if srcs ~= '' and st.screen ~= 'calls' then
+  if srcs ~= '' and st.screen ~= 'calls' and not picker.is_open() then
     right = right .. '   ' .. srcs
   end
   -- a lens on is said in the same place on every screen, the far right, in its red
@@ -294,23 +296,38 @@ function M.set_view(v)
   vim.cmd 'redrawstatus'
 end
 
---- Narrow the list to the names matching what is typed, as it is typed.
+--- `/`: a prompt over the list's head, the list narrowing as you type to
+--- the names holding what is typed; <CR> keeps it, <Esc> puts back the one
+--- there was.
 function M.search()
-  local au = api.nvim_create_autocmd('CmdlineChanged', {
-    group = aug,
-    callback = function()
-      st.filter = vim.fn.getcmdline()
-      pcall(show_list)
-      vim.cmd 'redraw'
-    end,
-  })
-  local ok, q = pcall(vim.fn.input, { prompt = '/', default = st.filter, cancelreturn = '\0' })
-  api.nvim_del_autocmd(au)
-  if not ok or q == '\0' then
-    q = ''
+  if not (st.win.list and api.nvim_win_is_valid(st.win.list)) then
+    return
   end
-  st.filter = q
-  show_list()
+  local was, at = st.filter, st.shown
+  picker.open {
+    title = 'search',
+    noun = 'contracts',
+    keys = '<CR> keep   <C-n>/<C-p> next   <Esc> back',
+    over = st.win.lhead,
+    focus = st.win.list,
+    width = explorer.LW - 2,
+    query = st.filter,
+    total = #index.model().contracts,
+    typed = function(q)
+      st.filter = q
+      pcall(show_list)
+      return #st.crows
+    end,
+    move = function(d)
+      step(st.win.list, st.crows, d)
+      M.on_move()
+    end,
+    pick = function() end,
+    cancel = function()
+      st.filter = was
+      show_list(at)
+    end,
+  }
 end
 
 --- Put the list's cursor on a contract by name, and a path fragment.
@@ -461,6 +478,7 @@ local function page_keys(buf)
   end, o)
   vim.keymap.set('n', '-', M.overview, o)
   vim.keymap.set('n', 'L', M.open_lens, o)
+  vim.keymap.set('n', '/', M.page_pick, o)
   vim.keymap.set('n', 'q', M.close, o)
   vim.keymap.set('n', 'S', M.switch, o)
   goto_keys(buf)
@@ -702,9 +720,11 @@ local function calls_entry()
   }
 end
 
---- Open contract `c`'s page, over the page or Calls screen shown if there is one.
+--- Open contract `c`'s page, over the page or Calls screen shown if there is
+--- one, on `tab` when given.
 ---@param c table
-function M.open_page(c)
+---@param tab? 'built'|'used'
+function M.open_page(c, tab)
   if st.page then
     st.stack[#st.stack + 1] = st.page
   elseif st.screen == 'calls' and st.calls then
@@ -713,9 +733,41 @@ function M.open_page(c)
   else
     st.explorer_at = st.shown
   end
-  local tab = (st.sides == 'used' or #c.deps == 0) and c.nusers > 0 and 'used' or 'built'
+  tab = tab or (st.sides == 'used' or #c.deps == 0) and c.nusers > 0 and 'used' or 'built'
   st.page = { kind = 'page', c = c, tab = tab, sel = {} }
   show_page()
+end
+
+--- `/` on a page: a float over its left to switch to any contract the lens
+--- lets through, on the tab shown, K back.
+function M.page_pick()
+  local p = st.page
+  local over = p and (p.win.list or p.win.mid)
+  if not (over and api.nvim_win_is_valid(over)) then
+    return
+  end
+  local m = index.model()
+  picker.open {
+    title = 'open',
+    noun = 'contracts',
+    keys = '<CR> open   <C-n>/<C-p> next   <Esc> back',
+    over = over,
+    focus = api.nvim_get_current_win(),
+    col = 1,
+    width = picker.W,
+    rows = api.nvim_win_get_height(over) + 1,
+    items = picker.contracts(m),
+    node = function(id)
+      return m.byid[id]
+    end,
+    column = 'used by',
+    pick = function(x)
+      local c = x and index.model().byid[x.id]
+      if c and st.page == p and c ~= p.c then
+        M.open_page(c, p.tab)
+      end
+    end,
+  }
 end
 
 --- Back: the previous page or Calls screen, or the explorer.
@@ -922,9 +974,6 @@ end
 --- the row under the cursor, then the keys.
 ---@return string left, string right
 function M.calls_status()
-  if calls_picker.is_open() then
-    return 'anchor on', calls_picker.KEYS
-  end
   local v, r = st.calls, st.calls_rows
   local g = index.model().graph
   local i = calls_at()
@@ -1124,16 +1173,23 @@ local function calls_pick()
     return
   end
   local w = st.cwin
-  calls_picker.open {
-    graph = function()
-      return index.model().graph
-    end,
-    model = index.model,
+  local m = index.model()
+  picker.open {
+    title = 'anchor on',
+    noun = 'functions',
+    keys = '<CR> anchor   <C-n>/<C-p> next   <Esc> back',
     over = w.list,
+    col = 1,
+    width = picker.W,
     rows = api.nvim_win_get_height(w.list) + 1,
-    pick = function(id)
-      if st.screen == 'calls' and st.calls then
-        calls.anchor(st.calls, id)
+    items = calls.callables(m.graph, m),
+    node = function(id)
+      return index.model().graph.nodes[id]
+    end,
+    column = 'used by',
+    pick = function(x)
+      if x and st.screen == 'calls' and st.calls then
+        calls.anchor(st.calls, x.id)
         show_calls()
       end
     end,
@@ -1141,7 +1197,6 @@ local function calls_pick()
       if calls_valid() then
         api.nvim_set_current_win(w.list)
       end
-      vim.cmd 'redrawstatus'
     end,
   }
 end

@@ -88,7 +88,9 @@ as the tree draws it, then where it is, `packages/core/src/run/` dim,
 `<C-n>` `<C-p>` (or `<Down>` `<Up>`) move, `<CR>` anchors on it the way the
 tree reads (from the top, calls) as `<CR>` on a row does, so `K` comes back;
 `<Esc>` closes it with nothing changed. The status line reads `anchor on`
-and the keys. In the code beside the tree `/` stays Vim's search.
+and the keys. In the code beside the tree `/` stays Vim's search. It is
+the one `/` seam has: a page opens it on contracts, and the explorer has its
+prompt alone, the list behind it narrowing.
 
 ![/ to anchor on any function](mocks/calls-picker.png)
 

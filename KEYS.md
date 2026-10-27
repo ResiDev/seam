@@ -20,7 +20,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `<Tab>` `<S-Tab>` | next or previous order: by folder, most used, most built from; the header lights the count it sorts by |
 | `b` | only the built-from tree; again, both trees |
 | `u` | only the used-by tree; again, both trees |
-| `/` | search names; the list narrows as you type |
+| `/` | search names: a prompt over the list's head, `> query` and `9 of 286 contracts`; the list narrows as you type to the names holding it, whatever their case, and the contract shown follows the cursor. `<C-n>` `<C-p>` `<Down>` `<Up>` move in the list, `<CR>` keeps the filter (emptied, it clears it), `<Esc>` `<C-c>` put back the one before |
 | `d` | on a directory row, filter to it |
 | `D` | clear the filter |
 | `J` `<CR>` | open the contract's page |
@@ -45,6 +45,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `gf` `gd` | in your own code: on the list, the dependency's declaration or the user file at its first use; in the code, the line under the cursor; on the head, the contract's declaration |
 | `K` `<BS>` | up a level: the previous page, the Calls screen it was opened from, or the explorer |
 | `-` | straight to the explorer from any depth, on this contract |
+| `/` | another contract: a float over the left lists every one the lens lets through, types and constants too, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` opens its page on the tab shown, and `K` comes back; `<Esc>` `<C-c>` close it, nothing changed. In Built from as code too: `n` `N` are the names there, so Vim's search had no next |
 | `L` | the lens |
 
 ## Calls
