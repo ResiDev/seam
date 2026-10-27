@@ -86,6 +86,7 @@ it.
 | Code colours | treesitter captures of the source file | per pane |
 | The call graph | treesitter: each function, component and class at the top of a file, and each file's top-level code, with the callables it names outside type positions, resolved as built-from names are | per file, in the same pass |
 | Change line | `git log -L` on the declaration range | per contract, on demand |
+| What a function takes and gives | `textDocument/hover` on each callable of the call graph, `scripts/types.lua` | one request a callable, once, in the background |
 
 So treesitter answers everything inside one file and the language server
 answers everything across files. The only bulk work is references for every
@@ -94,6 +95,26 @@ export.
 The call graph is names, not types: a local that shadows a top-level or
 imported name still counts as a call to it, and a method, a prop or a
 callback ends the tree without saying so.
+
+## Types
+
+`types.json`, beside the treesitter index, is what the TypeScript server
+says each function, component and class of the call graph is: its
+`textDocument/hover`, as it came, by node id; and for each class the
+callables that say `new` to it, from the source just before the call.
+`scripts/types.lua` writes it in a headless Neovim of its own, with tsgo from
+Mason unless `$SEAM_TS` names another server (11 to 30 s on excalidraw).
+Indexing starts it when the treesitter index is written, and opening a repo
+whose index has none starts it; until it lands, and when the server will not
+start (said once), every screen works without types.
+
+`seam.types` parses each hover into its parameters and return, and builds a
+flow for each repo type (an exported interface, type alias, class or enum,
+by name): the functions whose return names it or that `new` it make it, the
+ones with a parameter naming it take it. The model holds `sigs` by node id,
+`flows` by name and `flowlist`, the most travelled first. The call tree shows
+what each row takes and gives; the Types screen lists the types and follows
+one. `design/types.md` says how they look.
 
 ## The swappable part
 
@@ -161,8 +182,8 @@ The screens are locked in the design docs. The code must keep these rules:
 
 - **Layout.** The explorer is three columns: contracts 46 wide, built from
   60, used by the rest. The page is three columns: the list 40, the contract
-  46, the seam the rest. Calls is two: the tree 86, its code the rest. All
-  need 150 columns. Narrower than that is not designed. v1 says so and opens
+  46, the seam the rest. Calls is two: the tree 86, its code the rest; Types
+  the same, the list 86. All need 150 columns. Narrower than that is not designed. v1 says so and opens
   anyway.
 - **Trees.** Every tree is built by one module, `tree.lua`, from paths. Two
   spaces a level. Directories end in `/`. A chain of lone directories shares
@@ -199,7 +220,7 @@ The screens are locked in the design docs. The code must keep these rules:
 
 ## From your code
 
-`require('seam').here(how)`, `:SeamHere [overview|page|calls|called_by]`,
+`require('seam').here(how)`, `:SeamHere [overview|page|calls|called_by|types]`,
 opens seam on what the word under the cursor names in a buffer of the repo.
 `seam.here.resolve` is pure: the word, the file relative to the root and the
 cursor line, against the model. A contract (an export with a use, the lens's
@@ -207,8 +228,9 @@ cursor line, against the model. A contract (an export with a use, the lens's
 several; else one this file uses; else the only one of that name. For calls
 and called by a graph node first the same way (declared here, else one this
 file's nodes call, else the only one), then a contract, then the innermost
-node holding the cursor. Several and none here: the `/` picker of the screen
-asked for, holding the word. `:Seam` on a repo seam is open on comes to its
+node holding the cursor. For types, the flow of the repo type of that name.
+Several and none here: the `/` picker of the screen asked for, holding the
+word. `:Seam` on a repo seam is open on comes to its
 tab as it was; another repo closes it first.
 
 ## Code layout
@@ -218,7 +240,7 @@ lua/seam/
   init.lua          :Seam, start and open, here (from your code), what tests and view steps call
   here.lua          the word under the cursor in a file to the contract or function it names
   state.lua         the one table every screen reads: repo, models, tab, windows, what is shown
-  index.lua         the model from a source's JSON, the lens applied, where indexes live, indexing
+  index.lua         the model from a source's JSON, the lens applied, its types hung on, where indexes live, indexing
   theme.lua         highlight groups, hues
   lens.lua          the lens: patterns, what it hides, .seams/lens.json
   tree.lua          paths to rows: compaction, folding, the package bar
@@ -227,16 +249,20 @@ lua/seam/
   draw/explorer.lua the contracts list, and the trees or diagram beside it
   draw/page.lua     the Built from and Used by tabs, the contract, the seam
   calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does, what / lists
-  draw/calls.lua    the Calls screen: its head, the column titles, the tree, the call and the body
+  draw/calls.lua    the Calls screen: its head, the column titles, the tree, the call and the body, what each function takes and gives
+  types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
+  draw/types.lua    the Types screen: every type the most travelled first, or one type's flow, and the code beside
   diagram.lua       the v and V views, drawn by thread's flow renderer
   lens_panel.lua    the lens float and its keys
   picker.lua        the / float on every screen: a prompt, a list of picks or the explorer's own, fuzzy matching
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
+  types.lua         types.json: the TypeScript server's hover of each callable, in a headless nvim of its own
 tests/
   calls.lua         the call tree's and the picker's specs, on a graph written by hand
   here.lua          here's resolution specs, on a model written by hand
+  types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
   check.lua         every screen through its keys on a real repo
 ```
 

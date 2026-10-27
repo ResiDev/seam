@@ -10,7 +10,9 @@ return {
   sides = 'both', -- 'both', 'built' or 'used'
   panes = { built = 'both', used = 'seam' }, -- a page's panes per tab: 'both', 'contract' or 'seam'
   built_as = 'code', -- Built from as 'code', the contract with its names marked, or as a 'list'
-  stack = {}, -- what K comes back to from the page shown: pages ({ kind = 'page', c, ... }), and under them the Calls screen J left ({ kind = 'calls', calls, top, label })
+  stack = {}, -- what K comes back to from the screen shown: pages ({ kind = 'page', c, ... }), the Calls screen left ({ kind = 'calls', calls, top, label }), the Types screen left (seam.TypesView, its label)
   -- tab: seam's tab page; from_tab: the one it was opened from, where gf shows the code
   -- calls: the Calls screen's view (seam.CallsView), calls_rows its rows as drawn
+  -- columns: the call tree's columns, 'counts' when T chose them over what each function takes and gives
+  -- types: the Types screen's view (seam.TypesView), types_rows its rows as drawn
 }

@@ -2,6 +2,7 @@
 -- lens applied; where indexes live, and making one with treesitter.
 local lens = require 'seam.lens'
 local st = require 'seam.state'
+local types = require 'seam.types'
 local M = {}
 
 local ROOT = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
@@ -147,7 +148,22 @@ local function build(file)
   if st.lens then
     lens.apply(st.lens, m)
   end
+  M.attach_types(m, vim.fs.dirname(file))
   return m
+end
+
+--- Hang what the TypeScript server said of each callable on a model with a
+--- call graph, from `types.json` in `dir`, when it is there.
+---@param m table
+---@param dir string
+function M.attach_types(m, dir)
+  if not m.graph then
+    return
+  end
+  local hovers, news = types.read(dir .. '/types.json')
+  if hovers then
+    types.attach(m, hovers, news)
+  end
 end
 
 --- Read the repo's indexes, each source's JSON, or only `only`; one that has
@@ -156,7 +172,7 @@ end
 function M.load(only)
   for _, f in ipairs(vim.fn.glob(M.dir(st.root) .. '/*.json', false, true)) do
     local name = vim.fn.fnamemodify(f, ':t:r')
-    if name == 'hues' or (only and name ~= only) then
+    if name == 'hues' or name == 'types' or (only and name ~= only) then
       goto continue
     end
     local stat = vim.uv.fs_stat(f)
@@ -266,6 +282,57 @@ function M.uses_by_file(c)
   return entries, n
 end
 
+-- the repos whose types are being asked for, and those whose server would not answer
+local asking, refused = {}, {}
+
+--- Is the TypeScript server being asked for the repo's types?
+---@param root string
+---@return boolean
+function M.asking_types(root)
+  return asking[root] == true
+end
+
+--- Ask the TypeScript server what each callable is, in a headless Neovim of
+--- its own, writing `types.json` beside the treesitter index; once it lands
+--- the loaded models have their types and the screen shown is drawn again.
+--- Unless `again`, only when there is no `types.json` yet. A server that
+--- will not answer is said once, and not asked again this session.
+---@param root string
+---@param again? boolean
+function M.types(root, again)
+  local out = M.dir(root)
+  if asking[root] or refused[root] or not vim.uv.fs_stat(out .. '/treesitter.json') then
+    return
+  end
+  if not again and vim.uv.fs_stat(out .. '/types.json') then
+    return
+  end
+  asking[root] = true
+  local script = ROOT .. '/scripts/types.lua'
+  local tmp = out .. '/types.json.part'
+  vim.system({ vim.v.progpath, '--headless', '--clean', '-l', script, root, out .. '/treesitter.json', tmp }, { text = true }, function(res)
+    vim.schedule(function()
+      asking[root] = nil
+      if res.code ~= 0 or not vim.uv.fs_stat(tmp) then
+        refused[root] = true
+        os.remove(tmp)
+        local why = vim.trim(res.stderr or ''):match '[^\n]*$' or ''
+        vim.notify('seam: no types, the screens go on without them. ' .. why, vim.log.levels.WARN)
+        return
+      end
+      os.rename(tmp, out .. '/types.json')
+      if st.root ~= root then
+        return
+      end
+      for _, m in pairs(st.models) do
+        M.attach_types(m, out)
+      end
+      vim.notify('seam: ' .. (vim.trim(res.stderr or ''):match '[^\n]*$' or 'types'))
+      require('seam.screen').types_landed()
+    end)
+  end)
+end
+
 --- Index a repo with treesitter in a headless Neovim of its own, so the
 --- editor stays free; `done` runs once the JSON is written.
 ---@param root string
@@ -287,6 +354,7 @@ function M.index(root, done)
       if done then
         done()
       end
+      M.types(root, true)
     end)
   end)
 end

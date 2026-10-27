@@ -70,15 +70,16 @@ function M.start(root, opts)
   end
 end
 
-local WAYS = { overview = true, page = true, calls = true, called_by = true }
-M.ways = { 'overview', 'page', 'calls', 'called_by' }
+local WAYS = { overview = true, page = true, calls = true, called_by = true, types = true }
+M.ways = { 'overview', 'page', 'calls', 'called_by', 'types' }
 
 --- From your own code: seam on what the word under the cursor names. `how`:
 --- 'overview' (the explorer on that contract), 'page' (its page), 'calls' or
---- 'called_by' (the call tree anchored on that function, down or up). A
---- function that is no contract opens its calls; several by that name, the
---- `/` picker holding the word; nothing, the explorer's search holding it.
----@param how? 'overview'|'page'|'calls'|'called_by'
+--- 'called_by' (the call tree anchored on that function, down or up), or
+--- 'types' (the flow of the type it names). A function that is no contract
+--- opens its calls; several by that name, the `/` picker holding the word;
+--- nothing, the explorer's search holding it, or for types the types' `/`.
+---@param how? 'overview'|'page'|'calls'|'called_by'|'types'
 function M.here(how)
   how = how or 'overview'
   if not WAYS[how] then
@@ -97,6 +98,17 @@ function M.here(how)
   M.start(root, {
     after = function()
       local m = index.model()
+      if how == 'types' then
+        screen.show()
+        if m.flows and m.flows[word] and m.flows[word].n > 0 then
+          return screen.open_types(word)
+        end
+        screen.open_types(nil)
+        if st.screen == 'types' then
+          screen.types_pick(st.twin.list, nil, word)
+        end
+        return
+      end
       local r = require('seam.here').resolve(m, word, path, line, how)
       local dir = how == 'called_by' and 'up' or 'down'
       local calls = how == 'calls' or how == 'called_by'

@@ -103,6 +103,12 @@ eq(
   { 'Order 3', 'Cart 2' },
   'the flows, most travelled first; a hover off the graph left out'
 )
+types.attach(m, {
+  ['src/run.ts:20:ship'] = 'const ship: (order: Order, again: Order, cart: Cart) => Cart',
+}, {})
+eq(m.flows.Order.takes, { { id = 'src/run.ts:20:ship', param = 'again' }, { id = 'src/run.ts:20:ship', param = 'order' } }, 'a parameter each')
+eq(types.takers(m.flows.Order), { 'src/run.ts:20:ship' }, 'takers: a function once, whatever its parameters')
+eq(types.named(m.sigs['src/run.ts:20:ship'], m.flows), { 'Order', 'Cart' }, 'named: the repo types of a signature, each once')
 
 io.stdout:write(('%d checks, %d failed\n'):format(checks, #failures))
 os.exit(#failures == 0 and 0 or 1)
