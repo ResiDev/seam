@@ -1677,8 +1677,6 @@ types_keys = function(b)
     local x = types_at()
     if x and x.kind == 'fn' then
       M.its_types(x.id, st.types.flow, st.twin.list)
-    elseif x and x.kind == 'type' then
-      M.open_types(x.flow.name)
     end
   end, lo)
   vim.keymap.set('n', '<Tab>', function()
