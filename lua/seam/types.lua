@@ -331,4 +331,54 @@ function M.pieces(sig, flows)
   return out
 end
 
+--- Pieces fitted to `room` columns, the return kept whole as long as it can
+--- be: what a function takes is cut first, `(A, B, …) → R`.
+---@param pieces { text: string, flow: string|nil }[]
+---@param room integer
+---@return { text: string, flow: string|nil }[]
+function M.fit(pieces, room)
+  local function w(list)
+    local n = 0
+    for _, p in ipairs(list) do
+      n = n + vim.api.nvim_strwidth(p.text)
+    end
+    return n
+  end
+  local function cut(list, n)
+    local out, at = {}, 0
+    for _, p in ipairs(list) do
+      local pw = vim.api.nvim_strwidth(p.text)
+      if at + pw > n then
+        local keep = vim.fn.strcharpart(p.text, 0, math.max(0, n - at))
+        if keep ~= '' then
+          out[#out + 1] = { text = keep, flow = p.flow }
+        end
+        out[#out + 1] = { text = '…' }
+        return out
+      end
+      out[#out + 1] = p
+      at = at + pw
+    end
+    return out
+  end
+  if w(pieces) <= room then
+    return pieces
+  end
+  local sep
+  for i, p in ipairs(pieces) do
+    if p.text == ') → ' then
+      sep = i
+    end
+  end
+  if not sep then
+    return cut(pieces, room - 1)
+  end
+  local before, after = vim.list_slice(pieces, 1, sep - 1), vim.list_slice(pieces, sep)
+  local left = room - w(after) - 1
+  if left < 6 then
+    return cut(pieces, room - 1)
+  end
+  return vim.list_extend(cut(before, left), after)
+end
+
 return M
