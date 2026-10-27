@@ -1,4 +1,4 @@
--- The Calls screen drawn: its head, the anchor pinned above the tree, the
+-- The Calls screen drawn: its head, the column titles over the tree, the
 -- tree, and the code of the row under the cursor: where it is called, or
 -- itself.
 local api = vim.api
@@ -53,113 +53,90 @@ local function titles(view)
   return r
 end
 
--- callers or callees by name, then where, one after another to `w`: a
--- caller where it makes the call, a callee where it is declared
-local function names(r, g, list, w, at_call)
-  for j, e in ipairs(list) do
-    local node = g.nodes[e.id]
-    local line = at_call and e.lines[1] or node.line
-    local where = ' ' .. base(node.path) .. (line > 0 and ':' .. line or '')
-    local need = api.nvim_strwidth(label(node)) + #where + (node.exported and 0 or 6) + 3
-    if r.w + need > w - 12 and j > 1 then
-      r:add(('   +%d more'):format(#list - j + 1), 'SeamLabel')
-      return
-    end
-    if j > 1 then
-      r:add(' · ', 'SeamLabel')
-    end
-    name(r, node, 'SeamName', w)
-    if not node.exported and node.kind ~= 'module' then
-      r:add(' local', 'SeamDim')
-    end
-    r:add(where, 'SeamPath')
-  end
+-- what the trail calls an anchor: its name as the tree draws it, or the top
+local function crumb(g, id)
+  local node = id and g.nodes[id]
+  return node and label(node) or 'where the code starts'
 end
 
---- The head: where it is, then the shared functions left folded, when any.
+--- The head: the way here, the anchors `K` walks back along, the oldest
+--- dropped to … when they do not fit, then the anchor and where it is; then
+--- the two ways from it as tabs, the one shown lit, each with its count, and
+--- the lens's count of what it keeps out. From the top, the first line
+--- alone, the lens's count on it.
 ---@param buf integer
 ---@param g seam.Graph
 ---@param view seam.CallsView
----@param r seam.CallRows
 ---@param width integer
 ---@return integer rows
-function M.head(buf, g, view, r, width)
-  local visible = calls.visible(index.model(), 'up')
+function M.head(buf, g, view, width)
+  local m = index.model()
   local a = view.anchor and g.nodes[view.anchor]
-  local h = row():add(' Seams', 'SeamLabel'):add(' › ', 'SeamLabel')
-  if a then
-    name(h, a, 'SeamBold', 60)
-    h:add(view.dir == 'up' and '  called by' or '  calls', 'SeamTitle')
-  else
-    h:add('where the code starts', 'SeamBold')
-    draw.hidden(h, calls.hidden(g, view, index.model()))
-  end
-  local rows = { h }
-  if #r.shared > 0 then
-    local t = row():add('   shared, never opened: ', 'SeamLabel')
-    rows[2] = t
-    for j, id in ipairs(r.shared) do
-      local node = g.nodes[id]
-      local add = label(node) .. ' ' .. calls.used_by(g, id, visible)
-      if t.w + api.nvim_strwidth(add) + 12 > width then
-        t:add(('  +%d more'):format(#r.shared - j + 1), 'SeamLabel')
-        break
-      end
-      if j > 1 then
-        t:add '   '
-      end
-      name(t, node, 'SeamName', 40)
-      t:add(' ' .. calls.used_by(g, id, visible), 'SeamLabel')
+  local trail = {}
+  for _, s in ipairs(view.back) do
+    local t = crumb(g, s.anchor)
+    if trail[#trail] ~= t then
+      trail[#trail + 1] = t
     end
   end
-  draw.put(buf, rows)
-  return #rows
+  local here = crumb(g, view.anchor)
+  if trail[#trail] == here then
+    trail[#trail] = nil
+  end
+  local where = a and (a.line > 0 and (a.path .. ':' .. a.line) or a.path) or ''
+  local hidden = calls.hidden(g, view, m)
+  local need = 9 + api.nvim_strwidth(here) + (a and 3 + #where or 0) + (not a and hidden > 0 and 20 or 0)
+  for _, t in ipairs(trail) do
+    need = need + 3 + api.nvim_strwidth(t)
+  end
+  local cut = false
+  while #trail > 0 and need > width - 2 do
+    need = need - 3 - api.nvim_strwidth(table.remove(trail, 1))
+    cut = true
+  end
+  local h = row():add(' Seams', 'SeamLabel')
+  if cut then
+    h:add(' › …', 'SeamLabel')
+  end
+  for _, t in ipairs(trail) do
+    h:add(' › ' .. t, 'SeamLabel')
+  end
+  h:add(' › ', 'SeamLabel')
+  if not a then
+    h:add('where the code starts', 'SeamBold')
+    draw.hidden(h, hidden)
+    draw.put(buf, { h })
+    return 1
+  end
+  name(h, a, 'SeamBold', 60)
+  h:add '   '
+  draw.path(h, a.path, a.line > 0 and a.line or nil)
+  local ways = {
+    { 'down', 'Calls', #calls.kids(g, a.id, 'down', calls.visible(m, 'down')) },
+    { 'up', 'Called by', calls.used_by(g, a.id, calls.visible(m, 'up')) },
+  }
+  local t = row():add ' '
+  for j, w in ipairs(ways) do
+    if j > 1 then
+      t:add ' '
+    end
+    if w[1] == view.dir then
+      t:add(' ' .. w[2] .. ' ' .. w[3] .. ' ', 'SeamTab')
+    else
+      t:add(' ' .. w[2], 'SeamText'):add(' ' .. w[3] .. ' ', 'SeamLabel')
+    end
+  end
+  draw.hidden(t, hidden, nil, '    ')
+  draw.put(buf, { h, row(), t })
+  return 3
 end
 
---- The anchor pinned over the tree: the other way from it (going down, who
---- calls it; going up, what it calls), it, then the column titles. From the
---- top, the titles alone.
----@param buf integer
----@param g seam.Graph
+--- The column titles over the tree, for its window's bar: above or below,
+--- used by, file, line.
 ---@param view seam.CallsView
----@return integer rows
-function M.pin(buf, g, view)
-  local m = index.model()
-  local rows = {}
-  local a = view.anchor and g.nodes[view.anchor]
-  if not a then
-    rows = { titles(view) }
-    draw.put(buf, rows)
-    return #rows
-  end
-  local function others(dir, word, none)
-    local r = row()
-    local list, tests = calls.kids(g, a.id, dir, calls.visible(m, dir))
-    vim.list_extend(list, tests)
-    if #list == 0 then
-      return r:add(none, 'SeamLabel')
-    end
-    r:add(word, 'SeamLabel')
-    names(r, g, list, M.LW, dir == 'up')
-    return r
-  end
-  local me = row():add('━ ', 'SeamTitle')
-  name(me, a, 'SeamBold', 50)
-  local where = a.line > 0 and (':' .. a.line .. '-' .. a.end_line) or ''
-  me:add('  ' .. base(a.path) .. where, 'SeamPath')
-  local up, down = calls.visible(m, 'up'), calls.visible(m, 'down')
-  if view.dir == 'up' then
-    local n = calls.used_by(g, a.id, up)
-    me:add(('   called by %d  ·  %d above'):format(n, calls.above(g, a.id, up)), 'SeamLabel')
-    rows = { others('down', '↓ calls ', '↓ calls nothing'), me, titles(view) }
-  else
-    local kids = calls.kids(g, a.id, 'down', down)
-    me:add(('   calls %d  ·  %d below'):format(#kids, calls.below(g, a.id, down)), 'SeamLabel')
-    rows = { others('up', '↑ called by ', '↑ nothing calls it'), me, titles(view) }
-  end
-  draw.hidden(me, calls.hidden(g, view, m))
-  draw.put(buf, rows)
-  return #rows
+---@return string
+function M.titles(view)
+  return '%#SeamLabel#' .. titles(view):text()
 end
 
 -- the guides down the left, from its parents' places among their siblings
@@ -250,6 +227,8 @@ function M.list(buf, g, view, r)
       end
       if node.kind == 'module' then
         d:add('  top of the file', 'SeamLabel')
+      elseif x.shared and x.fold == 'folded' then
+        d:add(' shared', 'SeamDim')
       elseif not node.exported then
         d:add(' local', 'SeamDim')
       end

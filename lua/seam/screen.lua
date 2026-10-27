@@ -796,16 +796,15 @@ end
 
 local function calls_valid()
   local w = st.cwin
-  return w and api.nvim_win_is_valid(w.head) and api.nvim_win_is_valid(w.list) and api.nvim_win_is_valid(w.pin) and api.nvim_win_is_valid(w.code)
+  return w and api.nvim_win_is_valid(w.head) and api.nvim_win_is_valid(w.list) and api.nvim_win_is_valid(w.code)
 end
 
--- the rows the budget fills: the list's as if the head had its shared line,
--- so opening a row that brings one does not budget the tree again
+-- the rows the budget fills: the list's
 local function calls_height()
   if not calls_valid() then
     return 40
   end
-  return api.nvim_win_get_height(st.cwin.list) + api.nvim_win_get_height(st.cwin.head) - 2
+  return api.nvim_win_get_height(st.cwin.list)
 end
 
 -- the row under the list's cursor
@@ -884,17 +883,17 @@ local function calls_layout()
   api.nvim_win_set_buf(head, st.cbuf.head)
   local list = split(st.cbuf.list, head, 'below', true)
   local pane = split(st.cbuf.code, list, 'right')
-  local pin = split(st.cbuf.pin, list, 'above')
-  for _, w in ipairs { head, pin, pane } do
+  for _, w in ipairs { head, pane } do
     winopts(w)
   end
   winopts(list, true)
   wrap(pane)
   vim.wo[pane].winfixwidth = false
   vim.wo[head].winfixheight = true
-  vim.wo[pin].winfixheight = true
   api.nvim_win_set_width(list, calls_draw.LW)
-  st.cwin = { head = head, list = list, pin = pin, code = pane }
+  -- the column titles in the tree's own bar, right over its rows
+  vim.wo[list].winhighlight = vim.wo[list].winhighlight .. ',WinBar:SeamLabel,WinBarNC:SeamLabel'
+  st.cwin = { head = head, list = list, code = pane }
   st.calls_drawn = nil
   api.nvim_set_current_win(list)
 end
@@ -940,11 +939,10 @@ show_calls = function()
   local m = index.model()
   local g, v = m.graph, st.calls
   calls_layout()
-  api.nvim_win_set_height(st.cwin.pin, v.anchor and 3 or 1)
+  api.nvim_win_set_height(st.cwin.head, calls_draw.head(st.cbuf.head, g, v, vim.o.columns))
+  vim.wo[st.cwin.list].winbar = calls_draw.titles(v)
   local r = calls.rows(g, v, calls_height(), m)
   st.calls_rows = r
-  api.nvim_win_set_height(st.cwin.head, calls_draw.head(st.cbuf.head, g, v, r, vim.o.columns))
-  calls_draw.pin(st.cbuf.pin, g, v)
   local w = st.cwin.list
   local same = st.calls_drawn == (v.anchor or '') .. v.dir
   local top = st.calls_top or same and api.nvim_win_call(w, function()
@@ -1033,8 +1031,8 @@ local function calls_pick()
       return index.model().graph
     end,
     model = index.model,
-    over = w.pin,
-    rows = api.nvim_win_get_height(w.pin) + api.nvim_win_get_height(w.list),
+    over = w.list,
+    rows = api.nvim_win_get_height(w.list) + 1,
     pick = function(id)
       if st.screen == 'calls' and st.calls then
         calls.anchor(st.calls, id)
@@ -1122,12 +1120,12 @@ function M.open_calls(id)
     st.explorer_at = st.shown
   end
   if not (st.cbuf and api.nvim_buf_is_valid(st.cbuf.list)) then
-    st.cbuf = { head = draw.scratch 'calls-head', pin = draw.scratch 'calls-pin', list = draw.scratch 'calls', code = draw.scratch 'calls-code' }
+    st.cbuf = { head = draw.scratch 'calls-head', list = draw.scratch 'calls', code = draw.scratch 'calls-code' }
     calls_keys(st.cbuf.list)
     calls_code_keys(st.cbuf.code)
-    for _, b in ipairs { st.cbuf.head, st.cbuf.pin } do
+    for _, b in ipairs { st.cbuf.head } do
       vim.keymap.set('n', 'q', M.close, { buffer = b, nowait = true, silent = true })
-      -- nothing to do in the head or the pin: the cursor goes back to the tree
+      -- nothing to do in the head: the cursor goes back to the tree
       api.nvim_create_autocmd('WinEnter', {
         group = aug,
         buffer = b,

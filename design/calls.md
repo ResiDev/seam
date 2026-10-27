@@ -34,16 +34,13 @@ A row nothing calls (a start from the top, a file's top) shows itself,
 whatever was chosen, and says nothing calls it. Folders, files and the tests
 row show where they are.
 
-- **Anchored, calls.** `c` on a contract in the explorer. The anchor is pinned
-  at the top, with one line for who calls it. Under it, what it calls in the
-  order it is written, then what those call, and so on down.
-- **Anchored, called by.** `~` flips the direction on the same anchor. The
-  anchor stays pinned at the top, its callers indented under it, then their
-  callers, and so on. What says it is the other way: the head reads
-  `createRun()  called by`, the pinned line names what it calls
-  (`↓ calls startRun() run.ts:83 · …`) where calls names who calls it, and
-  the count column is **above** instead of **below**.
-- **From the top.** `C`, in the explorer or on any anchor; the head reads
+- **Anchored, calls.** `c` on a contract in the explorer. The head names the
+  anchor, and under it what it calls in the order it is written, then what
+  those call, and so on down.
+- **Anchored, called by.** `~` flips the direction on the same anchor: its
+  callers under it, then their callers, and so on. The head's lit tab says
+  which way, and the count column is **above** instead of **below**.
+- **From the top.** `C`, in the explorer or on any anchor; the head ends
   `where the code starts`. The roots are
   what nothing calls: an app's entry file, a module's top-level code, a
   package's public functions no one in the repo calls, test files. They sit
@@ -56,6 +53,26 @@ straight there. `J` opens the page of the row's function, and `K` on it
 comes back to the tree as it was.
 
 ![Opened one level](mocks/calls-down-opened.png)
+
+## The head
+
+Two lines over the column titles, a blank between them:
+
+- **The way here**, the anchors `K` walks back along, oldest first, then the
+  anchor in bold and where it is, the path dim with its package in its hue:
+  `Seams › startRun() › createRun()   packages/core/src/run/run.ts:75`.
+  `Seams` is the explorer. When the way is too long for the line, the oldest
+  anchors go to `…`. From the top it ends `where the code starts`.
+- **Which way**, two tabs drawn as a page's are: ` Calls 2 ` and
+  ` Called by 6 `, the one shown lit, each with how many it calls or how
+  many call it, one level, after the lens. Then what the lens keeps out,
+  `+12 hidden  L lens`, when it keeps anything out. From the top there are
+  no tabs, and the lens's count goes on the first line.
+
+![The head](mocks/calls-head.png)
+
+The mocks before it still draw the head it replaced: a pinned line for the
+other way, and the anchor on a line of its own.
 
 ## Anchor on anything
 
@@ -96,19 +113,19 @@ way.
   more instead of folding less.
 - **Shared functions are never opened for you.** One called from 5 or more
   functions (the threshold is a guess) is a utility: it shows as a row with
-  its counts but the budget skips it. A pinned line lists the ones in view:
-  `shared, never opened: useStore 5 · noChange 9`. `l` still opens one.
+  its counts but the budget skips it, and the row says `shared`, dim, after
+  its name, where `local` would go. `l` still opens one.
 - **Tests fold to one row** among callers and roots: `tests  16 files`. `l`
   opens it.
 - **The lens** is read the way the tree goes: what a function calls follows
   its **built from** column, what calls it its **used by** column, and the
   starts from the top its **contracts** column. The counts go by the same
   columns. What it hides is left out, with no row for it. It is never dropped
-  in silence: the anchor's line counts the distinct functions the tree would
-  hold without the lens and does not with it:
-  `━ createRun()  run.ts:75   called by 6 · 9 above   +17 hidden  L lens`.
-  From the top the head carries it:
-  `where the code starts   +308 hidden  L lens`. The count is muted red,
+  in silence: the head counts the distinct functions the tree would hold
+  without the lens and does not with it, after the tabs:
+  ` Calls 2   Called by 6     +17 hidden  L lens`.
+  From the top it goes on the first line:
+  `Seams › where the code starts   +308 hidden  L lens`. The count is muted red,
   `L lens` grey, and nothing shows when the lens hides nothing.
 
 ![A lens on, called by](mocks/lens-calls.png)
@@ -132,7 +149,7 @@ way.
 | `K` `<BS>` | the previous anchor; from the first, the explorer |
 | `-` | straight to the explorer, on the anchor |
 | `C` | from the top |
-| `L` | the lens; closed, the tree redraws with it, as it was, the count of what it hides on the anchor's line |
+| `L` | the lens; closed, the tree redraws with it, as it was, the count of what it hides in the head |
 | `<Tab>` | the code beside: called at, itself |
 | `n` `N` | called at: the next or previous place; itself: the next or previous call. In the code, `]]` `[[` |
 | `gd` | the declaration, in a normal window |
