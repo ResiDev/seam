@@ -106,6 +106,13 @@ came out of it: nothing that needs a legend.
 - Strict nesting: a file with one contract still has its own row.
 - Counts come from a background pass over a cache, so the list opens at once
   and fills in. An unknown count shows `·`.
+- `/` searches names. A float over the list's head, drawn as the call
+  tree's `/` is, titled `search`: a prompt, `> query`, with `9 of 286
+  contracts` on its right, and no list of its own: the explorer's list is
+  the result, narrowing as you type to the names that hold the query,
+  whatever their case. `<C-n>` `<C-p>` move in it, the trees following;
+  `<CR>` keeps the filter, said under the list's title as `/ run  9 found`;
+  `<Esc>` puts back the one there was. Emptied and `<CR>`, it is cleared.
 - `d` on a directory row filters to it: the list shows only the contracts in
   it, and the two trees only the users and dependencies in it. `D` clears it.
 - Under 150 columns is not designed.

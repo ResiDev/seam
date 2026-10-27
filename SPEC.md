@@ -215,12 +215,12 @@ lua/seam/
   draw/calls.lua    the Calls screen: its head, the column titles, the tree, the call and the body
   diagram.lua       the v and V views, drawn by thread's flow renderer
   lens_panel.lua    the lens float and its keys
-  calls_picker.lua  the / float over the call tree: a prompt, every function, anchor on one
+  picker.lua        the / float on every screen: a prompt, a list of picks or the explorer's own, fuzzy matching
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
 tests/
-  calls.lua         the call tree's specs, on a graph written by hand
+  calls.lua         the call tree's and the picker's specs, on a graph written by hand
   check.lua         every screen through its keys on a real repo
 ```
 

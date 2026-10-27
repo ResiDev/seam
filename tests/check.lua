@@ -11,6 +11,7 @@ local api = vim.api
 local seam = require 'seam'
 local screen = require 'seam.screen'
 local calls = require 'seam.calls'
+local picker = require 'seam.picker'
 local function lens_any(c)
   return c.contracts or c.built or c.used
 end
@@ -229,6 +230,62 @@ for _, view in ipairs { 'v', 'V' } do
 end
 for _ = 1, #seam.st.names + 3 do
   key '<Tab>'
+end
+
+-- / in the explorer: the list narrows as it is typed, to the names holding
+-- it whatever their case; <CR> keeps it, <Esc> puts back the one before
+do
+  where = 'explorer /'
+  local function names()
+    local out = {}
+    for _, i in ipairs(st.crows) do
+      out[#out + 1] = st.rowc[i].id
+    end
+    table.sort(out)
+    return out
+  end
+  local function holding(q)
+    local out = {}
+    for _, c in ipairs(st.models[st.cur].contracts) do
+      if c.name:lower():find(q:lower(), 1, true) then
+        out[#out + 1] = c.id
+      end
+    end
+    table.sort(out)
+    return out
+  end
+  local all = names()
+  local first = st.models[st.cur].contracts[1]
+  local q = first and first.name:sub(1, 3):upper() or 'x'
+  -- a key that moves takes what was typed first
+  key('/' .. q .. '<C-n><C-p>')
+  if not picker.is_open() then
+    fail '/ opened no prompt'
+  elseif st.filter ~= q or not vim.deep_equal(names(), holding(q)) then
+    fail(('typing %s: the filter is %q, %d rows, not %d'):format(q, st.filter, #st.crows, #holding(q)))
+  end
+  local before = api.nvim_win_get_cursor(st.win.list)[1]
+  key '<C-n>'
+  local now = api.nvim_win_get_cursor(st.win.list)[1]
+  if #st.crows > 1 and (now == before or st.shown ~= st.rowc[now]) then
+    fail '<C-n> did not move the list and what is shown with it'
+  end
+  key '<CR>'
+  if picker.is_open() or api.nvim_get_mode().mode ~= 'n' or api.nvim_get_current_win() ~= st.win.list then
+    fail '<CR> did not close the prompt back to the list in normal mode'
+  elseif st.filter ~= q or not vim.deep_equal(names(), holding(q)) then
+    fail('<CR> did not keep the filter ' .. q)
+  end
+  key '/zzzqqq<Esc>'
+  if picker.is_open() or api.nvim_get_mode().mode ~= 'n' then
+    fail '<Esc> did not close the prompt in normal mode'
+  elseif st.filter ~= q or not vim.deep_equal(names(), holding(q)) then
+    fail(('<Esc> left the filter %q, not %q'):format(st.filter, q))
+  end
+  key '/<C-u><CR>'
+  if st.filter ~= '' or not vim.deep_equal(names(), all) then
+    fail('emptied and <CR>: the filter is ' .. st.filter .. ', ' .. #st.crows .. ' rows of ' .. #all)
+  end
 end
 
 -- the lens panel, through its keys and its picker; then put the lens back
@@ -725,18 +782,18 @@ do
       seam.open_calls(list[1].id)
       key '~'
       local q = m.graph.nodes[list[1].id].name:sub(1, 3)
-      local want = calls.fuzzy(m.graph, calls.callables(m.graph, m), q)
+      local want = picker.fuzzy(calls.callables(m.graph, m), q)
       local was = st.calls.anchor
       key('/' .. q .. '<C-n><CR>')
       local to = want[math.min(2, #want)]
-      if require('seam.calls_picker').is_open() then
+      if picker.is_open() then
         fail '<CR> did not close the picker'
       elseif not to or st.calls.anchor ~= to.id or st.calls.dir ~= 'up' then
         fail(('/%s<C-n><CR> anchored on %s %s, not %s up'):format(q, tostring(st.calls.anchor), st.calls.dir, to and to.id or 'nothing'))
       end
       check_calls(true)
       key '/zzz<Esc>'
-      if require('seam.calls_picker').is_open() or api.nvim_get_mode().mode ~= 'n' or api.nvim_get_current_win() ~= st.cwin.list then
+      if picker.is_open() or api.nvim_get_mode().mode ~= 'n' or api.nvim_get_current_win() ~= st.cwin.list then
         fail '<Esc> did not close the picker back to the tree in normal mode'
       elseif to and st.calls.anchor ~= to.id then
         fail '<Esc> changed the anchor'
@@ -1046,6 +1103,52 @@ for ci, c in ipairs(contracts) do
         fail 'K in the explorer left it'
       end
     end
+  end
+end
+
+-- / on a page: a contract by name, <CR> on its page on the same tab, K back
+do
+  local cs = st.models[st.cur].contracts
+  local from, to
+  for _, c in ipairs(cs) do
+    if c.nusers > 0 and not from then
+      from = c
+    elseif from and c.nusers > 0 and c.name ~= from.name then
+      to = to or c
+    end
+  end
+  if from and to then
+    for _, tab in ipairs { 'built', 'used' } do
+      where = 'page / ' .. tab
+      st.stack, st.page = {}, nil
+      seam.open_page(from)
+      if st.page.tab ~= tab then
+        key '<Tab>'
+      end
+      local want = picker.fuzzy(picker.contracts(st.models[st.cur]), to.name)[1]
+      key('/' .. to.name .. '<C-n><C-p>')
+      local ps = picker.state()
+      if not ps or ps.sel ~= want.id then
+        fail(('/%s: the first listed is %s, not %s'):format(to.name, ps and tostring(ps.sel) or 'no picker', want.id))
+      end
+      key '<CR>'
+      local landed = st.page and st.page.c
+      if picker.is_open() or api.nvim_get_mode().mode ~= 'n' then
+        fail '<CR> did not close the picker in normal mode'
+      elseif not landed or landed.id ~= want.id or st.page.tab ~= tab or #st.stack ~= 1 then
+        fail(('<CR> landed on %s %s, depth %d, not %s %s'):format(landed and landed.id or 'nothing', st.page and st.page.tab or '', #st.stack, want.id, tab))
+      end
+      check_page()
+      key '/zzz<Esc>'
+      if picker.is_open() or api.nvim_get_mode().mode ~= 'n' or st.page.c ~= landed then
+        fail '<Esc> changed the page or left the picker'
+      end
+      key 'K'
+      if not st.page or st.page.c ~= from or st.page.tab ~= tab then
+        fail('K after / did not come back to ' .. from.name)
+      end
+    end
+    key '-'
   end
 end
 

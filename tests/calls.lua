@@ -5,6 +5,7 @@
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
 vim.opt.runtimepath:prepend(root)
 local calls = require 'seam.calls'
+local picker = require 'seam.picker'
 local index = require 'seam.index'
 
 local failures, checks = {}, 0
@@ -427,11 +428,27 @@ do
   calls.forget(pg)
   eq(ids(calls.callables(pg, H)), { 'start 3', 'startRun 2', 'Box 1', 'Store 0' }, 'the lens: contracts hides stash, used by the test from the count')
   calls.forget(pg)
-  eq(calls.fuzzy(pg, all, '  '), all, 'an empty query keeps them all, in order')
-  local got = calls.fuzzy(pg, all, 'sta')
+  eq(picker.fuzzy(all, '  '), all, 'an empty query keeps them all, in order')
+  local got = picker.fuzzy(all, 'sta')
   eq(ids(got), { 'start 4', 'stash 0', 'startRun 2' }, 'sta: the best match first, used by between equals')
   eq(got[1].pos, { 0, 1, 2 }, 'the letters matched')
-  eq(ids(calls.fuzzy(pg, all, 'zzz')), {}, 'nothing matches')
+  eq(ids(picker.fuzzy(all, 'zzz')), {}, 'nothing matches')
+  eq(all[1].name, 'start', 'a pick carries the name typing matches')
+
+  -- on a page: every contract the lens lets through, types too, the most used first
+  local cs = {
+    { id = 'src/b.ts:5:Step', name = 'Step', kind = 'type', path = 'src/b.ts', line = 5, nusers = 3 },
+    { id = 'src/a.ts:9:run', name = 'run', kind = 'function', path = 'src/a.ts', line = 9, nusers = 3 },
+    { id = 'src/a.ts:1:LIMIT', name = 'LIMIT', kind = 'const', path = 'src/a.ts', line = 1, nusers = 7 },
+    { id = 'src/c.ts:2:none', name = 'none', kind = 'const', path = 'src/c.ts', line = 2, nusers = 0 },
+  }
+  local cm = { contracts = cs, byid = {} }
+  for _, c in ipairs(cs) do
+    cm.byid[c.id] = c
+  end
+  local listed = picker.contracts(cm)
+  eq(ids(listed), { 'LIMIT 7', 'Step 3', 'run 3', 'none 0' }, 'contracts: by used by, then name')
+  eq(ids(picker.fuzzy(listed, 'st')), { 'Step 3' }, 'contracts narrow by name')
 
   -- anchoring from it keeps the direction, and K comes back
   local v = calls.new('src/p.ts:11:startRun', 'up')
