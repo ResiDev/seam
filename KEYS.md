@@ -65,7 +65,7 @@ The call tree of a function, component or class: what it calls all the way down,
 | `K` `<BS>` | back: the previous anchor; from the first, the explorer |
 | `-` | straight to the explorer, on the anchor when it is a contract |
 | `C` | from the top |
-| `L` | the lens: calls follow its built from column, callers its used by, the starts its contracts; what it hides has no row, the anchor's line (from the top, the head) counts it, `+12 hidden  L lens` |
+| `L` | the lens: calls follow its built from column, callers its used by, the starts its contracts; what it hides has no row, the head counts it after the tabs (from the top, on its first line), `+12 hidden  L lens` |
 | `<Tab>` | the code beside the tree: where the row's function is called, or itself. The choice stays as the cursor moves, across anchors and back; what nothing calls shows itself |
 | `n` `N` | Called at: the next or previous place it is called, round the ends. Itself: the next or previous line that calls something, lit. A count skips. In the code beside it, `]]` `[[` |
 | `gd` | the declaration, in a normal window |
@@ -73,7 +73,7 @@ The call tree of a function, component or class: what it calls all the way down,
 
 `]` and `[` wait for a second `]` or `[` before going to the sibling.
 
-The head and the pin give the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, `<Tab>` does as in the tree, `]]` `[[` as `n` `N` do there, with the cursor on the line lit, and `K` `<BS>` `-` `q` do as in the tree.
+The head gives the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, `<Tab>` does as in the tree, `]]` `[[` as `n` `N` do there, with the cursor on the line lit, and `K` `<BS>` `-` `q` do as in the tree.
 
 ## The lens
 

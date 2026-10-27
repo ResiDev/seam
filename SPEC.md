@@ -212,7 +212,7 @@ lua/seam/
   draw/explorer.lua the contracts list, and the trees or diagram beside it
   draw/page.lua     the Built from and Used by tabs, the contract, the seam
   calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does, what / lists
-  draw/calls.lua    the Calls screen: its head, the pinned anchor, the tree, the call and the body
+  draw/calls.lua    the Calls screen: its head, the column titles, the tree, the call and the body
   diagram.lua       the v and V views, drawn by thread's flow renderer
   lens_panel.lua    the lens float and its keys
   calls_picker.lua  the / float over the call tree: a prompt, every function, anchor on one

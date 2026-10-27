@@ -327,19 +327,19 @@ local check_code
 
 -- the call tree: its four windows on its own buffers, the list its rows with
 -- the cursor on the row the view says, the call lit beside it, the budget
--- inside the window, the anchor on top either way and the pin saying which
+-- inside the window, the head saying where it is and which way
 local function check_calls(fresh)
   if st.screen ~= 'calls' or not st.calls then
     return fail 'not on the Calls screen'
   end
   local w, r = st.cwin, st.calls_rows
-  for _, k in ipairs { 'head', 'pin', 'list', 'code' } do
+  for _, k in ipairs { 'head', 'list', 'code' } do
     if not valid(w[k]) or api.nvim_win_get_buf(w[k]) ~= st.cbuf[k] then
       return fail('the ' .. k .. ' window is not there with its buffer')
     end
   end
-  if #api.nvim_tabpage_list_wins(st.tab) ~= 4 then
-    fail(('%d windows on the Calls screen, not 4'):format(#api.nvim_tabpage_list_wins(st.tab)))
+  if #api.nvim_tabpage_list_wins(st.tab) ~= 3 then
+    fail(('%d windows on the Calls screen, not 3'):format(#api.nvim_tabpage_list_wins(st.tab)))
   end
   if api.nvim_buf_line_count(st.cbuf.list) ~= math.max(1, #r.rows) then
     fail 'the list is not its rows'
@@ -361,37 +361,59 @@ local function check_calls(fresh)
       return fail 'a row sits above the row it hangs from'
     end
   end
-  -- the head: the breadcrumb, and the shared line when there is one
+  -- the head: the way here ending on the anchor and where it is, then the
+  -- two ways from it with their counts, the one shown lit; from the top,
+  -- the way here alone. What the lens keeps out of the tree, after the tabs,
+  -- or from the top on the first line; nothing when it keeps nothing out
   local head = api.nvim_buf_get_lines(st.cbuf.head, 0, -1, false)
-  if #head ~= (#r.shared > 0 and 2 or 1) or api.nvim_win_get_height(w.head) ~= #head then
-    fail('the head is not the breadcrumb and the shared line: ' .. table.concat(head, ' | '))
+  local m = st.models[st.cur]
+  local a = st.calls.anchor and m.graph.nodes[st.calls.anchor]
+  if #head ~= (a and 3 or 1) or api.nvim_win_get_height(w.head) ~= #head then
+    fail('the head is not the way here and the tabs: ' .. table.concat(head, ' | '))
   end
-  -- what the lens keeps out of the tree, on the head from the top, on the
-  -- anchor's line on an anchor; nothing when it keeps nothing out
-  local HIDDEN = '   %+(%d+) hidden  L lens$'
-  local hidden = calls.hidden(st.models[st.cur].graph, st.calls, st.models[st.cur])
-  local crumb = not st.calls.anchor and 'where the code starts$' or st.calls.dir == 'up' and '  called by$' or '  calls$'
-  if not (head[1] or ''):gsub(HIDDEN, ''):match(crumb) then
-    fail('the breadcrumb does not end ' .. crumb .. ': ' .. tostring(head[1]))
+  local HIDDEN = '    ?%+(%d+) hidden  L lens$'
+  local hidden = calls.hidden(m.graph, st.calls, m)
+  local first = (head[1] or ''):gsub(HIDDEN, '')
+  if not first:match '^ Seams › ' then
+    fail('the head does not start at Seams: ' .. first)
   end
-  if not st.calls.anchor and tonumber((head[1] or ''):match(HIDDEN) or 0) ~= hidden then
-    fail(('the head does not say %d hidden: %s'):format(hidden, tostring(head[1])))
+  local ends = not a and ' › where the code starts' or ('   ' .. a.path .. (a.line > 0 and ':' .. a.line or ''))
+  if first:sub(-#ends) ~= ends then
+    fail('the way here does not end ' .. ends .. ': ' .. first)
   end
-  if not st.calls.anchor and api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)[1]:match '^%s+below' == nil then
-    fail 'from the top, the pin is not the column titles alone'
+  local said = head[a and 3 or 1] or ''
+  if tonumber(said:match(HIDDEN) or 0) ~= hidden then
+    fail(('the head does not say %d hidden: %s'):format(hidden, said))
   end
-  if st.calls.anchor then
-    local pin = api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)
-    local want = st.calls.dir == 'up' and '↓ calls' or '↑'
-    if #pin ~= 3 or pin[1]:sub(1, #want) ~= want or not pin[2]:match '^━' then
-      fail('the pin is not the other way, the anchor, the titles: ' .. table.concat(pin, ' | '))
+  if a then
+    local down = #calls.kids(m.graph, a.id, 'down', calls.visible(m, 'down'))
+    local up = calls.used_by(m.graph, a.id, calls.visible(m, 'up'))
+    if not said:match(('^  Calls %d   Called by %d '):format(down, up)) then
+      fail(('the tabs are not Calls %d and Called by %d: %s'):format(down, up, said))
     end
-    if tonumber((pin[2] or ''):match(HIDDEN) or 0) ~= hidden then
-      fail(('the anchor does not say %d hidden: %s'):format(hidden, tostring(pin[2])))
+    local lit = st.calls.dir == 'up' and 'Called by' or 'Calls'
+    local on
+    for _, mk in ipairs(api.nvim_buf_get_extmarks(st.cbuf.head, require('seam.draw').ns, { 2, 0 }, { 2, -1 }, { details = true })) do
+      if mk[4].hl_group == 'SeamTab' then
+        on = said:sub(mk[3] + 1, mk[4].end_col):match '^ (%D+) '
+      end
     end
-    local word = st.calls.dir == 'up' and 'above' or 'below'
-    if not pin[3]:match(word) then
-      fail('the column is not ' .. word)
+    if on ~= lit then
+      fail(('the tab lit is %s, not %s'):format(tostring(on), lit))
+    end
+  end
+  local word = st.calls.dir == 'up' and 'above' or 'below'
+  local titles = vim.wo[w.list].winbar:gsub('%%#%w+#', '')
+  if not titles:match('^%s+' .. word .. '%s+used by%s+file%s+line$') then
+    fail('the titles are not ' .. word .. ', used by, file, line: ' .. titles)
+  end
+  -- a shared function the budget left folded says so where local would go
+  for j, y in ipairs(r.rows) do
+    local line = api.nvim_buf_get_lines(st.cbuf.list, j - 1, j, false)[1] or ''
+    local says = y.shared and y.fold == 'folded' and y.id and not y.id:match ':0:$' or false
+    if says ~= (line:find(' shared', 1, true) ~= nil) then
+      fail(('row %d says shared when it is not, or not when it is: %s'):format(j, line))
+      break
     end
   end
 end
@@ -567,14 +589,10 @@ local function lens_and_back()
   end
 end
 
--- the head and the pin give the cursor back to the tree; the code keeps it
+-- the head gives the cursor back to the tree; the code keeps it
 -- until <Esc>
 local function windows()
   key '<C-w>k'
-  if api.nvim_get_current_win() ~= st.cwin.list then
-    fail 'the pin kept the cursor'
-  end
-  key '<C-w>t'
   if api.nvim_get_current_win() ~= st.cwin.list then
     fail 'the head kept the cursor'
   end
@@ -841,7 +859,7 @@ do
       end
       key '~'
       check_calls(true)
-      if api.nvim_buf_get_lines(st.cbuf.pin, 0, -1, false)[2]:find 'hidden' then
+      if (api.nvim_buf_get_lines(st.cbuf.head, 2, 3, false)[1] or ''):find 'hidden' then
         fail "createRun's calls say the lens hides something"
       end
       key '<BS>'
