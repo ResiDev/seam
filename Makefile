@@ -1,6 +1,6 @@
-# make check: the formatting, the call tree's specs, then every screen driven
-# through its keys on a real repo (SEAM_REPO, the lab's excalidraw copy by
-# default).
+# make check: the formatting, the call tree's and here's specs, then every
+# screen driven through its keys on a real repo (SEAM_REPO, the lab's
+# excalidraw copy by default).
 STYLUA ?= $(HOME)/.local/share/nvim/mason/bin/stylua
 SEAM_REPO ?= $(CURDIR)/lab/excalidraw
 SEAM_MAX ?= 10
@@ -14,6 +14,7 @@ lint:
 
 spec:
 	nvim --headless --clean -l tests/calls.lua
+	nvim --headless --clean -l tests/here.lua
 
 test: spec
 	SEAM_REPO=$(SEAM_REPO) SEAM_MAX=$(SEAM_MAX) nvim --headless -c 'luafile tests/check.lua'

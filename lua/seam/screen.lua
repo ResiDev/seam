@@ -298,8 +298,9 @@ end
 
 --- `/`: a prompt over the list's head, the list narrowing as you type to
 --- the names holding what is typed; <CR> keeps it, <Esc> puts back the one
---- there was.
-function M.search()
+--- there was. `query` is typed already, else the filter.
+---@param query? string
+function M.search(query)
   if not (st.win.list and api.nvim_win_is_valid(st.win.list)) then
     return
   end
@@ -311,8 +312,8 @@ function M.search()
     over = st.win.lhead,
     focus = st.win.list,
     width = explorer.LW - 2,
-    query = st.filter,
     total = #index.model().contracts,
+    query = type(query) == 'string' and query or st.filter,
     typed = function(q)
       st.filter = q
       pcall(show_list)
@@ -739,10 +740,12 @@ function M.open_page(c, tab)
 end
 
 --- `/` on a page: a float over its left to switch to any contract the lens
---- lets through, on the tab shown, K back.
-function M.page_pick()
+--- lets through, on the tab shown, K back. On the explorer, over its list,
+--- to open one's page. `query` is typed already.
+---@param query? string
+function M.page_pick(query)
   local p = st.page
-  local over = p and (p.win.list or p.win.mid)
+  local over = p and (p.win.list or p.win.mid) or (not p and st.screen == 'explorer' and st.win.list)
   if not (over and api.nvim_win_is_valid(over)) then
     return
   end
@@ -757,14 +760,15 @@ function M.page_pick()
     width = picker.W,
     rows = api.nvim_win_get_height(over) + 1,
     items = picker.contracts(m),
+    query = type(query) == 'string' and query or nil,
     node = function(id)
       return m.byid[id]
     end,
     column = 'used by',
     pick = function(x)
       local c = x and index.model().byid[x.id]
-      if c and st.page == p and c ~= p.c then
-        M.open_page(c, p.tab)
+      if c and st.page == p and (not p or c ~= p.c) then
+        M.open_page(c, p and p.tab)
       end
     end,
   }
@@ -1167,8 +1171,9 @@ local function calls_press(k, times)
   end
 end
 
--- `/`: a float over the tree to anchor on any function, the direction kept
-local function calls_pick()
+-- `/`: a float over the tree to anchor on any function, the direction kept;
+-- given a direction, a fresh tree that way instead, K going to the explorer
+local function calls_pick(query, dir)
   if not calls_valid() then
     return
   end
@@ -1183,13 +1188,18 @@ local function calls_pick()
     width = picker.W,
     rows = api.nvim_win_get_height(w.list) + 1,
     items = calls.callables(m.graph, m),
+    query = type(query) == 'string' and query or nil,
     node = function(id)
       return index.model().graph.nodes[id]
     end,
     column = 'used by',
     pick = function(x)
       if x and st.screen == 'calls' and st.calls then
-        calls.anchor(st.calls, x.id)
+        if dir then
+          st.calls = calls.new(x.id, dir)
+        else
+          calls.anchor(st.calls, x.id)
+        end
         show_calls()
       end
     end,
@@ -1208,7 +1218,9 @@ local function calls_keys(buf)
     vim.keymap.set('n', k, press(k), o)
   end
   vim.keymap.set('n', 'L', M.open_lens, o)
-  vim.keymap.set('n', '/', calls_pick, o)
+  vim.keymap.set('n', '/', function()
+    calls_pick()
+  end, o)
   vim.keymap.set('n', 'j', press('j', true), o)
   vim.keymap.set('n', 'k', press('k', true), o)
   vim.keymap.set('n', 'n', press(']]', true), o)
@@ -1250,9 +1262,11 @@ local function calls_code_keys(buf)
   goto_keys(buf)
 end
 
---- The Calls screen on a function, component or class by id, or from the top.
+--- The Calls screen on a function, component or class by id, or from the top;
+--- down from it, or up when `dir` says.
 ---@param id string|nil
-function M.open_calls(id)
+---@param dir? seam.Dir
+function M.open_calls(id, dir)
   local m = index.model()
   if not (m and m.graph) then
     vim.notify('seam: this index has no calls; :Seam! indexes again', vim.log.levels.WARN)
@@ -1300,8 +1314,34 @@ function M.open_calls(id)
       end,
     })
   end
-  st.calls = calls.new(id, 'down')
+  st.calls = calls.new(id, dir or 'down')
   show_calls()
+end
+
+--- `/` on the Calls screen, `query` typed already; with `dir`, the pick
+--- starts a fresh tree that way.
+---@param query? string
+---@param dir? seam.Dir
+function M.calls_pick(query, dir)
+  calls_pick(query, dir)
+end
+
+--- Start over on the explorer, the cursor on contract `c` (a filter that
+--- would hide it cleared), nothing under it for K.
+---@param c? table
+function M.show(c)
+  st.stack, st.page, st.calls, st.calls_rows = {}, nil, nil, nil
+  if c and st.filter ~= '' and not c.name:lower():find(st.filter:lower(), 1, true) then
+    st.filter = ''
+  end
+  layout_explorer()
+  show_list(c or st.shown)
+  if c and st.shown == c then
+    api.nvim_win_call(st.win.list, function()
+      vim.cmd 'normal! zz'
+    end)
+  end
+  paint()
 end
 
 ---------------------------------------------------------------- lens
@@ -1441,9 +1481,24 @@ function M.close()
   end
 end
 
---- Open the explorer on the repo at `root`, in a tab page of its own.
+--- Open the explorer on the repo at `root`, in a tab page of its own; when
+--- seam is open on it already, its tab, as it was.
 ---@param root string
 function M.open(root)
+  local from = api.nvim_get_current_tabpage()
+  if st.tab and api.nvim_tabpage_is_valid(st.tab) then
+    if st.root == root and st.screen then
+      if from ~= st.tab then
+        st.from_tab = from
+      end
+      api.nvim_set_current_tabpage(st.tab)
+      return
+    end
+    M.close()
+    if api.nvim_tabpage_is_valid(from) then
+      api.nvim_set_current_tabpage(from)
+    end
+  end
   st.root = root
   local dir = index.dir(root)
   st.lens = lens.load(root)
@@ -1469,7 +1524,6 @@ function M.open(root)
   theme.assign(index.model(), dir .. '/hues.json')
   st.stack, st.page, st.shown = {}, nil, nil
   -- the tab page gf goes back to, to show the code
-  local from = api.nvim_get_current_tabpage()
   if from ~= st.tab then
     st.from_tab = from
   end
