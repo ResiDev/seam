@@ -3,6 +3,7 @@
 -- rows are open, what the budget opens for you, and what each key does to the
 -- view. Pure: no windows, no state, so the specs drive it on a graph by hand.
 local tree = require 'seam.tree'
+local types = require 'seam.types'
 local M = {}
 
 ---@class seam.Node
@@ -37,7 +38,7 @@ local M = {}
 ---@field levels integer|nil the levels the budget opened
 ---@field cursor string|nil the key of the row under the cursor
 ---@field back table[] the views before each anchor, newest last
----@field code 'called'|'itself' what the code beside the tree shows: where the row is called, or the row itself
+---@field code 'types'|'called'|'itself'|nil what the code beside the tree shows: the types the row takes and gives, where it is called, or itself; nil the first of those it has
 ---@field step { key: string, code: string, n: integer }|nil the place or line `]]` and `[[` stepped to, on that row in that view
 
 ---@class seam.CallRow
@@ -579,7 +580,7 @@ end
 ---@param dir? seam.Dir
 ---@return seam.CallsView
 function M.new(anchor, dir)
-  return { anchor = anchor, dir = anchor and dir or 'down', open = {}, back = {}, code = 'called' }
+  return { anchor = anchor, dir = anchor and dir or 'down', open = {}, back = {} }
 end
 
 local function opener(view)
@@ -651,7 +652,8 @@ end
 
 ---@class seam.CallsPane
 ---@field node seam.Node
----@field code 'called'|'itself' what is shown: itself when nothing calls it, whatever the view chose
+---@field code 'types'|'called'|'itself' what is shown: the view's choice when the row has it; types when the repo has them, else called at, else itself
+---@field typed boolean the repo has types: the types view is there
 ---@field places table[] where it is called
 ---@field lines integer[] its lines that call something
 ---@field n integer the place shown, or the line lit (0: none)
@@ -680,7 +682,15 @@ function M.pane(g, view, r, i, m)
     places = M.places(g, id)
   end
   local p = { node = node, places = places, lines = M.call_lines(g, id, M.visible(m, 'down')), n = 0 }
-  p.code = #p.places == 0 and 'itself' or view.code or 'called'
+  p.typed = m ~= nil and m.sigs ~= nil
+  local want = view.code or (p.typed and 'types') or 'called'
+  if want == 'types' and not p.typed then
+    want = 'called'
+  end
+  if want == 'called' and #p.places == 0 then
+    want = 'itself'
+  end
+  p.code = want
   local key = x and x.key or ''
   local s = view.step
   if s and s.key == key and s.code == p.code then
@@ -699,6 +709,29 @@ function M.pane(g, view, r, i, m)
     p.n = vim.fn.index(p.lines, x.lines[1]) + 1
   end
   return p
+end
+
+--- The views the code beside the tree has for a pane, in `<Tab>`'s order.
+---@param p seam.CallsPane
+---@return string[]
+function M.codes(p)
+  local out = {}
+  if p.typed then
+    out[#out + 1] = 'types'
+  end
+  if #p.places > 0 then
+    out[#out + 1] = 'called'
+  end
+  out[#out + 1] = 'itself'
+  return out
+end
+
+--- The view `<Tab>` goes to from the one shown.
+---@param p seam.CallsPane
+---@return string
+function M.next_code(p)
+  local list = M.codes(p)
+  return list[vim.fn.index(list, p.code) + 2] or list[1]
 end
 
 ---------------------------------------------------------------- keys
@@ -795,11 +828,15 @@ function M.key(g, view, r, i, k, height, m)
     reset(view)
     return 'redraw'
   elseif k == '<Tab>' then
-    view.code = view.code == 'itself' and 'called' or 'itself'
+    local p = M.pane(g, view, r, r.rows[i] and i or nil, m)
+    if not p then
+      return nil
+    end
+    view.code = M.next_code(p)
     return 'pane'
   elseif k == ']]' or k == '[[' then
     local p = M.pane(g, view, r, r.rows[i] and i or nil, m)
-    local list = p and (p.code == 'called' and p.places or p.lines) or {}
+    local list = p and (p.code == 'called' and p.places or p.code == 'itself' and p.lines) or {}
     if #list == 0 then
       return nil
     end

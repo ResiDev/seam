@@ -50,6 +50,14 @@ Read down the tree, the data changes shape from one call to the next.
 The code beside it says the same at full length under its head, one
 parameter a line: `takes element ExcalidrawElement`, then `gives`.
 
+Under that, the pane has a third view, **Types**, first of `<Tab>`'s three
+and the one it opens on once a repo has types: the declaration of every repo
+type the function takes and gives, as written, in the order its signature
+names them, each headed `takes`, `gives` or `both`. So the row says
+`(State, Message, Walkthrough) → Outcome` and the pane shows what a `State`
+and an `Outcome` are, field by field. A declaration longer than 40 lines
+stops there, and `gf` reads the rest.
+
 ## The types
 
 ![The types, the most travelled first](mocks/types-top.png)

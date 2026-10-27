@@ -385,22 +385,83 @@ end
 --- lines lit, `mark(r, start, src, l)` underlining on each; the first lit.
 M.code_rows = code_rows
 
--- the two views over the code, the one shown lit; with nothing calling it,
--- itself alone
+-- the views over the code, the one shown lit; with nothing calling it and
+-- no types, itself alone
 local function tabs(p)
   local t = row():add '  '
-  if #p.places == 0 then
+  local codes = calls.codes(p)
+  if #codes == 1 then
     return t:add(' Itself ', 'SeamTab'):add('    nothing calls it', 'SeamLabel')
   end
-  for _, v in ipairs { { 'called', 'Called at', ' ' .. #p.places }, { 'itself', 'Itself', '' } } do
-    if v[1] == p.code then
-      t:add(' ' .. v[2] .. v[3] .. ' ', 'SeamTab')
+  local words = { types = { 'Types', '' }, called = { 'Called at', ' ' .. #p.places }, itself = { 'Itself', '' } }
+  for _, c in ipairs(codes) do
+    local v = words[c]
+    if c == p.code then
+      t:add(' ' .. v[1] .. v[2] .. ' ', 'SeamTab')
     else
-      t:add(' ' .. v[2], 'SeamText'):add(v[3] .. ' ', 'SeamLabel')
+      t:add(' ' .. v[1], 'SeamText'):add(v[2] .. ' ', 'SeamLabel')
     end
     t:add '   '
   end
+  if #p.places == 0 then
+    t:add(' nothing calls it', 'SeamLabel')
+  end
   return t
+end
+
+-- the longest a type's declaration runs before the rest is left to gf
+local DECL_MAX = 40
+
+-- types: each repo type the row takes or gives, its declaration as written,
+-- in the order the signature names them
+local function types_view(out, m, p)
+  local sig = m.sigs[p.node.id]
+  if not sig then
+    out[#out + 1] = row():add(' the TypeScript server said nothing of it', 'SeamLabel')
+    return
+  end
+  local roles, order, after = {}, {}, false
+  for _, piece in ipairs(types.pieces(sig, m.flows)) do
+    if piece.text == ') → ' then
+      after = true
+    elseif piece.flow then
+      if not roles[piece.flow] then
+        roles[piece.flow] = {}
+        order[#order + 1] = piece.flow
+      end
+      roles[piece.flow][after and 'gives' or 'takes'] = true
+    end
+  end
+  if not sig.params then
+    for _, n in ipairs(order) do
+      roles[n] = { is = true }
+    end
+  end
+  if #order == 0 then
+    out[#out + 1] = row():add(' takes and gives no type of the repo', 'SeamLabel')
+    return
+  end
+  for i, name in ipairs(order) do
+    local r = roles[name]
+    local word = r.is and 'is' or (r.takes and r.gives) and 'both' or r.takes and 'takes' or 'gives'
+    for _, e in ipairs(m.flows[name].decls) do
+      if i > 1 or #out > 0 then
+        out[#out + 1] = row()
+      end
+      local h = row():add((' %-6s'):format(word), 'SeamLabel'):add(name, 'SeamTypeBold'):add('   ' .. e.kind .. ' in ', 'SeamLabel')
+      draw.path(h, e.path, e.line)
+      out[#out + 1] = h
+      local s, l = code.doc_start(e.path, e.line), math.max(e.end_line or e.line, e.line)
+      local set = {}
+      for k = s, math.min(l, s + DECL_MAX - 1) do
+        set[k] = true
+      end
+      code_rows(out, e.path, set, {}, function() end)
+      if l > s + DECL_MAX - 1 then
+        out[#out + 1] = row():add(('      ⋯ %d more lines, gf to read them'):format(l - s - DECL_MAX + 1), 'SeamLabel')
+      end
+    end
+  end
 end
 
 -- called at: the place shown, its caller's function around the call, the
@@ -530,7 +591,9 @@ function M.pane(buf, win, g, view, r, i)
   out[#out + 1] = tabs(p)
   out[#out + 1] = row()
   local first
-  if p.code == 'called' then
+  if p.code == 'types' then
+    types_view(out, m, p)
+  elseif p.code == 'called' then
     first = called_at(out, g, p)
   else
     first = itself(out, g, p, x, view.dir == 'up' and view.anchor)
