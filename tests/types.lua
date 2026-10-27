@@ -49,6 +49,12 @@ eq(shape '(alias) function load(id: string): Doc', { { 'id: string' }, 'Doc' }, 
 eq(shape 'const C: { ({ a }: { a: A; }): any; displayName: string; }', { { '{ a }: { a: A; }' }, 'any' }, 'a component with properties')
 eq(shape 'const C: React.FC<Props>', { nil, nil, 'React.FC<Props>' }, 'a callable written as a value')
 eq(shape 'class Scene', { nil, nil, nil }, 'a class has no call')
+eq(
+  types.parse('function rot<Point extends GlobalPoint, const T = A>(p: Point): Point').generics,
+  { Point = true, T = true },
+  'its own type parameters, by name'
+)
+eq(types.parse('const f: <K>(k: K) => K').generics, { K = true }, "an arrow's type parameters")
 
 eq(types.names 'Map<Order["id"], NonDeleted<Line>> | "Order"', { 'Map', 'Order', 'NonDeleted', 'Line' }, 'names: indexed, nested, strings left out')
 eq(types.names '{ order: Order; cart?: Cart }', { 'Order', 'Cart' }, 'names: keys are not types')
@@ -64,6 +70,7 @@ local function line(text)
 end
 eq(line 'function f(a: Order, b: Cart[]): Promise<Order>', '([Order], [Cart][]) → Promise<[Order]>', 'pieces: before and after, repo types marked')
 eq(line 'const C: React.FC<Props>', 'React.FC<Props>', 'pieces: a value as it is')
+eq(line 'function f<Order>(a: Order, b: Cart): Order', '(Order, [Cart]) → Order', 'pieces: a type parameter is not the repo type of its name')
 local function fitted(text, room)
   return table.concat(vim.tbl_map(function(p)
     return p.text
@@ -109,6 +116,11 @@ types.attach(m, {
 eq(m.flows.Order.takes, { { id = 'src/run.ts:20:ship', param = 'again' }, { id = 'src/run.ts:20:ship', param = 'order' } }, 'a parameter each')
 eq(types.takers(m.flows.Order), { 'src/run.ts:20:ship' }, 'takers: a function once, whatever its parameters')
 eq(types.named(m.sigs['src/run.ts:20:ship'], m.flows), { 'Order', 'Cart' }, 'named: the repo types of a signature, each once')
+
+types.attach(m, {
+  ['src/run.ts:20:ship'] = 'function ship<Order extends Cart>(order: Order): Order',
+}, {})
+eq({ #m.flows.Order.takes, #m.flows.Order.gives, #m.flows.Cart.takes }, { 0, 0, 0 }, 'a type parameter named as a repo type is not it, nor its constraint')
 
 io.stdout:write(('%d checks, %d failed\n'):format(checks, #failures))
 os.exit(#failures == 0 and 0 or 1)
