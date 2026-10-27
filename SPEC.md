@@ -102,8 +102,9 @@ callback ends the tree without saying so.
 says each function, component and class of the call graph is: its
 `textDocument/hover`, as it came, by node id; and for each class the
 callables that say `new` to it, from the source just before the call.
-`scripts/types.lua` writes it in a headless Neovim of its own, with tsgo from
-Mason unless `$SEAM_TS` names another server (11 to 30 s on excalidraw).
+`scripts/types.lua` writes it in a headless Neovim of its own, with the first
+TypeScript 7 server it finds: the repo's `effect-tsgo` or `tsgo`, then `tsc` 7
+or `tsgo` from Mason or the PATH, unless `$SEAM_TS` names another (11 to 30 s on excalidraw).
 Indexing starts it when the treesitter index is written, and opening a repo
 whose index has none starts it; until it lands, and when the server will not
 start (said once), every screen works without types.
