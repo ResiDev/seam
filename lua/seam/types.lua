@@ -13,6 +13,7 @@ local M = {}
 ---@field params seam.Param[]|nil -- nil when the server gave a value, not a call (a class, `React.FC<P>`)
 ---@field ret string|nil
 ---@field value string|nil       -- the type of a callable written as a value
+---@field generics table<string, true>|nil -- its own type parameters: a `Point` there is not the repo's
 
 ---@class seam.Flow
 ---@field name string
@@ -97,12 +98,22 @@ local function param(p)
 end
 
 --- A call signature from its text, starting at its generics or its `(`:
---- `<T>(a: A) => R` with `arrow`, `<T>(a: A): R` without.
+--- `<T>(a: A) => R` with `arrow`, `<T>(a: A): R` without. Its parameters,
+--- its return and the names of its type parameters.
 local function call(s, arrow)
   s = vim.trim(s)
   local i = 1
+  local generics
   if s:sub(1, 1) == '<' then
-    i = (closing(s, 1) or #s) + 1
+    local c = closing(s, 1) or #s
+    for _, g in ipairs(split(s:sub(2, c - 1))) do
+      local name = g:gsub('^const%s+', ''):match '^[%a_$][%w_$]*'
+      if name then
+        generics = generics or {}
+        generics[name] = true
+      end
+    end
+    i = c + 1
     while s:sub(i, i) == ' ' do
       i = i + 1
     end
@@ -126,7 +137,7 @@ local function call(s, arrow)
   if semi then
     ret = vim.trim(ret:sub(1, semi - 1))
   end
-  return vim.tbl_map(param, split(s:sub(i + 1, j - 1))), ret
+  return vim.tbl_map(param, split(s:sub(i + 1, j - 1))), ret, generics
 end
 
 --- Parse a hover into what the function takes and gives.
@@ -137,15 +148,15 @@ function M.parse(text)
   local s = text:gsub('%s+', ' '):gsub('^%(%w+%) ', '')
   local fn_rest = s:match '^function [%w_$]+(.*)$' or s:match '^async function [%w_$]+(.*)$'
   if fn_rest then
-    sig.params, sig.ret = call(fn_rest, false)
+    sig.params, sig.ret, sig.generics = call(fn_rest, false)
     return sig
   end
   local ty = s:match '^const [%w_$]+: (.*)$' or s:match '^let [%w_$]+: (.*)$' or s:match '^var [%w_$]+: (.*)$'
   if ty then
-    sig.params, sig.ret = call(ty, true)
+    sig.params, sig.ret, sig.generics = call(ty, true)
     if not sig.params and ty:match '^{ [(<]' then
       -- a call signature with properties, as a component with displayName
-      sig.params, sig.ret = call(ty:sub(3), false)
+      sig.params, sig.ret, sig.generics = call(ty:sub(3), false)
     end
     if not sig.params then
       sig.value = ty
@@ -196,9 +207,10 @@ function M.attach(m, hovers, news)
     if m.graph and m.graph.nodes[id] then
       local sig = M.parse(text)
       m.sigs[id] = sig
+      local own = sig.generics or {}
       for _, p in ipairs(sig.params or {}) do
         for _, name in ipairs(M.names(p.type)) do
-          local f = m.flows[name]
+          local f = not own[name] and m.flows[name]
           if f then
             f.takes[#f.takes + 1] = { id = id, param = p.name }
             through[name] = through[name] or {}
@@ -207,7 +219,7 @@ function M.attach(m, hovers, news)
         end
       end
       for _, name in ipairs(M.names(sig.ret or sig.value or '')) do
-        local f = m.flows[name]
+        local f = not own[name] and m.flows[name]
         if f then
           f.gives[#f.gives + 1] = id
           through[name] = through[name] or {}
@@ -320,11 +332,20 @@ function M.short(t, flows)
 end
 
 --- The pieces of a signature as a row writes them, before and after:
---- `{ text, flow? }` where `flow` names the repo type the text is.
+--- `{ text, flow? }` where `flow` names the repo type the text is; a
+--- type parameter of its own is not one, whatever its name.
 ---@param sig seam.Sig
 ---@param flows table<string, seam.Flow>
 ---@return { text: string, flow: string|nil }[]
 function M.pieces(sig, flows)
+  local own, all = sig.generics, flows
+  if own then
+    flows = setmetatable({}, {
+      __index = function(_, k)
+        return not own[k] and all[k] or nil
+      end,
+    })
+  end
   local out = {}
   local function put(text, flow)
     out[#out + 1] = { text = text, flow = flow }
