@@ -22,6 +22,7 @@ In any buffer of the repo, on a name. Seam opens on its repo (indexing it first 
 | `:SeamHere page` | `<leader>kp` | that contract's page; `K` the explorer on it. Otherwise as above, the page's `/` holding the word for several |
 | `:SeamHere calls` | `<leader>kc` | the call tree anchored on that function, down; several, the tree's `/` holding the word |
 | `:SeamHere called_by` | `<leader>kC` | the same, up |
+| `:SeamHere types` | | the flow of the type that word names; otherwise the types, their `/` holding the word |
 | `:Seam` | `<leader>ko` | seam on the repo, as it was when it is open |
 | `require('seam').from_top()` | `<leader>kt` | the call tree from where the code starts |
 | `:Seam!` | `<leader>kr` | index the repo again |
@@ -43,6 +44,8 @@ The keys are not mapped by seam; the suggested ones are in the author's config.
 | `L` | the lens: what the explorer and pages show |
 | `c` | the calls of the contract under the cursor, down from it |
 | `C` | the calls from the top: where the code starts |
+| `T` | the types, the most travelled first |
+| `t` | the flow of the contract under the cursor, when it is a type a function takes or makes; otherwise a line saying it is not |
 | `gf` `gd` | in your own code: on the list, the contract's declaration; in a tree, the name's under the cursor, or the file (used by: at its first use); on the head, the contract's, or the line of its signature under the cursor |
 
 ## A contract's page
@@ -62,6 +65,7 @@ The keys are not mapped by seam; the suggested ones are in the author's config.
 | `K` `<BS>` | up a level: the previous page, the Calls screen it was opened from, or the explorer |
 | `-` | straight to the explorer from any depth, on this contract |
 | `/` | another contract: a float over the left lists every one the lens lets through, types and constants too, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` opens its page on the tab shown, and `K` comes back; `<Esc>` `<C-c>` close it, nothing changed. In Built from as code too: `n` `N` are the names there, so Vim's search had no next |
+| `t` | the flow of the contract, when it is a type a function takes or makes; `K` comes back to the page |
 | `L` | the lens |
 
 ## Calls
@@ -80,7 +84,9 @@ The call tree of a function, component or class: what it calls all the way down,
 | `/` | anchor on any function: a float lists every one the lens lets through in contracts, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` anchors on it, the direction kept (from the top, calls), and `K` comes back; `<Esc>` `<C-c>` close it, nothing changed |
 | `~` | flip: calls, called by |
 | `J` | the page of the row's function, when it is a contract; `K` on it comes back to the tree as it was |
-| `K` `<BS>` | back: the previous anchor; from the first, the explorer |
+| `T` | the tree's columns: what each function takes and gives (`takes → gives`), or below, used by, file and line. Types once the repo has them; the choice stays |
+| `t` | the repo types the row's function takes and gives: one, its flow; several, the `/` float over the tree holding them. `K` on the flow comes back to the tree |
+| `K` `<BS>` | back: the previous anchor; from the first, the screen the tree was opened from (a type's flow), else the explorer |
 | `-` | straight to the explorer, on the anchor when it is a contract |
 | `C` | from the top |
 | `L` | the lens: calls follow its built from column, callers its used by, the starts its contracts; what it hides has no row, the head counts it after the tabs (from the top, on its first line), `+12 hidden  L lens` |
@@ -92,6 +98,25 @@ The call tree of a function, component or class: what it calls all the way down,
 `]` and `[` wait for a second `]` or `[` before going to the sibling.
 
 The head gives the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, `<Tab>` does as in the tree, `]]` `[[` as `n` `N` do there, with the cursor on the line lit, and `K` `<BS>` `-` `q` do as in the tree; `gf` goes to the line under the cursor in your own code.
+
+## Types
+
+Every repo type a function takes or makes, the most travelled first; and one type's flow, the functions that make it, then the ones that take it. What each takes and gives is the TypeScript server's hover, asked once in the background beside the index.
+
+| Key | Does |
+|---|---|
+| `j` `k` | the next or previous row; in a flow, its section titles too |
+| `l` `<CR>` | the types: that type's flow |
+| `<CR>` | a flow: the call tree on the row's function; `K` comes back to the flow |
+| `t` | a flow: the row's function's other repo types: one, its flow; several, the `/` float holding them |
+| `<Tab>` | a flow: the next section title, made by, taken by, round the end |
+| `/` | another type: a float over the list of every one, the most travelled first; typing narrows it, fuzzily; `<CR>` its flow, `K` back; `<Esc>` closes it, nothing changed |
+| `K` `<BS>` | back: the previous flow, the types, the call tree, page or explorer it was opened from |
+| `-` | straight to the explorer |
+| `gf` `gd` | in your own code: on a function's row, its declaration; on a type's row, a section title or the head, the type's declaration; in the code beside, the line under the cursor |
+| `q` | close |
+
+The code beside keeps the cursor to scroll and search; `<Esc>` gives it back to the list.
 
 ## The lens
 

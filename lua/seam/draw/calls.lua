@@ -6,8 +6,10 @@ local calls = require 'seam.calls'
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
+local st = require 'seam.state'
 local theme = require 'seam.theme'
 local tree = require 'seam.tree'
+local types = require 'seam.types'
 local M = {}
 
 local row, trunc, shape = draw.row, draw.trunc, draw.shape
@@ -15,6 +17,8 @@ local row, trunc, shape = draw.row, draw.trunc, draw.shape
 -- the tree's width, and where its columns end or start
 M.LW = 86
 local COUNT_END, USED_END, FILE_AT, LINE_AT = 52, 61, 64, 79
+-- where what a function takes and gives starts, when the name leaves room
+M.SIG_AT = 36
 
 local function base(path)
   return path:match '[^/]+$' or path
@@ -43,8 +47,86 @@ end
 --- declaration is.
 M.name = name
 
+--- Are the tree's columns what each function takes and gives? Once the
+--- model has types, unless `T` chose the counts.
+---@param m table|nil
+---@return boolean
+function M.typed(m)
+  return m ~= nil and m.sigs ~= nil and st.columns ~= 'counts'
+end
+
+local function pieces_hl(p, lit)
+  return p.flow and (p.flow == lit and 'SeamTypeLit' or 'SeamType') or 'SeamPath'
+end
+
+--- What function `id` takes and gives on row `r`, from column SIG_AT or two
+--- past what the row holds, fitted to the tree: the repo types in the type
+--- colour, `lit` lit, the rest dim. Nothing without a signature.
+---@param r table
+---@param m table
+---@param id string|nil
+---@param lit? string a type's name
+---@return table r
+function M.sig(r, m, id, lit)
+  local sig = id and m.sigs and m.sigs[id]
+  if not sig then
+    return r
+  end
+  r:to(math.max(M.SIG_AT, r.w + 2))
+  for _, p in ipairs(types.fit(types.pieces(sig, m.flows), M.LW - 1 - r.w)) do
+    r:add(p.text, pieces_hl(p, lit))
+  end
+  return r
+end
+
+--- A type's text as a row writes it, made short, the repo types in it in
+--- the type colour, `lit` lit.
+---@param r table
+---@param m table
+---@param text string
+---@param lit? string
+---@return table r
+function M.type_text(r, m, text, lit)
+  for _, p in ipairs(types.pieces({ value = text }, m.flows)) do
+    r:add(p.text, pieces_hl(p, lit))
+  end
+  return r
+end
+
+--- What function `id` takes, one parameter a line, then what it gives, at
+--- full length under a code pane's head; nothing without a signature.
+---@param out table[] rows, added to
+---@param m table
+---@param id string
+---@param lit? string a type's name to light
+function M.takes_gives(out, m, id, lit)
+  local sig = m.sigs and m.sigs[id]
+  if not sig then
+    return
+  end
+  out[#out + 1] = row()
+  if not sig.params then
+    out[#out + 1] = M.type_text(row():add ' ', m, sig.value or sig.text, lit)
+    return
+  end
+  local nw = 4
+  for _, p in ipairs(sig.params) do
+    nw = math.max(nw, api.nvim_strwidth(p.name) + (p.optional and 1 or 0))
+  end
+  for j, p in ipairs(sig.params) do
+    local r = row():add(j == 1 and ' takes ' or '       ', 'SeamLabel')
+    r:add(p.name .. (p.optional and '?' or ''), 'SeamName'):to(7 + nw + 2)
+    out[#out + 1] = M.type_text(r, m, p.type, lit)
+  end
+  local r = row():add(' gives ', 'SeamLabel'):to(#sig.params > 0 and 7 + nw + 2 or 7)
+  out[#out + 1] = M.type_text(r, m, sig.ret or 'void', lit)
+end
+
 local function titles(view)
   local r = row()
+  if M.typed(index.model()) then
+    return r:to(M.SIG_AT):add('takes → gives', 'SeamLabel')
+  end
   local word = view.dir == 'up' and 'above' or 'below'
   r:to(COUNT_END - #word):add(word, 'SeamLabel')
   r:to(USED_END - 7):add('used by', 'SeamLabel')
@@ -163,11 +245,14 @@ local function also_at(x)
   return LINE_AT - 3 - api.nvim_strwidth(also(x))
 end
 
-local function columns(r, x)
+local function columns(r, x, m)
   local text, path = 'SeamText', 'SeamPath'
   if x.fold == 'also' then
     r:to(math.max(also_at(x), r.w + 2)):add(also(x), 'SeamLabel')
     return r:to(math.max(LINE_AT, r.w + 3)):add(':' .. x.lines[1], 'SeamPath')
+  end
+  if M.typed(m) then
+    return M.sig(r, m, x.id)
   end
   if x.count and x.count > 0 then
     local s = tostring(x.count)
@@ -239,7 +324,7 @@ function M.list(buf, g, view, r)
       elseif not node.exported then
         d:add(' local', 'SeamDim')
       end
-      columns(d, x)
+      columns(d, x, m)
     end
     out[#out + 1] = d
   end
@@ -295,6 +380,10 @@ local function code_rows(out, path, set, lit, mark)
   end
   return first
 end
+
+--- Code rows of `path` for the lines in `set`, a ⋯ between runs, `lit`
+--- lines lit, `mark(r, start, src, l)` underlining on each; the first lit.
+M.code_rows = code_rows
 
 -- the two views over the code, the one shown lit; with nothing calling it,
 -- itself alone
@@ -433,6 +522,11 @@ function M.pane(buf, win, g, view, r, i)
   h:add('   ' .. (node.kind == 'module' and 'top of the file' or node.kind) .. ' in ', 'SeamLabel')
   draw.path(h, node.path, node.line > 0 and node.line or nil)
   out[#out + 1] = h
+  local m = index.model()
+  if m.sigs and m.sigs[node.id] then
+    M.takes_gives(out, m, node.id)
+    out[#out + 1] = row()
+  end
   out[#out + 1] = tabs(p)
   out[#out + 1] = row()
   local first

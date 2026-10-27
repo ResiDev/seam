@@ -248,6 +248,36 @@ function M.attach(m, hovers, news)
   end)
 end
 
+--- The functions that take a type, each once, in the order of its `takes`:
+--- one taking it in two parameters is one function.
+---@param f seam.Flow
+---@return string[]
+function M.takers(f)
+  local out, seen = {}, {}
+  for _, t in ipairs(f.takes) do
+    if not seen[t.id] then
+      seen[t.id] = true
+      out[#out + 1] = t.id
+    end
+  end
+  return out
+end
+
+--- The repo types a signature names, each once, in the order it names them.
+---@param sig seam.Sig
+---@param flows table<string, seam.Flow>
+---@return string[]
+function M.named(sig, flows)
+  local out, seen = {}, {}
+  for _, p in ipairs(M.pieces(sig, flows)) do
+    if p.flow and not seen[p.flow] then
+      seen[p.flow] = true
+      out[#out + 1] = p.flow
+    end
+  end
+  return out
+end
+
 --- Read the types JSON beside a model's index, when there is one.
 ---@param file string
 ---@return table<string, string>|nil hovers, table<string, string[]>|nil news, string|nil server

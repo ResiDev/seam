@@ -476,7 +476,11 @@ local function check_calls(fresh)
   end
   local word = st.calls.dir == 'up' and 'above' or 'below'
   local titles = vim.wo[w.list].winbar:gsub('%%#%w+#', '')
-  if not titles:match('^%s+' .. word .. '%s+used by%s+file%s+line$') then
+  if require('seam.draw.calls').typed(m) then
+    if not titles:match '^%s+takes → gives$' then
+      fail('the titles are not takes → gives: ' .. titles)
+    end
+  elseif not titles:match('^%s+' .. word .. '%s+used by%s+file%s+line$') then
     fail('the titles are not ' .. word .. ', used by, file, line: ' .. titles)
   end
   -- a shared function the budget left folded says so where local would go
@@ -1152,6 +1156,221 @@ do
   end
 end
 
+-- the types: T in the explorer lists every type the most travelled first,
+-- its declaration beside it; l its flow, made by then taken by; <CR> on a
+-- function the call tree on it and K back to the flow; t on a function its
+-- other types; / another type; t from the call tree and from a type's
+-- contract; T in the call tree its columns; K back each time
+do
+  local m = st.models[st.cur]
+  local cdraw = require 'seam.draw.calls'
+  local function lines(buf)
+    return api.nvim_buf_get_lines(buf, 0, -1, false)
+  end
+  -- the Types screen, on the flow of `name` (nil: the list), its rows drawn
+  local function check_types(name)
+    if st.screen ~= 'types' or not st.types then
+      return fail 'not on the Types screen'
+    end
+    if st.types.flow ~= name then
+      return fail(('the flow of %s, not %s'):format(tostring(st.types.flow), tostring(name)))
+    end
+    local w = st.twin
+    for _, k in ipairs { 'head', 'list', 'code' } do
+      if not valid(w[k]) or api.nvim_win_get_buf(w[k]) ~= st.tbuf[k] then
+        return fail('the ' .. k .. ' window is not there with its buffer')
+      end
+    end
+    if #api.nvim_tabpage_list_wins(st.tab) ~= 3 then
+      fail(('%d windows on the Types screen, not 3'):format(#api.nvim_tabpage_list_wins(st.tab)))
+    end
+    local rs = st.types_rows
+    if #lines(st.tbuf.list) ~= math.max(1, #rs.rows) then
+      fail 'the list is not its rows'
+    end
+    local head = lines(st.tbuf.head)
+    local x = rs.rows[api.nvim_win_get_cursor(w.list)[1]]
+    local pane = table.concat(lines(st.tbuf.code), '\n')
+    if not name then
+      if #rs.rows ~= #m.flowlist or not head[1]:find(#m.flowlist .. ' types of the repo', 1, true) then
+        fail('the list is not every type that flows: ' .. head[1])
+      end
+      if x and not pane:find(' ' .. x.flow.name .. '   ' .. x.flow.decls[1].kind .. ' in ', 1, true) then
+        fail('the declaration beside is not ' .. x.flow.name .. "'s")
+      end
+      return x
+    end
+    local f = m.flows[name]
+    if not head[1]:match('^ Types › ' .. vim.pesc(name)) then
+      fail('the head is not the type: ' .. head[1])
+    end
+    local takers = require('seam.types').takers(f)
+    if not head[2]:find(('made by %d  ·  taken by %d'):format(#f.gives, #takers), 1, true) then
+      fail('the head does not count its flow: ' .. head[2])
+    end
+    if #rs.sections ~= 2 or #rs.rows ~= #f.gives + #takers + 3 then
+      fail(('%d rows for %d made by and %d taken by'):format(#rs.rows, #f.gives, #takers))
+    end
+    if x and x.kind == 'fn' then
+      local node = m.graph.nodes[x.id]
+      if not pane:find(node.name, 1, true) then
+        fail('the code beside is not ' .. node.name)
+      end
+      if m.sigs[x.id] and m.sigs[x.id].params and not pane:find(' gives ', 1, true) then
+        fail('the code beside does not say what ' .. node.name .. ' gives')
+      end
+    end
+    return x
+  end
+  if not m.flows then
+    io.stdout:write 'no types.json: the types are not checked\n'
+  else
+    where = 'types'
+    screen.show()
+    key 'T'
+    check_types(nil)
+    key 'j'
+    key 'j'
+    local x = check_types(nil)
+    where = 'types gf'
+    if x then
+      local e = x.flow.decls[1]
+      key 'gf'
+      went('gf on ' .. x.flow.name, e.path, e.line, st.twin.list)
+    end
+    -- the flow of the third, and the walk from it
+    where = 'types l'
+    key 'l'
+    local name = x and x.flow.name
+    local fx = check_types(name)
+    if not (fx and fx.kind == 'fn') then
+      fail 'a flow does not open on its first function'
+    end
+    key 'j'
+    check_types(name)
+    where = 'types <Tab>'
+    key '<Tab>'
+    local tx = check_types(name)
+    if not (tx and tx.kind == 'section' and tx.section == 'takes') then
+      fail '<Tab> did not go to taken by'
+    end
+    key '<Tab>'
+    tx = check_types(name)
+    if not (tx and tx.kind == 'section' and tx.section == 'gives') then
+      fail '<Tab> did not come round to made by'
+    end
+    key 'j'
+    fx = check_types(name)
+    where = 'types <CR>'
+    if fx and fx.kind == 'fn' then
+      local node = m.graph.nodes[fx.id]
+      key 'gf'
+      went('gf on ' .. node.name, node.path, math.max(1, node.line), st.twin.list)
+      key '<CR>'
+      if st.screen ~= 'calls' or not st.calls or st.calls.anchor ~= fx.id then
+        fail('<CR> did not anchor the call tree on ' .. fx.id)
+      else
+        check_calls(true)
+        key 'K'
+        local back = check_types(name)
+        if not (back and back.key == fx.key) then
+          fail 'K from the call tree did not come back to the flow on its row'
+        end
+      end
+      -- t: its other types, one straight to its flow, several in the float
+      where = 'types t'
+      local others = vim.tbl_filter(function(n)
+        return n ~= name
+      end, m.sigs[fx.id] and require('seam.types').named(m.sigs[fx.id], m.flows) or {})
+      key 't'
+      if #others == 1 then
+        check_types(others[1])
+        key 'K'
+      elseif #others > 1 then
+        local ps = picker.state()
+        if not (ps and #ps.ids == #others) then
+          fail(('t on %s: not a float of its %d other types'):format(fx.id, #others))
+        end
+        key '<Esc>'
+      end
+      check_types(name)
+    end
+    where = 'types /'
+    key('/' .. m.flowlist[1].name .. '<CR>')
+    check_types(m.flowlist[1].name)
+    key 'K'
+    check_types(name)
+    key 'K'
+    check_types(nil)
+    key '<BS>'
+    if st.screen ~= 'explorer' then
+      fail('K from the types did not come back to the explorer: ' .. tostring(st.screen))
+    end
+    -- t on a type's contract in the explorer, K back to it
+    where = 'types t explorer'
+    local c
+    for _, f in ipairs(m.flowlist) do
+      for _, e in ipairs(f.decls) do
+        c = c or (vim.tbl_contains(m.contracts, e) and e or nil)
+      end
+    end
+    if c then
+      screen.show(c)
+      key 't'
+      check_types(c.name)
+      key 'K'
+      if st.screen ~= 'explorer' or st.shown ~= c then
+        fail('K from the flow did not come back to the explorer on ' .. c.name)
+      end
+    end
+    -- the call tree: t on a function naming one repo type, its flow; T the counts
+    where = 'types calls'
+    local one
+    for id, sig in pairs(m.sigs) do
+      if #require('seam.types').named(sig, m.flows) == 1 and m.graph.nodes[id].kind ~= 'module' and (not one or id < one) then
+        one = id
+      end
+    end
+    local up = one and m.graph.up[one] and m.graph.up[one][1]
+    if up then
+      seam.open_calls(up.from)
+      local row
+      for i, y in ipairs(st.calls_rows.rows) do
+        row = row or (y.id == one and i or nil)
+      end
+      if row then
+        api.nvim_win_set_cursor(st.cwin.list, { row, 0 })
+        key 'j'
+        key 'k'
+        local titles = vim.wo[st.cwin.list].winbar:gsub('%%#%w+#', '')
+        if not titles:match '^%s+takes → gives$' then
+          fail('the titles are not takes → gives: ' .. titles)
+        end
+        key 't'
+        check_types(require('seam.types').named(m.sigs[one], m.flows)[1])
+        key 'K'
+        if st.screen ~= 'calls' or st.calls.anchor ~= up.from then
+          fail 'K from the flow did not come back to the call tree'
+        end
+        key 'T'
+        check_calls(false)
+        if cdraw.typed(m) then
+          fail 'T did not swap to the counts'
+        end
+        key 'T'
+        check_calls(false)
+        if not cdraw.typed(m) then
+          fail 'T again did not swap back to the types'
+        end
+      end
+      key '-'
+    end
+    if st.screen ~= 'explorer' then
+      fail '- did not go to the explorer'
+    end
+  end
+end
+
 -- from your own code: a file of the repo in a tab of its own, the cursor on
 -- a contract's name, here() puts the explorer's cursor on it, the page on its
 -- page; on a local function, calls anchors on it and called by goes up; gf
@@ -1239,6 +1458,20 @@ do
       api.nvim_set_current_tabpage(st.tab)
     end
     key '<BS>'
+  end
+  -- a type's name: its flow
+  local ty = m.flowlist and m.flowlist[1] and m.flowlist[1].decls[1]
+  if ty and name_col(ty.path, ty.line, ty.name) then
+    where = 'here types ' .. ty.id
+    local from = on(ty.path, ty.line, name_col(ty.path, ty.line, ty.name))
+    seam.here 'types'
+    if api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'types' or not st.types or st.types.flow ~= ty.name then
+      fail('here types did not open the flow of ' .. ty.name)
+    end
+    api.nvim_set_current_tabpage(from)
+    vim.cmd 'tabclose'
+    api.nvim_set_current_tabpage(st.tab)
+    key '-'
   end
   -- a word naming nothing: the explorer, its search holding the word
   where = 'here nothing'

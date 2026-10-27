@@ -37,6 +37,11 @@ function M.setup()
   -- the lens: what it hides in a muted red, apart from the pink package hue
   s('SeamLensHidden', { fg = '#c45c5c' })
   s('SeamStatusLens', { fg = '#c45c5c', bg = '#16161e' })
+  -- a repo type in a signature, coloured as types are in code; lit where it is the one followed
+  s('SeamType', { link = '@type' })
+  local ty = api.nvim_get_hl(0, { name = '@type', link = false }).fg
+  s('SeamTypeBold', { fg = ty, bold = true })
+  s('SeamTypeLit', { fg = ty, bold = true, underline = true })
   for i, h in ipairs(HUES) do
     s('SeamHue' .. i, { fg = h, bold = true })
     s('SeamBar' .. i, { fg = h })
