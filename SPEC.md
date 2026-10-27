@@ -197,11 +197,26 @@ The screens are locked in the design docs. The code must keep these rules:
 - **Snippets.** A use is shown in the function it sits in, 20 rows at most,
   keeping the lines with uses in view, as thread's caller code does.
 
+## From your code
+
+`require('seam').here(how)`, `:SeamHere [overview|page|calls|called_by]`,
+opens seam on what the word under the cursor names in a buffer of the repo.
+`seam.here.resolve` is pure: the word, the file relative to the root and the
+cursor line, against the model. A contract (an export with a use, the lens's
+`all_uses` counted) declared in this file, the one holding the cursor if
+several; else one this file uses; else the only one of that name. For calls
+and called by a graph node first the same way (declared here, else one this
+file's nodes call, else the only one), then a contract, then the innermost
+node holding the cursor. Several and none here: the `/` picker of the screen
+asked for, holding the word. `:Seam` on a repo seam is open on comes to its
+tab as it was; another repo closes it first.
+
 ## Code layout
 
 ```
 lua/seam/
-  init.lua          :Seam, start and open, what tests and view steps call
+  init.lua          :Seam, start and open, here (from your code), what tests and view steps call
+  here.lua          the word under the cursor in a file to the contract or function it names
   state.lua         the one table every screen reads: repo, models, tab, windows, what is shown
   index.lua         the model from a source's JSON, the lens applied, where indexes live, indexing
   theme.lua         highlight groups, hues
@@ -221,6 +236,7 @@ scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
 tests/
   calls.lua         the call tree's and the picker's specs, on a graph written by hand
+  here.lua          here's resolution specs, on a model written by hand
   check.lua         every screen through its keys on a real repo
 ```
 

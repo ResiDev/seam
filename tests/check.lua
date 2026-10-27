@@ -1152,5 +1152,119 @@ do
   end
 end
 
+-- from your own code: a file of the repo in a tab of its own, the cursor on
+-- a contract's name, here() puts the explorer's cursor on it, the page on its
+-- page; on a local function, calls anchors on it and called by goes up; gf
+-- comes back to the file
+do
+  local m = st.models[st.cur]
+  local function name_col(path, line, name)
+    local l = vim.fn.readfile(st.root .. '/' .. path, '', line)[line] or ''
+    local at = l:find('%f[%w_$]' .. vim.pesc(name) .. '%f[^%w_$]')
+    return at and at - 1
+  end
+  -- on the name in its file, in a tab that is not seam's
+  local function on(path, line, col)
+    vim.cmd 'tabnew'
+    vim.cmd.edit(vim.fn.fnameescape(st.root .. '/' .. path))
+    api.nvim_win_set_cursor(0, { line, col })
+    return api.nvim_get_current_tabpage()
+  end
+  local c
+  for _, x in ipairs(m.contracts) do
+    if x.kind == 'function' and m.graph and m.graph.nodes[x.id] and name_col(x.path, x.line, x.name) then
+      c = x
+      break
+    end
+  end
+  if c then
+    where = 'here overview ' .. c.id
+    st.filter = 'zzzz'
+    local from = on(c.path, c.line, name_col(c.path, c.line, c.name))
+    local tab = st.tab
+    seam.here()
+    local r = valid(st.win.list) and api.nvim_win_get_cursor(st.win.list)[1]
+    if st.tab ~= tab then
+      fail 'here opened another tab, not the one seam had'
+    elseif api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'explorer' then
+      fail 'here did not show the explorer'
+    elseif st.shown ~= c or not r or st.rowc[r] ~= c then
+      fail(('the cursor is on %s, not %s'):format(st.shown and st.shown.id or 'nothing', c.id))
+    elseif st.filter ~= '' then
+      fail 'a filter hiding it stayed'
+    end
+    if st.from_tab ~= from then
+      fail 'gf would not go back to the file here came from'
+    end
+    key 'gf'
+    went('gf after here', c.path, c.line, st.win.list)
+    where = 'here page ' .. c.id
+    api.nvim_set_current_tabpage(from)
+    seam.here 'page'
+    if not (st.page and st.page.c == c and api.nvim_get_current_tabpage() == st.tab) then
+      fail 'here page did not open its page'
+    end
+    check_page()
+    key 'K'
+    if st.screen ~= 'explorer' or st.shown ~= c then
+      fail 'K from the page here opened did not come back to it in the explorer'
+    end
+    api.nvim_set_current_tabpage(from)
+    vim.cmd 'tabclose'
+    api.nvim_set_current_tabpage(st.tab)
+  end
+  -- a local function: calls of it, then called by
+  local f
+  for _, n in pairs(m.graph and m.graph.nodes or {}) do
+    if n.kind == 'function' and not n.exported and not n.test and name_col(n.path, n.line, n.name) then
+      if not f or n.id < f.id then
+        f = n
+      end
+    end
+  end
+  if f then
+    for _, how in ipairs { 'calls', 'called_by' } do
+      where = 'here ' .. how .. ' ' .. f.id
+      local from = on(f.path, f.line, name_col(f.path, f.line, f.name))
+      seam.here(how)
+      if api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'calls' or not st.calls then
+        fail(how .. ' did not open the call tree')
+      elseif st.calls.anchor ~= f.id or st.calls.dir ~= (how == 'calls' and 'down' or 'up') then
+        fail(('anchored on %s %s'):format(tostring(st.calls.anchor), st.calls.dir))
+      else
+        check_calls(true)
+      end
+      api.nvim_set_current_tabpage(from)
+      vim.cmd 'tabclose'
+      api.nvim_set_current_tabpage(st.tab)
+    end
+    key '<BS>'
+  end
+  -- a word naming nothing: the explorer, its search holding the word
+  where = 'here nothing'
+  local from = on(c and c.path or f.path, 1, 0)
+  api.nvim_buf_set_lines(0, 0, 0, false, { 'zzqqxx' })
+  api.nvim_win_set_cursor(0, { 1, 0 })
+  seam.here()
+  local ps = picker.state()
+  if not (ps and ps.query == 'zzqqxx' and st.screen == 'explorer') then
+    fail('the search does not hold the word: ' .. vim.inspect(ps, { newline = ' ', indent = '' }) .. ' ' .. tostring(st.screen))
+  end
+  key '<Esc>'
+  if picker.is_open() or st.filter ~= '' then
+    fail '<Esc> left the search or its filter'
+  end
+  if api.nvim_tabpage_is_valid(from) then
+    api.nvim_set_current_tabpage(from)
+    vim.cmd 'bwipeout!'
+    if api.nvim_get_current_tabpage() == from and #api.nvim_list_tabpages() > 1 then
+      vim.cmd 'tabclose'
+    end
+  else
+    fail 'the tab here was asked from is gone'
+  end
+  api.nvim_set_current_tabpage(st.tab)
+end
+
 io.stdout:write(('%s: %d contracts, %d keys, %d failures\n'):format(repo, #contracts, steps, #failures))
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')

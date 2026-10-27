@@ -6,11 +6,27 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 
 | Key | Does |
 |---|---|
-| `:Seam` | open the explorer in its own tab page |
+| `:Seam` | open the explorer in its own tab page; when it is open on that repo, its tab as it was |
 | `:Seam debug` | write what it knows to `stdpath('state')/seam-debug.txt` |
 | `q` | close seam |
 | `R` | ask the source again for everything shown |
 | `gf` `gd` | that place in your own code: the tab you opened seam from (if it is gone, another that is not seam's, else a new one), the file in its window, the cursor on the line, centred, the jump in the jumplist. Seam's tab stays as it was. On a row naming a function or contract, its declaration; a file, its first line, or its first use in used by; a folder, nothing; on a line of code, that line; on a head, what the screen is about |
+
+## From your code
+
+In any buffer of the repo, on a name. Seam opens on its repo (indexing it first when it has no index or an old one), or comes to its tab, and `gf` there goes back to the buffer. The word names a contract declared in the file, else one the file uses, else the only one of that name; for calls, a function, component or class the same way, local ones too, else the function the cursor is in.
+
+| Command | Suggested key | Does |
+|---|---|---|
+| `:SeamHere` `:SeamHere overview` | `<leader>kk` | the explorer, its cursor on that contract (a filter hiding it cleared). A function that is no contract: its calls. Several of that name and none here, or nothing: the search holding the word. One the lens hides says so, and searches |
+| `:SeamHere page` | `<leader>kp` | that contract's page; `K` the explorer on it. Otherwise as above, the page's `/` holding the word for several |
+| `:SeamHere calls` | `<leader>kc` | the call tree anchored on that function, down; several, the tree's `/` holding the word |
+| `:SeamHere called_by` | `<leader>kC` | the same, up |
+| `:Seam` | `<leader>ko` | seam on the repo, as it was when it is open |
+| `require('seam').from_top()` | `<leader>kt` | the call tree from where the code starts |
+| `:Seam!` | `<leader>kr` | index the repo again |
+
+The keys are not mapped by seam; the suggested ones are in the author's config.
 
 ## Explorer
 
