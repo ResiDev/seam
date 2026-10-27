@@ -64,6 +64,13 @@ local function line(text)
 end
 eq(line 'function f(a: Order, b: Cart[]): Promise<Order>', '([Order], [Cart][]) → Promise<[Order]>', 'pieces: before and after, repo types marked')
 eq(line 'const C: React.FC<Props>', 'React.FC<Props>', 'pieces: a value as it is')
+local function fitted(text, room)
+  return table.concat(vim.tbl_map(function(p)
+    return p.text
+  end, types.fit(types.pieces(types.parse(text), flows), room)))
+end
+eq(fitted('function f(a: Order, b: Cart, c: number): Promise<Order>', 30), '(Order, Car…) → Promise<Order>', 'fit: the parameters cut, the return kept')
+eq(fitted('function f(a: Order): Order', 30), '(Order) → Order', 'fit: what fits is left alone')
 
 -- a model: Order is made by placeOrder and by new in seed, taken by ship
 local m = {
