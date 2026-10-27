@@ -21,6 +21,7 @@ local ns_at = api.nvim_create_namespace 'seam.at'
 local ORDERS = explorer.ORDERS
 local TABS = { built = 'built from', used = 'used by' }
 local shape = draw.shape
+local goto_keys
 
 ---------------------------------------------------------------- windows
 
@@ -462,9 +463,7 @@ local function page_keys(buf)
   vim.keymap.set('n', 'L', M.open_lens, o)
   vim.keymap.set('n', 'q', M.close, o)
   vim.keymap.set('n', 'S', M.switch, o)
-  vim.keymap.set('n', 'gd', function()
-    M.goto_decl(st.page.c)
-  end, o)
+  goto_keys(buf)
   vim.keymap.set('n', 'R', function()
     index.load()
     show_page()
@@ -551,6 +550,7 @@ show_page = function()
     end
   end
   page.head(p)
+  goto_keys(p.buf.head)
   winopts(keep)
   vim.wo[keep].winfixheight = true
   p.win = { head = keep }
@@ -681,7 +681,7 @@ function M.page_enter()
   elseif r.meta.path then
     local us = index.uses_by_file(p.c)[r.meta.path]
     local u = us and us[p.use_i or 1] or (us and us[1])
-    vim.cmd('tabnew +' .. (u and u.line or 1) .. ' ' .. vim.fn.fnameescape(st.root .. '/' .. r.meta.path))
+    M.jump { path = r.meta.path, line = u and u.line or 1, col = u and u.col and u.col - 1 }
   end
 end
 
@@ -745,12 +745,110 @@ function M.overview()
   paint()
 end
 
---- The declaration, in a normal window.
----@param c table|nil
-function M.goto_decl(c)
-  if c then
-    vim.cmd('tabnew +' .. c.line .. ' ' .. vim.fn.fnameescape(st.root .. '/' .. c.path))
+-- the tab page to show code in: the one seam was opened from, else the
+-- first that is not seam's
+local function code_tab()
+  if st.from_tab and st.from_tab ~= st.tab and api.nvim_tabpage_is_valid(st.from_tab) then
+    return st.from_tab
   end
+  for _, t in ipairs(api.nvim_list_tabpages()) do
+    if t ~= st.tab then
+      return t
+    end
+  end
+end
+
+-- a window in the current tab page that holds a file: the current one,
+-- unless it is a float, a sidebar or a list
+local function file_win()
+  local function holds(w)
+    return api.nvim_win_get_config(w).relative == '' and vim.bo[api.nvim_win_get_buf(w)].buftype == ''
+  end
+  local cur = api.nvim_get_current_win()
+  if holds(cur) then
+    return cur
+  end
+  for _, w in ipairs(api.nvim_tabpage_list_wins(0)) do
+    if holds(w) then
+      return w
+    end
+  end
+  return cur
+end
+
+--- That place in your own code: the tab page seam was opened from (else the
+--- first that is not seam's, else a new one), the file in its window, the
+--- cursor on the line, centred, the jump in the jumplist. Seam's tab stays.
+---@param t seam.Place|nil
+function M.jump(t)
+  if not (t and t.path) then
+    api.nvim_echo({ { 'nothing here to go to', 'SeamLabel' } }, false, {})
+    return
+  end
+  local file = vim.fs.normalize(st.root .. '/' .. t.path)
+  local tab = code_tab()
+  if tab then
+    api.nvim_set_current_tabpage(tab)
+  else
+    vim.cmd 'tabnew'
+  end
+  api.nvim_set_current_win(file_win())
+  vim.cmd "normal! m'"
+  if vim.fs.normalize(api.nvim_buf_get_name(0)) ~= file then
+    if not pcall(vim.cmd.edit, vim.fn.fnameescape(file)) then
+      vim.cmd.split(vim.fn.fnameescape(file))
+    end
+  end
+  local line = math.max(1, math.min(t.line or 1, api.nvim_buf_line_count(0)))
+  local src = api.nvim_buf_get_lines(0, line - 1, line, false)[1] or ''
+  local col = t.col
+  if not col and t.name and t.name ~= '' then
+    local at = src:find('%f[%w_$]' .. vim.pesc(t.name) .. '%f[^%w_$]')
+    col = at and at - 1
+  end
+  col = math.max(0, math.min(col or #src:match '^%s*', math.max(0, #src - 1)))
+  api.nvim_win_set_cursor(0, { line, col })
+  vim.cmd 'normal! zvzz'
+end
+
+-- what the screen shown is about: the contract, the page's, the anchor
+local function subject()
+  if st.screen == 'calls' and st.calls then
+    local node = st.calls.anchor and index.model().graph.nodes[st.calls.anchor]
+    return node and { path = node.path, line = math.max(1, node.line), name = node.kind ~= 'module' and node.name or nil }
+  end
+  local c = st.screen == 'page' and st.page and st.page.c or st.screen == 'explorer' and st.shown
+  return c and { path = c.path, line = c.line, name = c.name }
+end
+
+-- the heads and the diagram: what is not a row of its own goes to what the
+-- screen is about
+local function about_subject(buf)
+  return buf == (st.buf and st.buf.lhead)
+    or buf == (st.buf and st.buf.rhead)
+    or buf == (st.buf and st.buf.diag)
+    or buf == (st.page and st.page.buf and st.page.buf.head)
+    or buf == (st.cbuf and st.cbuf.head)
+end
+
+--- gf: that place in your own code, from the line under the cursor. A row
+--- naming a function, contract or file, its declaration or the file; a line
+--- of code, that line; a head, what the screen is about.
+function M.gf()
+  local buf = api.nvim_get_current_buf()
+  local cur = api.nvim_win_get_cursor(0)
+  local t = draw.at(buf, cur[1], cur[2])
+  if not t and about_subject(buf) then
+    t = subject()
+  end
+  M.jump(t)
+end
+
+-- gf and gd, the same jump, in a buffer of seam's
+goto_keys = function(buf)
+  local o = { buffer = buf, nowait = true, silent = true }
+  vim.keymap.set('n', 'gf', M.gf, o)
+  vim.keymap.set('n', 'gd', M.gf, o)
 end
 
 --- The next source, on the same contract.
@@ -1064,15 +1162,7 @@ local function calls_keys(buf)
   vim.keymap.set('n', '<Up>', press 'k', o)
   vim.keymap.set('n', 'J', calls_page, o)
   vim.keymap.set('n', '-', calls_overview, o)
-  vim.keymap.set('n', 'gd', function()
-    local g = index.model().graph
-    local x = st.calls_rows and st.calls_rows.rows[calls_at()]
-    local id = x and x.id or st.calls.anchor
-    local node = id and g.nodes[id]
-    if node then
-      M.goto_decl { path = node.path, line = math.max(1, node.line) }
-    end
-  end, o)
+  goto_keys(buf)
   vim.keymap.set('n', 'q', M.close, o)
 end
 
@@ -1102,6 +1192,7 @@ local function calls_code_keys(buf)
   vim.keymap.set('n', '<BS>', back, o)
   vim.keymap.set('n', '-', calls_overview, o)
   vim.keymap.set('n', 'q', M.close, o)
+  goto_keys(buf)
 end
 
 --- The Calls screen on a function, component or class by id, or from the top.
@@ -1125,6 +1216,7 @@ function M.open_calls(id)
     calls_code_keys(st.cbuf.code)
     for _, b in ipairs { st.cbuf.head } do
       vim.keymap.set('n', 'q', M.close, { buffer = b, nowait = true, silent = true })
+      goto_keys(b)
       -- nothing to do in the head: the cursor goes back to the tree
       api.nvim_create_autocmd('WinEnter', {
         group = aug,
@@ -1271,9 +1363,7 @@ local function explorer_keys(buf)
   end, o)
   -- the top level: nothing above it, and no hover from another plugin's K
   vim.keymap.set('n', 'K', '<Nop>', o)
-  vim.keymap.set('n', 'gd', function()
-    M.goto_decl(st.shown)
-  end, o)
+  goto_keys(buf)
   vim.keymap.set('n', 'S', M.switch, o)
   vim.keymap.set('n', 'L', M.open_lens, o)
   vim.keymap.set('n', 'q', M.close, o)
@@ -1323,6 +1413,11 @@ function M.open(root)
   st.cur = st.cur and st.models[st.cur] and st.cur or (vim.tbl_contains(st.names, 'treesitter') and 'treesitter' or st.names[1])
   theme.assign(index.model(), dir .. '/hues.json')
   st.stack, st.page, st.shown = {}, nil, nil
+  -- the tab page gf goes back to, to show the code
+  local from = api.nvim_get_current_tabpage()
+  if from ~= st.tab then
+    st.from_tab = from
+  end
   vim.cmd 'tabnew'
   st.tab = api.nvim_get_current_tabpage()
   local blank = api.nvim_get_current_buf()
@@ -1340,6 +1435,7 @@ function M.open(root)
     local o = { buffer = b, nowait = true, silent = true }
     vim.keymap.set('n', 'q', M.close, o)
     vim.keymap.set('n', 'S', M.switch, o)
+    goto_keys(b)
   end
   api.nvim_create_autocmd('CursorMoved', { group = aug, buffer = st.buf.list, callback = M.on_move })
   api.nvim_create_autocmd('WinScrolled', {

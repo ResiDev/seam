@@ -9,6 +9,8 @@ local M = {}
 
 M.ns = api.nvim_create_namespace 'seam'
 local ns_cursor = api.nvim_create_namespace 'seam.cursor'
+-- buffer -> the meta of each row put in it, for what `at` reads
+local metas = {}
 
 local function width(s)
   if s:find '[\128-\255]' then
@@ -121,7 +123,9 @@ function M.put(buf, rows)
   api.nvim_buf_clear_namespace(buf, code.ns, 0, -1)
   api.nvim_buf_clear_namespace(buf, ns_cursor, 0, -1)
   local codes = {}
+  metas[buf] = {}
   for i, r in ipairs(rows) do
+    metas[buf][i] = r.meta
     local row0 = i - 1
     for _, h in ipairs(r.h) do
       local e = math.min(h[2], #lines[i])
@@ -142,6 +146,65 @@ function M.put(buf, rows)
     end
   end
   code.track(buf, codes)
+end
+
+---@class seam.Place
+---@field path string relative to the repo root
+---@field line integer
+---@field col integer|nil 0-based, the byte the cursor goes to
+---@field name string|nil a name on the line to put the cursor on, without `col`
+
+-- a span of copied code as a place: a line copied, its byte under `cur`
+-- (the start of the copy when the cursor is left of it); a name, its
+-- declaration
+local function span_place(c, cur)
+  if type(c[3]) == 'string' then
+    return { path = c[1], line = c[2], name = c[3] }
+  end
+  return { path = c[1], line = c[2], col = c[3] + math.max(0, math.min((cur or c[4]) - c[4], c[5])) }
+end
+
+--- Where row `lnum` of `buf` is in the code, the cursor on byte `col`: the
+--- place its row was drawn with; else the source line copied there, or the
+--- declaration of the name under the cursor; else what the row stands for
+--- (a contract, a dependency, a file, at its first use when it lists uses);
+--- else the first line or name copied onto it. Nil for a folder, a blank,
+--- a title.
+---@param buf integer
+---@param lnum integer 1-based
+---@param col integer 0-based
+---@return seam.Place|nil
+function M.at(buf, lnum, col)
+  local meta = (metas[buf] or {})[lnum] or {}
+  if meta.at ~= nil then
+    return meta.at or nil
+  end
+  local spans = code.spans(buf, lnum - 1)
+  for _, c in ipairs(spans) do
+    if col >= c[4] and col < c[4] + c[5] then
+      return span_place(c, col)
+    end
+  end
+  local d = meta.dep
+  if d and type(d.target) == 'string' and index.id_path(d.target) then
+    return { path = index.id_path(d.target), line = index.id_line(d.target), name = d.target:match '[^:]*$' }
+  elseif meta.c then
+    return { path = meta.c.path, line = meta.c.line, name = meta.c.name }
+  elseif meta.kind == 'file' and meta.path then
+    local u = type(meta.payload) == 'table' and meta.payload[1]
+    if type(u) == 'table' and u.line then
+      return { path = meta.path, line = u.line, col = u.col and u.col - 1 }
+    end
+    return { path = meta.path, line = 1 }
+  elseif meta.kind == 'dir' then
+    return nil
+  end
+  for _, c in ipairs(spans) do
+    if type(c[3]) ~= 'string' then
+      return span_place(c, col)
+    end
+  end
+  return spans[1] and span_place(spans[1])
 end
 
 --- Light the line the cursor is on in `win`, every row it wraps to.

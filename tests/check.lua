@@ -47,6 +47,21 @@ local function valid(w)
   return w and api.nvim_win_is_valid(w)
 end
 
+-- gf took you to `path` at `line` in a tab that is not seam's; then back to
+-- seam's tab, the cursor in `win`
+local function went(what, path, line, win)
+  local name, at = api.nvim_buf_get_name(0), api.nvim_win_get_cursor(0)[1]
+  if api.nvim_get_current_tabpage() == st.tab then
+    fail(what .. ': gf stayed in seam')
+  elseif name:sub(-#path - 1) ~= '/' .. path or at ~= line then
+    fail(('%s: gf went to %s:%d, not %s:%d'):format(what, name, at, path, line))
+  end
+  api.nvim_set_current_tabpage(st.tab)
+  if valid(win) then
+    api.nvim_set_current_win(win)
+  end
+end
+
 -- the windows on screen are the ones the pane choice says
 local function check_page()
   local p = st.page
@@ -617,6 +632,14 @@ do
       api.nvim_set_current_win(st.win.list)
       return screen.find(c.name, c.path)
     end
+    -- gf on a contract in the explorer: its declaration in your own tab
+    local first = st.models[st.cur].contracts[1]
+    if first and on_screen(first) then
+      where = 'explorer gf'
+      local c = st.shown
+      key 'gf'
+      went('gf on ' .. c.name, c.path, c.line, st.win.list)
+    end
     local list = {}
     for _, c in ipairs(st.models[st.cur].contracts) do
       if g.nodes[c.id] and #(g.down[c.id] or {}) > 0 then
@@ -822,6 +845,26 @@ do
         end
         key 'n'
         check_code(ci)
+        -- gf on the row: createRun's declaration in your own tab
+        where = 'calls raf-run-redesign gf'
+        key 'gf'
+        went('gf on createRun', 'packages/core/src/run/run.ts', 75, st.cwin.list)
+        -- gf in the code beside it: the line under the cursor, the call
+        p = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, ci, st.models[st.cur])
+        u = p and p.places[p.n]
+        local from = u and st.models[st.cur].graph.nodes[u.from]
+        local row
+        for j, l in ipairs(api.nvim_buf_get_lines(st.cbuf.code, 0, -1, false)) do
+          row = row or (tonumber(l:match '^%s*(%d+)  ') == (u and u.line) and j) or nil
+        end
+        if not (from and row) then
+          fail 'the code beside createRun does not show its call'
+        else
+          key '<C-w>l'
+          api.nvim_win_set_cursor(st.cwin.code, { row, 0 })
+          key 'gf'
+          went('gf in the code', from.path, u.line, st.cwin.list)
+        end
         key '<BS>'
       end
       -- a lens hiding react in used by: createRun's callers leave useOwnedRun
@@ -971,13 +1014,12 @@ for ci, c in ipairs(contracts) do
       end
       if ci % 11 == 0 and st.page.tab == 'used' then
         where = c.id .. ' open a user file'
+        local path = st.page.rows[api.nvim_win_get_cursor(st.page.win.list)[1]].meta.path
         key '<CR>'
-        if api.nvim_get_current_tabpage() ~= st.tab then
-          vim.cmd 'tabclose'
-          api.nvim_set_current_tabpage(st.tab)
-        else
-          fail '<CR> on a user file opened nothing'
+        if api.nvim_get_current_tabpage() == st.tab or not api.nvim_buf_get_name(0):find(path, 1, true) then
+          fail '<CR> on a user file did not show it in your own tab'
         end
+        api.nvim_set_current_tabpage(st.tab)
         if st.page and valid(st.page.win.list) then
           api.nvim_set_current_win(st.page.win.list)
         end

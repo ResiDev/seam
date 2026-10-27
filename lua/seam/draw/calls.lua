@@ -198,7 +198,14 @@ function M.list(buf, g, view, r)
   for i, x in ipairs(r.rows) do
     local node = x.id and g.nodes[x.id]
     local pkg = x.pkg or (x.path and index.pkg_of(m, x.path))
-    local d = row { i = i, key = x.key }
+    -- where gf goes: a function's declaration, a file's first line, a folder nowhere
+    local at = false
+    if node then
+      at = { path = node.path, line = math.max(1, node.line), name = node.kind ~= 'module' and node.name or nil }
+    elseif x.kind == 'file' and x.path then
+      at = { path = x.path, line = 1 }
+    end
+    local d = row { i = i, key = x.key, at = at }
     if x.kind == 'dir' and not x.touched then
       d:add ' '
     else
@@ -237,7 +244,7 @@ function M.list(buf, g, view, r)
     out[#out + 1] = d
   end
   if #r.rows == 0 then
-    out[#out + 1] = row():add('  calls nothing', 'SeamLabel')
+    out[#out + 1] = row({ at = false }):add('  calls nothing', 'SeamLabel')
   end
   draw.put(buf, out)
 end

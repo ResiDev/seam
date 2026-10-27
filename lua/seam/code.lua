@@ -186,6 +186,17 @@ function M.track(buf, rows)
   shown[buf] = { rows = rows, painted = {} }
 end
 
+--- The spans of copied code on 0-based row `row0` of `buf`: each
+--- `{ path, lnum, from, at, len }`, `from` the source byte the copy starts
+--- at, or the name it copies, and `at` where it sits in the row.
+---@param buf integer
+---@param row0 integer
+---@return table[]
+function M.spans(buf, row0)
+  local C = shown[buf]
+  return C and C.rows[row0] or {}
+end
+
 --- Paint the code rows in view in `win`, and a screen above and below.
 ---@param win integer
 function M.paint_win(win)
