@@ -312,10 +312,11 @@ function M.types(root, again)
   if again then
     refused[root] = nil
   end
-  if asking[root] or refused[root] or not vim.uv.fs_stat(out .. '/treesitter.json') then
+  if asking[root] or not vim.uv.fs_stat(out .. '/treesitter.json') then
     return
   end
   if not again and vim.uv.fs_stat(out .. '/types.json') then
+    refused[root] = nil
     -- written while these models were loaded without it
     if st.root == root then
       for _, m in pairs(st.models) do
@@ -326,9 +327,13 @@ function M.types(root, again)
     end
     return
   end
+  if refused[root] then
+    return
+  end
   asking[root] = true
   local script = ROOT .. '/scripts/types.lua'
-  local tmp = out .. '/types.json.part'
+  -- its own file, so two editors asking at once don't take each other's
+  local tmp = ('%s/types.json.%d.part'):format(out, vim.uv.os_getpid())
   vim.system({ vim.v.progpath, '--headless', '--clean', '-l', script, root, out .. '/treesitter.json', tmp }, { text = true }, function(res)
     vim.schedule(function()
       asking[root] = nil
