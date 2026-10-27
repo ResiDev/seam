@@ -1405,10 +1405,20 @@ end
 ---@return table|nil
 function M.typed_model()
   local m = index.model()
+  if not (m and m.flows) and st.root then
+    index.types(st.root)
+    m = index.model()
+  end
   if m and m.flows then
     return m
   end
-  say(index.asking_types(st.root) and 'no types yet: the TypeScript server is being asked' or 'no types: the TypeScript server gave none for this repo')
+  if index.asking_types(st.root) then
+    say 'no types yet: the TypeScript server is being asked, and the screen redraws when they land'
+  elseif index.types_refused(st.root) then
+    say 'no types: the TypeScript server did not answer for this repo; :Seam! asks again'
+  else
+    say 'no types: this repo has no call graph to type; :Seam! indexes it again'
+  end
 end
 
 --- The flow of contract `c`, when it is a type some function takes or makes.

@@ -292,19 +292,38 @@ function M.asking_types(root)
   return asking[root] == true
 end
 
+--- Did the TypeScript server fail to answer for the repo this session?
+---@param root string
+---@return boolean
+function M.types_refused(root)
+  return refused[root] == true
+end
+
 --- Ask the TypeScript server what each callable is, in a headless Neovim of
 --- its own, writing `types.json` beside the treesitter index; once it lands
 --- the loaded models have their types and the screen shown is drawn again.
 --- Unless `again`, only when there is no `types.json` yet. A server that
---- will not answer is said once, and not asked again this session.
+--- will not answer is said once, and not asked again this session unless
+--- `again`.
 ---@param root string
 ---@param again? boolean
 function M.types(root, again)
   local out = M.dir(root)
+  if again then
+    refused[root] = nil
+  end
   if asking[root] or refused[root] or not vim.uv.fs_stat(out .. '/treesitter.json') then
     return
   end
   if not again and vim.uv.fs_stat(out .. '/types.json') then
+    -- written while these models were loaded without it
+    if st.root == root then
+      for _, m in pairs(st.models) do
+        if not m.flows then
+          M.attach_types(m, out)
+        end
+      end
+    end
     return
   end
   asking[root] = true

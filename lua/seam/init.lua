@@ -43,6 +43,7 @@ function M.start(root, opts)
   local from = api.nvim_get_current_tabpage()
   local function show()
     screen.open(root)
+    index.types(root)
     if not (st.tab and api.nvim_tabpage_is_valid(st.tab) and st.root == root and st.screen) then
       return
     end
