@@ -1035,10 +1035,14 @@ function M.calls_status()
   end
   local p = calls.pane(g, v, r, x and i or nil, index.model())
   local swap = {}
-  if p and #p.places > 0 then
-    swap = { '<Tab> ' .. (p.code == 'called' and 'itself' or 'called at'), 'n/N ' .. (p.code == 'called' and 'place' or 'call') }
-  elseif p and #p.lines > 0 then
-    swap = { 'n/N call' }
+  if p and #calls.codes(p) > 1 then
+    local words = { types = 'types', called = 'called at', itself = 'itself' }
+    swap = { '<Tab> ' .. words[calls.next_code(p)] }
+  end
+  if p and p.code == 'called' then
+    swap[#swap + 1] = 'n/N place'
+  elseif p and p.code == 'itself' and #p.lines > 0 then
+    swap[#swap + 1] = 'n/N call'
   end
   if calls_valid() and api.nvim_get_current_win() == st.cwin.code then
     return left, table.concat(vim.list_extend(swap, { '<Esc> the tree', 'K back', '- explorer', 'q close' }), '   ')

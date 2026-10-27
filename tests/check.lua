@@ -517,13 +517,23 @@ check_code = function(i)
   local text = table.concat(lines, '\n')
   local what = p.node.id .. ' (' .. p.code .. ')'
   if #p.places == 0 then
-    if p.code ~= 'itself' or not text:find('nothing calls it', 1, true) then
+    if p.code == 'called' or not text:find('nothing calls it', 1, true) then
       fail(what .. ': nothing calls it, and the code does not say so')
     end
-  elseif p.code ~= st.calls.code then
+  elseif st.calls.code and p.code ~= st.calls.code and vim.tbl_contains(calls.codes(p), st.calls.code) then
     fail(what .. ': the code is not the view chosen, ' .. st.calls.code)
   end
-  if p.code == 'called' then
+  if p.code == 'types' then
+    local named = m.sigs[p.node.id] and require('seam.types').named(m.sigs[p.node.id], m.flows) or {}
+    for _, n in ipairs(named) do
+      if not text:find('%f[%w]' .. vim.pesc(n) .. '   ' .. m.flows[n].decls[1].kind .. ' in ') then
+        fail(what .. ': no declaration of ' .. n)
+      end
+    end
+    if #named == 0 and not (text:find('no type of the repo', 1, true) or text:find('said nothing of it', 1, true)) then
+      fail(what .. ': no types, and the code does not say so')
+    end
+  elseif p.code == 'called' then
     local u = p.places[p.n]
     local real = false
     for _, e in ipairs(g.up[p.node.id] or {}) do
@@ -568,24 +578,32 @@ local function swap()
       end
     end
   end
-  for _, code_ in ipairs { 'itself', 'called' } do
-    local was = st.calls.code
+  for _ = 1, 3 do
+    local before = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, api.nvim_win_get_cursor(st.cwin.list)[1], st.models[st.cur])
+    if not before then
+      return
+    end
+    local code_ = calls.next_code(before)
     key '<Tab>'
-    if st.calls.code == was or st.calls.code ~= code_ then
-      fail('<Tab> did not swap to ' .. code_)
+    if st.calls.code ~= code_ then
+      fail('<Tab> did not go to ' .. code_ .. ' from ' .. before.code)
     end
     check_calls(false)
-    step 'n'
-    step 'n'
-    step 'N'
-    step(']]', true)
-    step('[[', true)
+    if code_ ~= 'types' then
+      step 'n'
+      step 'n'
+      step 'N'
+      step(']]', true)
+      step('[[', true)
+    end
     key 'j'
     if st.calls.code ~= code_ then
       fail('j did not keep ' .. code_)
     end
     check_calls(false)
-    step 'N'
+    if code_ ~= 'types' then
+      step 'N'
+    end
   end
 end
 

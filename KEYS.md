@@ -90,7 +90,7 @@ The call tree of a function, component or class: what it calls all the way down,
 | `-` | straight to the explorer, on the anchor when it is a contract |
 | `C` | from the top |
 | `L` | the lens: calls follow its built from column, callers its used by, the starts its contracts; what it hides has no row, the head counts it after the tabs (from the top, on its first line), `+12 hidden  L lens` |
-| `<Tab>` | the code beside the tree: where the row's function is called, or itself. The choice stays as the cursor moves, across anchors and back; what nothing calls shows itself |
+| `<Tab>` | the code beside the tree: the types the row's function takes and gives, each its declaration (once the repo has types, and first); where it is called; or itself. The choice stays as the cursor moves, across anchors and back; what nothing calls shows its types or itself |
 | `n` `N` | Called at: the next or previous place it is called, round the ends. Itself: the next or previous line that calls something, lit. A count skips. In the code beside it, `]]` `[[` |
 | `gf` `gd` | in your own code: on a row, its function's declaration, or a file's first line; in the code beside, the line under the cursor |
 | `q` | close |
