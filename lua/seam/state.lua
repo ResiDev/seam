@@ -11,5 +11,6 @@ return {
   panes = { built = 'both', used = 'seam' }, -- a page's panes per tab: 'both', 'contract' or 'seam'
   built_as = 'code', -- Built from as 'code', the contract with its names marked, or as a 'list'
   stack = {}, -- what K comes back to from the page shown: pages ({ kind = 'page', c, ... }), and under them the Calls screen J left ({ kind = 'calls', calls, top, label })
+  -- tab: seam's tab page; from_tab: the one it was opened from, where gf shows the code
   -- calls: the Calls screen's view (seam.CallsView), calls_rows its rows as drawn
 }

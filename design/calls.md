@@ -152,7 +152,7 @@ way.
 | `L` | the lens; closed, the tree redraws with it, as it was, the count of what it hides in the head |
 | `<Tab>` | the code beside: called at, itself |
 | `n` `N` | called at: the next or previous place; itself: the next or previous call. In the code, `]]` `[[` |
-| `gd` | the declaration, in a normal window |
+| `gf` `gd` | in your own code, in the tab you opened seam from: on a row its declaration, in the code beside the line under the cursor |
 | `q` | close |
 
 ![Called by](mocks/calls-up.png)

@@ -10,6 +10,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `:Seam debug` | write what it knows to `stdpath('state')/seam-debug.txt` |
 | `q` | close seam |
 | `R` | ask the source again for everything shown |
+| `gf` `gd` | that place in your own code: the tab you opened seam from (if it is gone, another that is not seam's, else a new one), the file in its window, the cursor on the line, centred, the jump in the jumplist. Seam's tab stays as it was. On a row naming a function or contract, its declaration; a file, its first line, or its first use in used by; a folder, nothing; on a line of code, that line; on a head, what the screen is about |
 
 ## Explorer
 
@@ -26,7 +27,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `L` | the lens: what the explorer and pages show |
 | `c` | the calls of the contract under the cursor, down from it |
 | `C` | the calls from the top: where the code starts |
-| `gd` | the declaration, in a normal window |
+| `gf` `gd` | in your own code: on the list, the contract's declaration; in a tree, the name's under the cursor, or the file (used by: at its first use); on the head, the contract's, or the line of its signature under the cursor |
 
 ## A contract's page
 
@@ -40,8 +41,8 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `s` | as a list: only the seam; again, the contract and the seam |
 | `]]` `[[` | Used by: the next or previous use in this file |
 | `J` | down a level: Built from, enter the page of the dependency shown. Nothing on Used by |
-| `<CR>` | Built from: enter the page of the dependency shown. Used by: open the file at the use |
-| `gd` | the declaration, in a normal window |
+| `<CR>` | Built from: enter the page of the dependency shown. Used by: the file at the use, in your own code, as `gf` does |
+| `gf` `gd` | in your own code: on the list, the dependency's declaration or the user file at its first use; in the code, the line under the cursor; on the head, the contract's declaration |
 | `K` `<BS>` | up a level: the previous page, the Calls screen it was opened from, or the explorer |
 | `-` | straight to the explorer from any depth, on this contract |
 | `L` | the lens |
@@ -68,12 +69,12 @@ The call tree of a function, component or class: what it calls all the way down,
 | `L` | the lens: calls follow its built from column, callers its used by, the starts its contracts; what it hides has no row, the head counts it after the tabs (from the top, on its first line), `+12 hidden  L lens` |
 | `<Tab>` | the code beside the tree: where the row's function is called, or itself. The choice stays as the cursor moves, across anchors and back; what nothing calls shows itself |
 | `n` `N` | Called at: the next or previous place it is called, round the ends. Itself: the next or previous line that calls something, lit. A count skips. In the code beside it, `]]` `[[` |
-| `gd` | the declaration, in a normal window |
+| `gf` `gd` | in your own code: on a row, its function's declaration, or a file's first line; in the code beside, the line under the cursor |
 | `q` | close |
 
 `]` and `[` wait for a second `]` or `[` before going to the sibling.
 
-The head gives the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, `<Tab>` does as in the tree, `]]` `[[` as `n` `N` do there, with the cursor on the line lit, and `K` `<BS>` `-` `q` do as in the tree.
+The head gives the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, `<Tab>` does as in the tree, `]]` `[[` as `n` `N` do there, with the cursor on the line lit, and `K` `<BS>` `-` `q` do as in the tree; `gf` goes to the line under the cursor in your own code.
 
 ## The lens
 
