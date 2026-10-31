@@ -46,8 +46,9 @@ def folder_count(prefix):
     paths = set(p for p in list(ND) + list(BD) if p.startswith(prefix) and not p.endswith((".test.ts", ".perf.ts")))
     return sum(1 for p in paths if file_state(p))
 
+GIT0 = True
 WORD = {"new": "new", "gone": "gone", "signature": "signature changed", "body": "body changed", "changed": "changed"}
-SIGN = {"new": ("gr", "+"), "gone": ("rd", "-"), "signature": ("or", "●"), "body": ("ye", "~"), "changed": ("ye", "~")}
+SIGN = {"new": ("gr", "+"), "gone": ("rd", "_"), "signature": ("ye", "~"), "body": ("ye", "~"), "changed": ("ye", "~")}
 COL = {"new": "gr", "gone": "rd st", "signature": "or", "body": "ye", "changed": "ye"}
 
 def name_seg(n, kind, st, mode, dim):
@@ -195,6 +196,116 @@ for path, ns in [("run/run.ts", [93]), ("checklists/checklists.ts", [178, 180]),
     ub.append((s("", "   ") + s("fg", path) + s("c", "   " + what), ""))
     for n in ns: ub.append(place(path, n, BASE))
     ub.append(blank()[0])
-screen("changed-lens", [blank()[0]] + tree_rows("word", LW, "storageFailed", only=True), ub, LW,
+screen("changed-lens", [blank()[0]] + tree_rows("sign", LW, "storageFailed", only=True), ub, LW,
        "only what changed   storageFailed()  used by", "problems.ts › storageFailed()")
 print("ok")
+
+# ── round two: gitsigns in the tree, CodeDiff's inline diff in the pane ─
+lib.SHOT_CSS += (" .nv .dl{background:#3b2230;color:#b8a0a8} .nv .dlx{background:#6e2a3a;color:#e8c8d0}"
+                 " .nv .ax{background:#2c5a4a} .nv .ad{background:#1d3a35}")
+GIT = {"new": ("gr", "+"), "gone": ("rd", "_"), "signature": ("ye", "~"), "body": ("ye", "~"), "changed": ("ye", "~")}
+SIGN.update(GIT)
+
+import re as _re
+def chars(a, b):
+    """the spans of a and of b that differ, word by word, as (start, end) lists"""
+    ta = [m for m in _re.finditer(r"\w+|\s+|[^\w\s]", a)]
+    tb = [m for m in _re.finditer(r"\w+|\s+|[^\w\s]", b)]
+    sa, sb = [], []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, [m.group() for m in ta], [m.group() for m in tb], autojunk=False).get_opcodes():
+        if tag != "equal":
+            for toks, x1, x2, out in ((ta, i1, i2, sa), (tb, j1, j2, sb)):
+                while x1 < x2 and not toks[x1].group().strip(): x1 += 1
+                while x2 > x1 and not toks[x2 - 1].group().strip(): x2 -= 1
+                if x2 > x1: out.append((toks[x1].start(), toks[x2 - 1].end()))
+    return sa, sb
+
+def spans(text, marks, base, strong):
+    out, k = [], 0
+    for i, j in marks:
+        if i > k: out.append((base, text[k:i]))
+        out.append((strong, text[i:j])); k = j
+    if k < len(text): out.append((base, text[k:]))
+    return out
+
+def inline(base, now, n0, collapse, ctx=3):
+    """CodeDiff's inline layout: removed lines as lines without numbers above, added on green;
+    collapse folds every run of unchanged lines longer than twice the context"""
+    rows = []
+    ops = difflib.SequenceMatcher(None, base, now, autojunk=False).get_opcodes()
+    for oi, (tag, a1, a2, c1, c2) in enumerate(ops):
+        if tag == "equal":
+            ks = list(range(c1, c2))
+            if collapse:
+                head = ks[:ctx] if oi > 0 else []
+                tail = ks[-ctx:] if oi < len(ops) - 1 else []
+                if len(ks) > len(head) + len(tail) + 1:
+                    for k in head: rows.append((s("", " ") + s("c", str(n0 + k).rjust(4)) + s("", "  ") + ts(now[k]), ""))
+                    hidden = len(ks) - len(head) - len(tail)
+                    rows.append((s("", "      ") + s("d3", f"⋯ {hidden} lines unchanged"), ""))
+                    for k in tail: rows.append((s("", " ") + s("c", str(n0 + k).rjust(4)) + s("", "  ") + ts(now[k]), ""))
+                    continue
+            for k in ks: rows.append((s("", " ") + s("c", str(n0 + k).rjust(4)) + s("", "  ") + ts(now[k]), ""))
+            continue
+        old, new = base[a1:a2], now[c1:c2]
+        pairs = min(len(old), len(new)) if tag == "replace" else 0
+        for i, t in enumerate(old):
+            m = chars(t, new[i])[0] if i < pairs else []
+            r = s("dl", "       ") + spans(t, m, "dl", "dlx")
+            rows.append((r + s("dl", " " * max(0, PW - lib.width(r))), ""))
+        for i, t in enumerate(new):
+            m = chars(old[i], t)[1] if i < pairs else []
+            r = s("ad", " ") + s("ad c", str(n0 + c1 + i).rjust(4)) + s("ad", "  ")
+            r += [(c + " ad", x) for c, x in ts(t)] if not m else spans(t, m, "ad", "ax")
+            rows.append((r + s("ad", " " * max(0, PW - lib.width(r))), ""))
+    return rows
+
+RANGE = s("c", "   changes ") + s("y", BASE_NAME) + s("c", " → ") + s("y", "now")
+def screen2(name, left, right, lw, status, trail, keys="<Tab> view   <C-Tab> display   ]c [c next change   gc only changed   L lens"):
+    hd = [(s("c", " Seams › ") + s("fg bold", trail) + RANGE, ""), (s("d3", "─" * W), "")]
+    n = max(len(left), len(right)) + 1
+    lib.write_shot(name, compose(hd, [(left + blank(n - len(left)), lw), (right + blank(n - len(right)), W - lw - 1)], status, keys))
+
+LW3 = 46
+PW = W - LW3 - 1
+def fpane(display):
+    return head(s("fg bold", "problems.ts"), "file in packages/core/src/") + [tabs(VIEWS, "Changed"),
+            (s("", " ") + s("c", "display  ") + s("fg", display), ""), blank()[0]]
+screen2("changed-signs", [blank()[0]] + tree_rows("sign", LW3, "problems.ts", opened=("problems.ts", "storage/adapter.ts")),
+        fpane("changes only") + inline(pb, pn, 1, True)[:60], LW3, "problems.ts  changed · changes only", "problems.ts")
+screen2("changed-signs-only", [blank()[0]] + tree_rows("sign", LW3, "problems.ts", only=True, opened=("problems.ts", "storage/adapter.ts")),
+        fpane("changes only") + inline(pb, pn, 1, True)[:60], LW3, "only what changed   problems.ts  changes only", "problems.ts")
+screen2("changed-whole", [blank()[0]] + tree_rows("sign", LW3, "problems.ts", opened=("problems.ts",)),
+        fpane("whole file") + inline(pb, pn, 1, False)[:60], LW3, "problems.ts  changed · whole file", "problems.ts")
+
+# the lens, the range on its first rows
+def lens_float():
+    w = 100
+    def r(*segs): return (s("", " ") + sum(segs, []), "")
+    rows = [r(s("c", "")),
+            r(s("fg bold", "changes"), s("c", "   from  "), s("y", "HEAD"), s("c", "   to  "), s("y", "working tree"), s("c", "      what the signs and ]c [c follow")),
+            r(s("c", "")),
+            r(s("c", " " * 44 + "contracts  built from  used by")),
+            r(s("", "  "), s("pr", "*.test.*"), s("c", " " * 26 + "12"), s("c", "       ·        hide       hide")),
+            r(s("", "  "), s("fg", "e2e/"), s("c", " " * 30 + " 9"), s("c", "      hide      hide       hide")),
+            r(s("", "  "), s("b", "+ add: pick folders and files, or type a pattern")),
+            r(s("c", "")),
+            r(s("c", "  on changes: "), s("fg", "f"), s("c", " from  "), s("fg", "t"), s("c", " to   a branch, a tag, a hash, HEAD~3; "), s("fg", "x"), s("c", " back to HEAD → working tree")),
+            r(s("c", ""))]
+    return rows, w
+lrows, lw_ = lens_float()
+base_left = [blank()[0]] + tree_rows("sign", LW3, "problems.ts", opened=("problems.ts",))
+right = fpane("changes only") + inline(pb, pn, 1, True)[:40]
+n = max(len(base_left), len(right)) + 1
+L2, R2 = base_left + blank(n - len(base_left)), right + blank(n - len(right))
+# draw the float over the middle: rows 4.. of the composite, columns 30..
+hd = [(s("c", " Seams › ") + s("fg bold", "problems.ts") + s("c", "   changes ") + s("y", "HEAD") + s("c", " → ") + s("y", "working tree"), ""), (s("d3", "─" * W), "")]
+body = compose(hd, [(L2, LW3), (R2, W - LW3 - 1)], "lens", "j k row   f from   t to   x reset   q close")
+import html as H
+lines = body.split("\n")
+top = 5
+box = ["╭─ lens " + "─" * (lw_ - 8) + "╮"] + ["│" + lib.html_row(rw, lw_) + "│" for rw, _ in lrows] + ["╰" + "─" * lw_ + "╯"]
+for i, b in enumerate(box):
+    lines[top + i] = '<span class="d3">' + " " * 30 + "</span>" + (f'<span class="fg">{b}</span>' if i in (0, len(box) - 1) else '<span class="fg">│</span>' + b[1:-1] + '<span class="fg">│</span>') + '<span>' + " " * (W - 30 - lw_ - 2) + "</span>"
+lib.write_shot("changed-range", "\n".join(lines))
+print("round two ok")

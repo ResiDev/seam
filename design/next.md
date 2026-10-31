@@ -286,24 +286,48 @@ Open:
 
 ## What changed (git)
 
-Pick a base, such as `master` or a commit. Then:
+A range of git, `from` and `to`. By default from `HEAD` to the working
+tree: what isn't committed yet. Then:
 
-- **The tree marks what changed.** A file, function or type whose lines
-  changed since the base is marked. A function whose signature changed is
-  marked differently from one whose body changed. That's measured by
-  parsing the base's version of the file (`git show base:path`) with
-  treesitter and comparing what it takes and gives.
-- **A lens, "only what changed".** The tree keeps only the changed rows and
-  the folders and files above them.
-- **The Changed view** shows a row's diff.
-- **Used by on a changed function** is what the change can break. A
-  changed signature with three callers lists those three, with the code at
-  each.
+- **The range lives in the lens** (`L`), on its first row, above the
+  rules: `changes  from HEAD  to working tree`. `f` and `t` on that row take
+  a branch, a tag, a hash or `HEAD~3`; `x` goes back to the default. The
+  head names the range when it isn't the default
+  (`mocks/changed-range.png`).
+- **The tree carries git signs,** in the left column, as gitsigns draws
+  them in the code: `+` new, `~` changed, `_` gone (a declaration gone
+  keeps its row, struck through, where it was). A folder or file is `~`
+  when anything under it changed, `+` when it's new. No words after the
+  rows. The signs follow the range: an empty range, no signs, so they need
+  no key to hide them (`mocks/changed-signs.png`).
+- **`gc` keeps only what changed** in the tree: the changed rows and the
+  folders and files above them (`mocks/changed-signs-only.png`). It works
+  on the tree whatever view is shown, and `gc` again shows everything.
+- **`]c` and `[c`** go to the next and previous change: in the tree, the
+  next changed row; in the pane, the next change in its diff. Your
+  gitsigns keys.
+- **The Changed view is CodeDiff's inline diff,** drawn into the pane:
+  codediff.nvim's `compute_diff` and `render_inline_diff`, which draw into
+  any buffer. Without codediff, Vim's own `vim.text.diff` and seam's
+  drawing in the same shape. Removed lines show where they were, unnumbered
+  on red; added on green; the words that changed in each lit stronger.
+- **Its displays:** changes only, the default, every run of unchanged lines
+  folded to `⋯ 12 lines unchanged` with three lines kept around each change
+  (`mocks/changed-signs.png`); and the whole file
+  (`mocks/changed-whole.png`). codediff has no folding (its roadmap lists
+  it), so the folds are seam's.
+- **On a function or type,** the Changed view is its lines alone; on a
+  file, the file; on a folder, its changed files one after another.
+- **Used by on a changed function** lists who uses it now, then who used
+  it at `from`. storageFailed lost its first parameter: five places in
+  three files called it before, two in a new file now
+  (`mocks/changed-lens.png`). A changed signature, against a changed body,
+  is told by parsing `from`'s version of the file (`git show from:path`)
+  with treesitter and comparing what it takes and gives; the pane's head
+  says which.
 
 That's the check you do on an agent's work, on the map you already read:
 what it touched, whether it changed a contract, and who relies on it.
-
-Open: is the base chosen once per repo, or each time? `master` by default?
 
 ## Above the file: boundaries
 
@@ -465,15 +489,13 @@ signature.
 
 Mocked on two real versions of raf core, the base the Oct 17 copy
 (`raf-run-redesign`), now seam's copy of Oct 23, as no git history of raf
-is reachable here: `mocks/changed-tree-a.png`, `-b`, `-c` (8b),
-`mocks/changed-view-a.png` and `-b` (8d, on problems.ts),
-`mocks/changed-lens.png` (8c). A declaration is new, gone or changed by
+is reachable here: `mocks/changed-signs.png`, `-signs-only`, `-whole`, `-range` and
+`-lens`; signs, words and colours were tried for 8b and signs kept. A declaration is new, gone or changed by
 its text under treesitter; a changed function's signature changed when its
 written parameters or return differ, else its body. Used by on a changed
 signature lists who uses it now and who used it at the base: storageFailed
 lost its first parameter, five places in three files called it at the
-base, two in a new file call it now. 8a, choosing the base, is not drawn:
-it needs a repo's branches and commits.
+base, two in a new file call it now.
 
 ### 9. Boundaries
 
