@@ -655,6 +655,164 @@ screen("mapx-lanes", "Values as lanes",
        "Each value createRun makes is a lane that starts at the call that makes it and runs down to the last call it is handed to. Read across a row for what a call takes; down a lane for where a value goes. Types ride on the values, not on every call.",
        pane_head(crh, crr, "values between calls", "") + lanes(), "createRun()  map · values")
 
+
+# ── round two: the picks, on every kind of row ──────────────────────────
+DISP = ["tree", "both ways", "folders", "size"]
+def phead(title, rest, cur, opts=DISP, hint=""):
+    r = s("", " ") + s("c", "display  ")
+    for j, o in enumerate(opts):
+        if j: r += s("d3", " · ")
+        r += s("fg bold" if o == cur else "c", o)
+    r += s("c", hint)
+    return [(s("", " ") + title + s("c", "   " + rest), ""), blank()[0], tabs(), (r, ""), blank()[0]]
+
+# the tree, types hidden and shown with T
+def plain_right(i, at, col): return []
+screen("mapy-fn-tree", "A function, tree, T off",
+       "Names only. T shows what each call takes and gives, and stays.",
+       phead(crh, crr, "tree", hint="     T inputs and outputs   > < levels   l opens") + guides(ROOT, 2, None, chain=False),
+       "createRun()  map · tree")
+screen("mapy-fn-tree-types", "A function, tree, T on",
+       "The same rows with T on: what each takes and gives, in columns.",
+       phead(crh, crr, "tree", hint="     T inputs and outputs   > < levels   l opens") + [hdr] + rows4,
+       "createRun()  map · tree · types")
+
+# folders, on a function: the folders its calls go into, each a box
+def fn_folders(root):
+    g = collections.OrderedDict()
+    for k in kids(root):
+        d = posixpath.dirname(short(N[k]["path"]))
+        g.setdefault(d, collections.OrderedDict()).setdefault(posixpath.basename(N[k]["path"]), []).append(N[k]["name"])
+    order = sorted(g, key=lambda d: -sum(len(v) for v in g[d].values()))
+    heights = [sum(1 for _ in g[d]) + 3 for d in order]
+    H_ = sum(heights) + len(order) - 1
+    cv = Canvas(RW - 2, H_)
+    nm = N[root]["name"]
+    mid = H_ // 2
+    cv.box(0, mid - 1, len(nm) + 4, 3, "d3"); cv.put(2, mid, nm, "b bold")
+    cv.put(2, mid + 2, "run/", "c")
+    bus = len(nm) + 10
+    cv.h(len(nm) + 4, bus, mid, "c")
+    y = 0; tops = []
+    bx = bus + 18
+    for d, h in zip(order, heights):
+        files = g[d]
+        w = max(len(x) for x in files) + 4 + max(len("  ".join(v)) for v in files.values()) + 4
+        w = max(w, len(d) + 8)
+        cv.box(bx, y, w, h, "d3")
+        cv.put(bx + 2, y, " " + ((d + "/") if d else "core/src/ files") + " ", "fg bold")
+        for j, (f, v) in enumerate(files.items()):
+            cv.put(bx + 2, y + 2 + j, f.ljust(max(len(x) for x in files) + 2), "fd")
+            cv.put(bx + 4 + max(len(x) for x in files), y + 2 + j, "  ".join(v), "b")
+        ay = y + 2
+        n = sum(len(v) for v in files.values())
+        tops.append(ay)
+        cv.h(bus, bx - 2, ay, "c"); cv.put(bx - 1, ay, "▶", "c")
+        cv.put(bus + 2, ay, f" {n} call" + ("s " if n != 1 else " "), "o")
+        y += h + 1
+    cv.v(bus, min(tops + [mid]), max(tops + [mid]), "c")
+    return cv.rows()
+screen("mapy-fn-folders", "A function, folders",
+       "createRun's calls as the folders they go into, each folder a box holding the files and names. The arrow says how many. > follows those on into the folders they call.",
+       phead(crh, crr, "folders", hint="     > < levels   l opens a box") + fn_folders(ROOT),
+       "createRun()  map · folders")
+
+# both ways, on a folder and on a type
+def both(left, right, centre, lw=56):
+    n = max(len(left), len(right)); mid = n // 2
+    cv = Canvas(RW - 2, n)
+    l0 = mid - len(left) // 2; r0 = mid - len(right) // 2
+    for j, seg in enumerate(left):
+        cv.seg(seg, lw - width(seg), l0 + j); cv.h(lw + 1, lw + 3, l0 + j, "c")
+    if left: cv.v(lw + 3, l0, l0 + len(left) - 1, "c"); cv.h(lw + 3, lw + 6, mid, "c")
+    cv.seg(centre, lw + 7, mid)
+    bx = lw + 8 + width(centre)
+    cv.h(bx, bx + 3, mid, "c")
+    if right: cv.v(bx + 3, r0, r0 + len(right) - 1, "c")
+    for j, seg in enumerate(right):
+        cv.h(bx + 3, bx + 5, r0 + j, "c"); cv.seg(seg, bx + 6, r0 + j)
+    return cv.rows()
+
+def folder_both(folder):
+    inn = collections.defaultdict(set); out = collections.defaultdict(set)
+    for i, n in N.items():
+        if is_test(n["path"]) or not n["path"].startswith("packages/"): continue
+        a_in = n["path"].startswith(CORE + folder)
+        for c, _, _ in n["calls"]:
+            if c not in N: continue
+            b_in = N[c]["path"].startswith(CORE + folder)
+            if b_in and not a_in: inn[n["path"]].add(N[c]["name"])
+            if a_in and not b_in and N[c]["path"].startswith("packages/"): out[N[c]["path"]].add(N[c]["name"])
+    def seg(p, names, left):
+        f = p.replace(CORE, "").replace("packages/", "")
+        nm = ", ".join(sorted(names))
+        return (s("c", cut(nm, 26) + "  ") + s("fg", f)) if left else (s("fg", f) + s("c", "  " + cut(nm, 40)))
+    L = [seg(p, v, True) for p, v in sorted(inn.items(), key=lambda kv: -len(kv[1]))]
+    R = [seg(p, v, False) for p, v in sorted(out.items(), key=lambda kv: -len(kv[1]))]
+    return both(L, R, s("fg bold", folder)), len(inn), len(out)
+fb, ni, no = folder_both("storage/")
+screen("mapy-folder-both", "A folder, both ways",
+       f"storage/: the {ni} files outside it that call in on the left, the {no} files it calls out to on the right, each with the names that cross. The boundary of a folder in one picture.",
+       phead(s("fg bold", "storage/"), f"folder in core/src   called from {ni} files, calls {no}", "both ways", hint="     l opens a file") + fb,
+       "storage/  map · both ways", cursor="storage/", trail="storage/")
+
+def fns_with(pred):
+    out = []
+    for f in S["files"]:
+        if is_test(f["path"]): continue
+        for x in f["fns"]:
+            if pred(x): out.append((f["path"], x))
+    return out
+def takes_t(T): return fns_with(lambda x: any(re.search(r"\b" + T + r"\b", p.get("type") or "") for p in x["params"]))
+def gives_t(T): return fns_with(lambda x: re.search(r"\b" + T + r"\b", x.get("ret") or ""))
+def type_both(T, types):
+    makers = gives_t(T); takers = takes_t(T)
+    def seg(path, x, side):
+        sg = None
+        if types:
+            ps = ", ".join(("{ … }" if simple(p.get("type") or p["name"]).startswith("{") else simple(p.get("type") or p["name"])) for p in x["params"])
+            ret = simple(x.get("ret"))
+            if not ret:
+                h = x.get("hover") or ""
+                ret = simple(h.rsplit("=>", 1)[1]).rstrip(")") if "=>" in h else "void"
+        if side == "L":
+            return (s("pun", "(") + ts(cut(ps, 30)) + s("pun", ")") + s("c", " → ") if types else []) + s("b", x["name"])
+        return s("b", x["name"]) + (s("c", " → ") + ts(cut(ret, 24)) if types else [])
+    L = [seg(p, x, "L") for p, x in makers]
+    R = [seg(p, x, "R") for p, x in takers]
+    return both(L, R, s("ty bold", T), lw=50)
+screen("mapy-type-both", "A type, both ways, T on",
+       "Model: who makes it on the left, who takes it on the right. With T on, the makers show what they take and the takers what they give, so the type sits in the middle of its own flow.",
+       phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", "both ways", hint="     T inputs and outputs   l opens") + type_both("Model", True),
+       "Model  map · both ways · types", cursor="Model", trail="Model")
+
+# size, on a folder: each file, how much it reaches outside itself
+def folder_size(folder):
+    files = collections.defaultdict(list)
+    for i, n in N.items():
+        if n["path"].startswith(CORE + folder) and not is_test(n["path"]): files[n["path"]].append(i)
+    rows_ = []
+    for p, fs in files.items():
+        r = set()
+        for i in fs: r |= reach(i)
+        r = {i for i in r if N[i]["path"] != p}
+        used = {c for i in fs for c in CALLERS[i] if N[c]["path"] != p and not is_test(N[c]["path"])}
+        rows_.append((p, len(r), len(used)))
+    rows_.sort(key=lambda t: -t[1])
+    mx = max(t[1] for t in rows_)
+    bw = 56
+    out = [(s("", "   ") + s("", " " * 18) + s("c", "reaches outside itself") + s("", " " * (bw - 16)) + s("c", "used from outside"), ""), blank()[0]]
+    for p, nr, nu in rows_:
+        w = round(bw * nr / mx)
+        r = s("", "   ") + s("fg", posixpath.basename(p).ljust(18)) + (s("bar", " " * w) if w else s("d3", "▏")) + s("c", f" {nr}")
+        r += s("", " " * (bw + 28 - width(r))) + s("fd", str(nu))
+        out.append((r, ""))
+    return out
+screen("mapy-folder-size", "A folder, size",
+       "run/'s files by how much each reaches outside itself, with how many functions outside call into it. run.ts and update.ts reach the most; rules.ts, walkthroughs.ts and record.ts are the most leaned on.",
+       phead(s("fg bold", "run/"), "folder in core/src   10 files", "size", hint="     l opens a file") + folder_size("run/"),
+       "run/  map · size", cursor="run/", trail="run/")
+
 # ── the gallery ─────────────────────────────────────────────────────────
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):
