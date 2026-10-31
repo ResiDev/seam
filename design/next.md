@@ -91,6 +91,28 @@ Decided 2026-10-31, from the mocks `mocks/types-view-*.png`:
   side (B) cut the signatures; a band over today's trees (C) breaks the
   blank line between functions. Built from and Used by become single views
   in the same pane, redesigned to fit it.
+- **A view and its display.** Each view can be shown more than one way,
+  its display. `<Tab>` and `<S-Tab>` change the view; `v` and `V` step its
+  display forward and back. The display chosen stays for that view as the
+  cursor moves, and the pane's head names it after the view's tab. Today
+  `v` and `V` already turn the explorer's trees into the diagram and the
+  map, so the keys keep their meaning: this, shown another way.
+- **Used by and Built from open by file,** the point of the view, each file
+  then each place with its line of code (`mocks/used-by-a.png`,
+  `mocks/built-from-a.png`). Their other displays:
+  - Used by, by name: each thing it hands out with its signature, then
+    everyone who uses it (`mocks/used-by-b.png`).
+  - Used by, by user: each function or type that uses it as a signature
+    line, then what it uses (`mocks/used-by-c.png`).
+  - Built from, by name, in the order the code first uses each, its
+    signature and that line (`mocks/built-from-b.png`).
+  - Built from, as signature lines of what it calls, in the order it calls
+    them, then the types it names (`mocks/built-from-c.png`).
+  - Tests sort after the rest in every display.
+- **Scroll the pane from the left.** With the cursor in the tree, `<C-d>`
+  and `<C-u>` scroll the pane half a screen, `<C-e>` and `<C-y>` a line, as
+  they scroll a window in Vim and a preview in Telescope. In the pane they
+  scroll the pane as usual. Every screen with a pane does the same.
 - **A folder has the views a file has where they make sense:** Types, Built
   from, Used by and Changed. It has no Code.
 
