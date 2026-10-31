@@ -290,8 +290,10 @@ A range of git, `from` and `to`. By default from `HEAD` to the working
 tree: what isn't committed yet. Then:
 
 - **The range lives in the lens** (`L`), on its first row, above the
-  rules: `changes  from HEAD  to working tree`. `f` and `t` on that row take
-  a branch, a tag, a hash or `HEAD~3`; `x` goes back to the default. The
+  rules: `changes  from HEAD  to working tree`. `f` and `t` work from any row
+  of the lens, the cursor where it is: each opens a picker of branches,
+  tags and recent commits, a ref typed narrows it, and its first entry is
+  the default (`HEAD`, the working tree), so picking it resets. The
   head names the range when it isn't the default
   (`mocks/changed-range.png`).
 - **The tree carries git signs,** in the left column, as gitsigns draws
@@ -436,6 +438,17 @@ and createRun at three.
 - B. An indented tree, top to bottom, as the tree draws.
 - C. Columns, one a level: the cursor in one column fills the next, as a
   file manager's columns do.
+
+Mocked on createRun from seam's treesitter index, its 17 calls and
+theirs: `mocks/map-a.png` (left to right, names only), `mocks/map-b.png`
+(an indented tree of signature lines), `mocks/map-c.png` (columns),
+`mocks/map-three.png` (B at three levels), `mocks/map-file.png` (run.ts's
+imports, two levels, the names each takes), `mocks/map-type.png` (Model,
+made by and taken by, then who takes what those give). Past the first
+level a branch shows three and `⋯ 15 more`, opened with `l`. Measured:
+createPage calls 18 and update 17, so at two levels the map is about 80
+rows without that cut; the file map at two levels repeats state.ts and
+problems.ts under nearly every file.
 
 6c. **When it's too wide.** Scroll sideways; the levels past the screen
 cut with `…`; or the first level only as names, the rest on `l`.
