@@ -396,6 +396,17 @@ without the types and constants it uses, not only its calls.
 1e. **A file's rows.** Exports, then what it keeps, dimmer. Or exports
 only, what it keeps seen through `l`.
 
+Mocked on raf, createRun open and update.ts's 3 exports and 10 kept, with
+react's WaymarkRoot open for a call into another package (`src/tree/mock.py`):
+`mocks/tree-where-a.png` (this file plain, another file underlined, another
+package its hue bar), `tree-where-b.png` (this file dim), `tree-where-c.png`
+(the file dim after the row), `tree-cols-counts.png` (`T`: used by and
+calls), `tree-cols-types.png` (`T`: takes and gives, the tree widened to
+92), `tree-flow.png` (calls under the closures and ifs they sit in),
+`tree-file-kept.png` (exports, then `▸ 10 kept to itself`). Measured: 17 of
+createRun's 17 calls are in other files, so under A every row under it is
+underlined.
+
 ### 2. Switching views
 
 - A. Tabs in the pane's head, `Code  Types  Built from  Used by  Map
@@ -561,7 +572,9 @@ base, two in a new file call it now.
 ### 9. Boundaries
 
 - A. The table of packages or folders against each other.
-- B. Not its own thing: a folder's Map view, rolled up.
+- **B, chosen.** Not its own thing: a folder's Map view, the folders
+  display (`mocks/mapx-folders.png`), with both ways for what crosses a
+  folder's edge (`mocks/mapy-folder-both.png`). The table goes.
 - C. Not its own thing: a folder's Types view.
 
 A picture of each on raf's packages. If B or C reads as well, the table
