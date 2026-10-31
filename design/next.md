@@ -255,13 +255,20 @@ run/
   Mocks: `mocks/where-underline-core.png` (update()),
   `where-underline-react.png` (useOwnedRun() calling core's createRun).
 - **A call already open above** (recursion) is dim and doesn't open.
-- **Each row can show what it takes and gives,** as above, or its used by
-  and built from counts. One key flips them, and the choice stays, like `T`
-  in Calls.
+- **Nothing beside a name.** The pane shows its types and counts; the tree
+  stays narrow. (Decided 2026-10-31; `mocks/tree-cols-*.png` were not liked.)
+- **`s` changes the order,** as `<Tab>` does in today's explorer: by folder
+  (the tree), most used first, most calling first. The two sorted orders are
+  a flat list of functions, each with its package's hue bar and two counts,
+  used by and calls, the one it sorts by lit. Tests don't count.
+  `mocks/tree-sort-used.png`, `tree-sort-calls.png`.
+- **An opened function shows its calls, in the order they run,** and nothing
+  around them: no closures, `if`s or `case`s (`mocks/tree-flow.png` was not
+  liked).
 
 Open:
-- Should the rows under a function show the `if`, `case`, `later` and
-  `return` they sit under, without the conditions? trace.lua computes it.
+- ~~Should the rows under a function show the `if`, `case`, `later` and
+  `return` they sit under?~~ No.
 - Should the folders above be the one tree, or a separate boundaries view
   (below)?
 
