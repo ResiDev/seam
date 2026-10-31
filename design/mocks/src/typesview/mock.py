@@ -1,0 +1,258 @@
+# The Types view, mocked from raf core's written signatures (sigs.json, made
+# by extract.lua with treesitter from the code as written; returns not
+# written come from the server's hover in seam's types.json).
+#   python3 mock.py <sigs.json>   -> /tmp/seam-tree/v6/types-view-*.html
+import sys, json, re, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lens"))
+import lib
+from lib import s, ts, blank, compose, code
+lib.W = W = 178
+LW = 44
+RW = W - LW - 1
+D = json.load(open(sys.argv[1]))
+F = {f["path"]: f for f in D["files"]}
+SRC = "packages/core/src/"
+
+# ── type text as raf writes it, Readonly<> taken off (raf wraps every type in it)
+def unwrap(t):
+    while True:
+        i = t.find("Readonly<")
+        if i < 0: return t
+        depth, j = 0, i + 8
+        for j in range(i + 8, len(t)):
+            if t[j] == "<": depth += 1
+            elif t[j] == ">" and t[j - 1] != "=":
+                depth -= 1
+                if depth == 0: break
+        t = t[:i] + t[i + 9:j] + t[j + 1:]
+
+def simple(t):
+    t = re.sub(r"/\*\*.*?\*/", "", t)
+    t = unwrap(t)
+    t = re.sub(r"\s+", " ", t)
+    t = re.sub(r";\s*}", " }", t).replace("; ", ", ")
+    return t.strip()
+
+def parts(t):
+    """{ a: A, b: B } -> ['a: A', 'b: B'] at the top level"""
+    t = t.strip()[1:-1]
+    out, depth, cur, prev = [], 0, "", ""
+    for ch in t:
+        if ch in "<({[": depth += 1
+        if ch in ")}]" or (ch == ">" and prev != "="): depth -= 1
+        prev = ch
+        if ch == "," and depth == 0:
+            out.append(cur.strip()); cur = ""
+        else: cur += ch
+    if cur.strip(): out.append(cur.strip())
+    return out
+
+def ret_of(fn):
+    if fn.get("ret"): return simple(fn["ret"])
+    h = fn.get("hover") or ""
+    if "=>" in h: return simple(h.rsplit("=>", 1)[1])
+    return "void"
+
+def takes(fn, generics="written"):
+    ps = fn["params"]
+    if len(ps) == 1 and ps[0].get("type") and simple(ps[0]["type"]).startswith("{"):
+        return simple(ps[0]["type"])
+    return "(" + ", ".join(simple(p["type"]) if p.get("type") else p["name"] for p in ps) + ")"
+
+def fn(path, name):
+    return next(x for x in F[path]["fns"] if x["name"] == name)
+
+def typ(path, name):
+    return next(x for x in F[path]["types"] if x["name"] == name)
+
+# ── one signature line: takes → name → gives, the names in one column
+def wrap(text, w, level=1):
+    """break after commas, shallowest first, to fit w; continuation lines indented 2"""
+    if len(text) <= w: return [text]
+    pieces, depth, angle, cur, prev = [], 0, 0, "", ""
+    for i, ch in enumerate(text):
+        cur += ch
+        if ch in "({[": depth += 1
+        if ch in ")}]": depth -= 1
+        if ch == "<": angle += 1
+        if ch == ">" and prev != "=": angle -= 1
+        prev = ch
+        if ch == "," and depth <= level and angle == 0:
+            pieces.append(cur); cur = ""
+    pieces.append(cur)
+    out, line = [], ""
+    for pc in pieces:
+        if line and len(line) + len(pc) > w:
+            out.append(line.rstrip()); line = "  " + pc.lstrip()
+        else:
+            line += pc
+    if line.strip(): out.append(line.rstrip())
+    if level < 4 and any(len(l) > w for l in out):
+        return [x if i == 0 or x.startswith("  ") else "  " + x for i, x in enumerate(wrap(text, w, level + 1))]
+    return out
+
+def cut(text, w):
+    return text if len(text) <= w else text[: w - 1] + "…"
+
+def sig_rows(items, pw, mode="wrap", on=None, kept=()):
+    """items: (takes, name, gives). mode: wrap | cut | parts"""
+    nw = max(len(n) for _, n, _ in items)
+    if mode == "wrap":  # a first line that can't break inside a type moves the column out
+        pw = max([pw] + [len(wrap(tk, pw)[0]) for tk, _, _ in items])
+    rows = []
+    for tk, name, gv in items:
+        nm = s("fd" if name in kept else "b", name.ljust(nw))
+        if mode == "parts" and tk.startswith("{") and len(tk) > pw:
+            ps = parts(tk)
+            first = "{ " + ps[0] + ","
+            rows.append((s("", " ") + ts(first.ljust(pw), on=on) + s("c", " → ") + nm + s("c", " → ") + ts(gv, on=on), ""))
+            for i, p in enumerate(ps[1:]):
+                end = " }" if i == len(ps) - 2 else ","
+                rows.append((s("", " ") + ts(("  " + p + end), on=on), ""))
+            continue
+        if mode == "cut" or len(tk) <= pw:
+            rows.append((s("", " ") + ts(cut(tk, pw).ljust(pw), on=on) + s("c", " → ") + nm + s("c", " → ") + ts(gv, on=on), ""))
+            continue
+        ls = wrap(tk, pw)
+        rows.append((s("", " ") + ts(ls[0].ljust(pw), on=on) + s("c", " → ") + nm + s("c", " → ") + ts(gv, on=on), ""))
+        for l in ls[1:]:
+            rows.append((s("", " ") + ts(l, on=on), ""))
+    return rows
+
+def title(t):
+    return (s("", " ") + s("fg bold", t), "")
+
+def decl(path, name, label):
+    t = typ(path, name)
+    doc = t.get("doc") or ""
+    lines = (doc + "\n" if doc else "") + t["text"]
+    ls = lines.split("\n")
+    first = t["line"] - (len(doc.split("\n")) if doc else 0)
+    head = (s("", " ") + s("c", label + " ") + s("ty bold", name) + s("c", f"   type in {SRC}{path}:{t['line']}"), "")
+    rows, inside = [], False
+    for i, l in enumerate(ls):
+        st = l.strip()
+        is_c = inside or st.startswith("/**") or st.startswith("//")
+        if st.startswith("/**") and "*/" not in st: inside = True
+        elif inside and "*/" in st: inside = False
+        body = s("c it", l) if is_c else ts(l)
+        if is_c and "*/" in st and not st.endswith("*/"): body = ts(l)
+        rows.append((s("c", str(first + i).rjust(4)) + s("", "  ") + body, ""))
+    return [head] + rows
+
+# ── the screen: the tree on the left, the views on the right
+def tree(open_, cursor):
+    rows = []
+    def r(depth, seg, key=None, dim=False):
+        row = s("hcor", "▎") + s("", "  " * depth) + seg
+        rows.append((row, "sel" if key == cursor else ""))
+    rows.append((s("", "  ") + s("fd", "packages/"), ""))
+    r(1, s("hcor bold", "core") + s("fd", "/src/"))
+    for folder, files in [("checklists/", None), ("run/", [("run.ts", ["createRun"]), ("update.ts", ["runStateOf", "initialModel", "update"]), ("rules.ts", None), ("views.ts", None), ("walkthroughs.ts", None)]),
+                          ("storage/", [("adapter.ts", ["adapterOf"]), ("link.ts", ["createLink"]), ("records.ts", ["parseRecord", "changesBetween", "replacing", "storedRecord", "staleness", "applyChanges"])]),
+                          ("walkthrough/", None)]:
+        is_open = folder in open_
+        r(2, s("c", "" if is_open else "▸ ") + s("fd", folder), key=folder)
+        if not is_open: continue
+        for file, names in files:
+            if names is None or file not in open_:
+                r(3, s("c", "▸ ") + s("fd", file), key=file); continue
+            r(3, s("fd", file), key=file)
+            for n in names:
+                r(4, s("b", n) + s("pun", "()"), key=n)
+    r(2, s("fd", "state.ts"), key="state.ts")
+    for n in ["Model", "Given", "RunState", "Updated", "Msg"]:
+        r(3, s("ty", n), key=n)
+    return rows
+
+def tabs(have, on="Types"):
+    row = s("", " ")
+    for t in have:
+        row += s("tab bold" if t == on else "c", f" {t} ") + s("", "  ")
+    return (row, "")
+
+def shot(name, crumb, cursor, open_, right, status):
+    hd = [(s("c", " Seams › ") + s("fg bold", crumb), ""), (s("d3", "─" * W), "")]
+    L = tree(open_, cursor)
+    n = max(len(L), len(right)) + 1
+    scr = compose(hd, [(L + blank(n - len(L)), LW), (right + blank(n - len(right)), RW)], status, "<Tab> view   l open   J page   K back")
+    lib.write_shot(name, scr)
+
+def page(name, blocks):
+    """several small screens with a caption each"""
+    body = ""
+    for cap, rows in blocks:
+        body += f"<h3>{cap}</h3>" + compose([], [(rows + blank(1), RW)], "", "").replace(
+            '<span class="mode"> NORMAL </span>', "").rsplit("\n", 1)[0] + "</pre>"
+    open(f"/tmp/seam-tree/v6/{name}.html", "w").write(
+        f"<!doctype html><html><head><meta charset='utf-8'><style>{lib.SHOT_CSS}</style></head><body>{body}</body></html>")
+
+PW = 46
+
+# 1. a folder: what storage/ hands the rest of core
+outside = ["adapterOf", "createLink", "parseRecord", "changesBetween", "replacing", "storedRecord", "staleness", "applyChanges"]
+where = {"adapterOf": "storage/adapter.ts", "createLink": "storage/link.ts"}
+items = [(takes(fn(where.get(n, "storage/records.ts"), n)), n, ret_of(fn(where.get(n, "storage/records.ts"), n))) for n in outside]
+R = [(s("", " ") + s("fg bold", "storage/") + s("c", f"   folder in {SRC}storage/   3 files · 8 functions and 9 types used outside it"), ""), blank()[0],
+     tabs(["Types", "Built from", "Used by"]), blank()[0],
+     title("functions used outside storage/")] + sig_rows(items, PW) + [blank()[0], title("types used outside storage/")]
+tys = [("StoredRecord", 5), ("RecordChanges", 3), ("RecordUnreadableError", 3), ("Parsed", 2), ("Read", 2), ("StorageAdapter", 1), ("SaveAdapter", 1), ("SavePartialAdapter", 1), ("DroppedEntry", 1)]
+for n, c in tys:
+    R.append((s("", " ") + s("ty", n.ljust(24)) + s("c", f"{c} file" + ("s" if c > 1 else "")), ""))
+shot("types-view-folder", "storage/", "storage/", {"storage/", "adapter.ts", "link.ts", "records.ts"}, R, "storage/  types")
+
+# 2. a file: run/update.ts, its exports, then what it keeps
+up = F["run/update.ts"]["fns"]
+ex = [(takes(x), x["name"], ret_of(x)) for x in up if x["exported"]]
+kp = [(takes(x), x["name"], ret_of(x)) for x in up if not x["exported"]]
+R = [(s("", " ") + s("fg bold", "update.ts") + s("c", f"   file in {SRC}run/   3 exported · 10 kept to itself"), ""), blank()[0],
+     tabs(["Code", "Types", "Built from", "Used by"]), blank()[0], title("exported")] + sig_rows(ex, 40) + \
+    [blank()[0], title("kept in update.ts")] + sig_rows(kp, 40, kept={n for _, n, _ in kp})
+shot("types-view-file", "run/update.ts", "update.ts", {"run/", "update.ts", "run.ts"}, R, "update.ts  types")
+
+# 3. a function: createRun
+cr = fn("run/run.ts", "createRun")
+R = [(s("", " ") + s("b bold", "createRun") + s("pun", "()") + s("c", f"   function in {SRC}run/run.ts:{cr['line']}"), ""), blank()[0],
+     tabs(["Code", "Types", "Built from", "Used by"]), blank()[0]] + sig_rows([(takes(cr), "createRun", ret_of(cr))], 14) + [blank()[0]] + \
+    decl("run/types.ts", "RunOptions", "takes") + [blank()[0]] + decl("run/types.ts", "Run", "gives")[:22] + [(s("c", "     ⋯"), "")]
+shot("types-view-function", "createRun()", "createRun", {"run/", "run.ts", "update.ts"}, R, "createRun()  types")
+
+# 4. a type: Model, who gives it, who takes it, what holds it
+givers, takers = [], []
+for f in D["files"]:
+    for x in f["fns"]:
+        g, ps = ret_of(x), takes(x)
+        if re.search(r"\bModel\b", g): givers.append((ps, x["name"], g))
+        if re.search(r"\bModel\b", ps): takers.append((ps, x["name"], g))
+R = [(s("", " ") + s("ty bold", "Model") + s("c", f"   type in {SRC}state.ts:152   2 functions give one · 7 take one"), ""), blank()[0],
+     tabs(["Code", "Types", "Built from", "Used by"]), blank()[0], title("gives a Model")] + sig_rows(givers, 34, on="Model") + \
+    [blank()[0], title("takes a Model")] + sig_rows(takers, 34, on="Model") + [blank()[0], title("holds a Model")] + \
+    [(s("", " ") + ts("Updated  { model: Model, effects: readonly Effect[] }", on="Model"), ""), blank()[0]] + decl("state.ts", "Model", "")[1:]
+shot("types-view-type", "state.ts › Model", "Model", {"run/"}, R, "Model  types")
+
+# 5. a long signature, three ways
+li = [(takes(fn("storage/link.ts", "createLink")), "createLink", "Link"),
+      (takes(fn("storage/records.ts", "changesBetween")), "changesBetween", "RecordChanges | undefined"),
+      (takes(fn("storage/records.ts", "parseRecord")), "parseRecord", "Parsed")]
+page("types-view-long", [("A. Wrapped under itself, the arrows kept in line", sig_rows(li, PW, "wrap")),
+                         ("B. Cut with …, opened with the expand key", sig_rows(li, PW, "cut")),
+                         ("C. One part per line, as a declaration reads", sig_rows(li, PW, "parts"))])
+
+# 6. generics, three ways
+pr = fn("problems.ts", "problemReporter"); sa = fn("run/rules.ts", "stepAt"); dw = fn("walkthrough/walkthrough.ts", "defineWalkthrough")
+A = [("<TStep extends Step>(ProblemHandlers<TStep>)", "problemReporter", "ReportProblem<TStep>"),
+     ("<TStep extends Step>(Walkthrough<TStep>, number)", "stepAt", "TStep"),
+     ("<TWalkthrough extends Walkthrough = Walkthrough>(RunOptions<TWalkthrough>)", "createRun", "Run<TWalkthrough>"),
+     ("<const TStep extends TShape, TShape extends Step = Step>(WalkthroughDefinition<TStep, TShape>)", "defineWalkthrough", "Walkthrough<NoInfer<TStep>>")]
+B = [("<TStep extends Step>(ProblemHandlers<TStep>)", "problemReporter", "ReportProblem<TStep>"),
+     ("<TStep extends Step>(Walkthrough<TStep>, number)", "stepAt", "TStep"),
+     ("(RunOptions)", "createRun", "Run"),
+     ("<TStep extends Step>(WalkthroughDefinition<TStep>)", "defineWalkthrough", "Walkthrough<TStep>")]
+C = [("(ProblemHandlers<Step>)", "problemReporter", "ReportProblem<Step>"),
+     ("(Walkthrough<Step>, number)", "stepAt", "Step"),
+     ("(RunOptions<Walkthrough>)", "createRun", "Run<Walkthrough>"),
+     ("(WalkthroughDefinition<Step, Step>)", "defineWalkthrough", "Walkthrough<Step>")]
+page("types-view-generics", [("A. As written", sig_rows(A, 78)),
+                             ("B. A type parameter left out where its default is used, NoInfer and const left out", sig_rows(B, 56)),
+                             ("C. Each type parameter replaced by what it extends", sig_rows(C, 56))])
+print("ok")
