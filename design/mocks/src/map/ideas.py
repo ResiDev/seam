@@ -1,0 +1,665 @@
+# Many ways to draw the Map, all on raf core's real calls (seam's treesitter
+# index) and signatures (sigs.json). Writes one shot per idea and a gallery.
+#   python3 ideas.py <treesitter.json> <sigs.json> <raf core src>
+#       -> /tmp/seam-tree/v6/mapx-*.html, /tmp/seam-tree/v6/map-ideas.html
+import sys, os, json, re, posixpath, collections, html as H
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lens"))
+import lib
+from lib import s, ts, blank, compose, width
+lib.W = W = 178
+lib.SHOT_CSS += " .nv .chip{background:#24283b} .nv .chipb{background:#2f3549;font-weight:700} .nv .bar{background:#3d59a1;color:#c0caf5} .nv .bar2{background:#2e3c64;color:#a9b1d6} .nv .bar3{background:#283152;color:#737aa2}"
+TSX = json.load(open(sys.argv[1]))
+N = {n["id"]: n for n in TSX["nodes"]}
+S = json.load(open(sys.argv[2]))
+SRC = sys.argv[3]
+CORE = "packages/core/src/"
+SIG = {}
+for f in S["files"]:
+    for x in f["fns"]: SIG[(CORE + f["path"], x["name"])] = x
+
+def unwrap(t):
+    while True:
+        i = t.find("Readonly<")
+        if i < 0: return t
+        depth = 0
+        for j in range(i + 8, len(t)):
+            if t[j] == "<": depth += 1
+            elif t[j] == ">" and t[j - 1] != "=":
+                depth -= 1
+                if depth == 0: break
+        t = t[:i] + t[i + 9:j] + t[j + 1:]
+def simple(t): return re.sub(r"\s+", " ", unwrap(re.sub(r"/\*\*.*?\*/", "", t or ""))).strip()
+def cut(t, w): return t if len(t) <= w else t[:w - 1] + "…"
+def sig(i, w=34):
+    x = SIG.get((N[i]["path"], N[i]["name"]))
+    if not x: return None
+    def part(p):
+        t = simple(p.get("type") or p["name"])
+        return "{ … }" if t.startswith("{") else t
+    takes = ", ".join(part(p) for p in x["params"])
+    ret = simple(x.get("ret")) if x.get("ret") else None
+    if not ret:
+        h = x.get("hover") or ""
+        ret = simple(h.rsplit("=>", 1)[1]).rstrip(")") if "=>" in h else "void"
+        if ret.count("{") != ret.count("}") or len(ret) > 30: ret = "{ … }"
+    return cut(takes, w), cut(ret, 30)
+def kids(i):
+    out = []
+    for c, _, _ in N[i]["calls"]:
+        if c in N and c not in out: out.append(c)
+    return out
+def byname(nm, path=None):
+    return next(i for i, n in N.items() if n["name"] == nm and (path is None or path in n["path"]))
+def short(p): return p.replace(CORE, "")
+def reach(i):
+    seen, st = set(), [i]
+    while st:
+        for k in kids(st.pop()):
+            if k not in seen: seen.add(k); st.append(k)
+    seen.discard(i); return seen
+CALLERS = collections.defaultdict(list)
+for i, n in N.items():
+    for c, _, _ in n["calls"]:
+        if i not in CALLERS[c]: CALLERS[c].append(i)
+def is_test(p): return ".test." in p or "/test/" in p or p.startswith("e2e/") or ".perf." in p
+
+ROOT = byname("createRun")
+HOME = N[ROOT]["path"]
+LW = 44
+RW = W - LW - 1
+CAP = 3
+
+# ── a canvas: lines join by their ends, text over them ──────────────────
+GLYPH = {5: "│", 10: "─", 6: "┌", 12: "┐", 3: "└", 9: "┘", 7: "├", 13: "┤", 14: "┬", 11: "┴", 15: "┼",
+         1: "╵", 4: "╷", 2: "╶", 8: "╴"}
+class Canvas:
+    def __init__(c, w, h):
+        c.w, c.H = w, h
+        c.bits = [[0] * w for _ in range(h)]
+        c.txt = [[None] * w for _ in range(h)]
+        c.cls = [[""] * w for _ in range(h)]
+    def grow(c, y):
+        while y >= c.H:
+            c.bits.append([0] * c.w); c.txt.append([None] * c.w); c.cls.append([""] * c.w); c.H += 1
+    def put(c, x, y, text, cls=""):
+        c.grow(y)
+        for k, ch in enumerate(text):
+            if 0 <= x + k < c.w: c.txt[y][x + k] = ch; c.cls[y][x + k] = cls
+    def seg(c, segs, x, y):
+        for cl, t in segs: c.put(x, y, t, cl); x += len(t)
+        return x
+    def _b(c, x, y, b, cls):
+        c.grow(y)
+        if 0 <= x < c.w: c.bits[y][x] |= b; c.cls[y][x] = c.cls[y][x] or cls
+    def h(c, x0, x1, y, cls="c"):
+        if x0 > x1: x0, x1 = x1, x0
+        for x in range(x0, x1 + 1):
+            c._b(x, y, (8 if x > x0 else 0) | (2 if x < x1 else 0), cls)
+    def v(c, x, y0, y1, cls="c"):
+        if y0 > y1: y0, y1 = y1, y0
+        for y in range(y0, y1 + 1):
+            c._b(x, y, (1 if y > y0 else 0) | (4 if y < y1 else 0), cls)
+    def box(c, x, y, w, h, cls="c"):
+        c.h(x, x + w - 1, y, cls); c.h(x, x + w - 1, y + h - 1, cls)
+        c.v(x, y, y + h - 1, cls); c.v(x + w - 1, y, y + h - 1, cls)
+    def rows(c, indent=1):
+        out = []
+        for y in range(c.H):
+            r = s("", " " * indent)
+            for x in range(c.w):
+                t = c.txt[y][x]
+                if t is None:
+                    b = c.bits[y][x]
+                    r.append((c.cls[y][x] if b else "", GLYPH.get(b, " ") if b else " "))
+                else:
+                    r.append((c.cls[y][x], t))
+            while r and r[-1][1] == " " and r[-1][0] == "": r.pop()
+            out.append((r, ""))
+        return out
+
+# ── the screen ──────────────────────────────────────────────────────────
+VIEWS = ["Code", "Types", "Built from", "Used by", "Map", "Changed"]
+def tabs():
+    r = s("", " ")
+    for t in VIEWS: r += s("tab bold" if t == "Map" else "c", f" {t} ") + s("", "  ")
+    return (r, "")
+def pane_head(title, rest, display, extra=""):
+    return [(s("", " ") + title + s("c", "   " + rest), ""), blank()[0], tabs(),
+            (s("", " ") + s("c", "display  ") + s("fg", display) + s("c", extra), ""), blank()[0]]
+def tree_left(cursor):
+    rows = [blank()[0]]
+    T = [("packages/", 0, "fg"), ("core/src/", 1, "hcor"), ("▸ checklists/", 2, "fg"), ("run/", 2, "fg"), ("▸ page.ts", 3, "fg"),
+         ("run.ts", 3, "fg"), ("createRun()", 4, "b"), ("▸ update.ts", 3, "fg"), ("storage/", 2, "fg"), ("link.ts", 3, "fg"),
+         ("createLink()", 4, "b"), ("▸ records.ts", 3, "fg"), ("state.ts", 2, "fg"), ("Model", 3, "ty"), ("Msg", 3, "ty")]
+    for t, d, c in T:
+        rows.append((s("", "  " + "  " * d) + s(c, t), "sel" if t == cursor else ""))
+    return rows
+SHOTS = []
+def screen(name, title, cap, right, status, cursor="createRun()", trail="createRun()", wide=False):
+    hd = [(s("c", " Seams › ") + s("fg bold", trail), ""), (s("d3", "─" * W), "")]
+    keys = "<Tab> view   <C-Tab> display   > < levels   l open   J go"
+    if wide:
+        body = compose(hd, [(right + blank(1), W)], status, keys)
+    else:
+        left = tree_left(cursor)
+        n = max(len(left), len(right)) + 1
+        body = compose(hd, [(left + blank(n - len(left)), LW), (right + blank(n - len(right)), RW)], status, keys)
+    lib.write_shot(name, body)
+    SHOTS.append((name, title, cap, body))
+
+crh = s("b bold", "createRun") + s("pun", "()")
+crr = "function in run/run.ts:33   calls 17"
+def head(display, extra="   > < levels   l opens"): return pane_head(crh, crr, display, extra)
+
+# ── 1. tree guides, names only, the file on the right ───────────────────
+def guides(root, levels, right=None, cap=CAP, col=40, chain=True):
+    rows = [(s("", " ") + s("b bold", N[root]["name"]) + (right(root, len(N[root]["name"]) + 1, col) if right else []), "")]
+    def walk(i, prefix, depth):
+        ks = kids(i)
+        shown = ks if depth == 0 else ks[:cap]
+        more = len(ks) - len(shown)
+        for j, k in enumerate(shown):
+            last = j == len(shown) - 1 and not more
+            r = s("c", " " + prefix + ("└─ " if last else "├─ ")) + s("b", N[k]["name"])
+            gk = kids(k)
+            inline = chain and len(gk) == 1 and depth + 1 < levels
+            if inline: r += s("c", " ── ") + s("b", N[gk[0]]["name"])
+            if right: r += right(k, width(r), col)
+            rows.append((r, ""))
+            if depth + 1 < levels and len(gk) > 1 or (depth + 1 < levels and len(gk) == 1 and not chain):
+                walk(k, prefix + ("   " if last else "│  "), depth + 1)
+        if more: rows.append((s("c", " " + prefix + "└─ ⋯ " + f"{more} more"), ""))
+    walk(root, "", 0)
+    return rows
+
+def file_right(i, at, col):
+    p = short(N[i]["path"])
+    if N[i]["path"] == HOME: return []
+    return s("", " " * max(2, col - at)) + s("d3", p)
+screen("mapx-guides", "Tree lines, names only",
+       "The tree's own lines. A call with one call of its own is put on the same line. The file is dim on the right, and only when it isn't run.ts.",
+       head("calls") + guides(ROOT, 2, file_right), "createRun()  map · calls")
+
+# ── 2. grouped by file, one row each ────────────────────────────────────
+def by_file(root):
+    g = collections.OrderedDict()
+    for k in kids(root): g.setdefault(N[k]["path"], []).append(k)
+    order = sorted(g, key=lambda p: (posixpath.dirname(short(p)) or "~", short(p)))
+    rows, last = [], None
+    for p in order:
+        d = posixpath.dirname(short(p))
+        if d != last:
+            if last is not None: rows.append(blank()[0])
+            rows.append((s("", " ") + s("fg", (d + "/") if d else "core/src/"), "")); last = d
+        r = s("", "   ") + s("fd", posixpath.basename(p).ljust(18))
+        for j, k in enumerate(g[p]): r += s("b", N[k]["name"]) + s("", "   ")
+        rows.append((r, ""))
+    return rows
+screen("mapx-by-file", "Grouped by file",
+       "One row a file, the functions it gives createRun on the row, files under their folder. Shows where a function reaches, at the cost of the order.",
+       pane_head(crh, "function in run/run.ts:33   calls 17 in 13 files", "calls by file", "   l opens a file's calls") + by_file(ROOT), "createRun()  map · calls by file")
+
+# ── 3. file boxes in folder bands ───────────────────────────────────────
+def file_boxes(root):
+    g = collections.OrderedDict()
+    for k in kids(root): g.setdefault(N[k]["path"], []).append(k)
+    bands = collections.OrderedDict()
+    for p in sorted(g, key=lambda p: short(p)):
+        bands.setdefault(posixpath.dirname(short(p)), []).append(p)
+    order = sorted(bands, key=lambda d: (-sum(len(g[p]) for p in bands[d]), d))
+    out = []
+    for d in order:
+        out.append((s("", " ") + s("fg bold", (d + "/") if d else "core/src/"), ""))
+        cv = Canvas(RW - 2, 1)
+        x, y, rowh = 2, 0, 0
+        for p in bands[d]:
+            names = [N[k]["name"] for k in g[p]]
+            title = posixpath.basename(p)
+            w = max(len(title) + 6, max(len(n) for n in names) + 4)
+            h = len(names) + 2
+            if x + w > RW - 3: x, y, rowh = 2, y + rowh + 1, 0
+            cv.box(x, y, w, h, "d3")
+            cv.put(x + 2, y, " " + title + " ", "fd")
+            for j, n in enumerate(names): cv.put(x + 2, y + 1 + j, n, "b")
+            x += w + 2; rowh = max(rowh, h)
+        out += cv.rows(); out.append(blank()[0])
+    return out
+screen("mapx-file-boxes", "Boxes for files, bands for folders",
+       "The same grouping drawn as boxes. The folder with the most calls comes first. It reads at a glance which parts of the code createRun leans on.",
+       pane_head(crh, "function in run/run.ts:33   calls 17 in 13 files", "calls by file", "   l opens a box") + file_boxes(ROOT), "createRun()  map · calls by file")
+
+# ── 4. names first, types in columns ────────────────────────────────────
+def typed_cols(i, at, col):
+    sg = sig(i, 40)
+    if not sg: return []
+    return s("", " " * max(2, col - at)) + ts(sg[0]) + s("", " " * max(2, 44 - len(sg[0]))) + ts(sg[1])
+rows4 = guides(ROOT, 2, typed_cols, col=34, chain=False)
+hdr = (s("", " " * 35) + s("c", "takes") + s("", " " * 39) + s("c", "gives"), "")
+screen("mapx-type-columns", "Names first, types in two columns",
+       "B's facts, but the names come first and line up, and what a call takes and gives sit in their own columns. The eye runs down the names; the types are there to read across.",
+       head("calls with types") + [hdr] + rows4, "createRun()  map · calls with types")
+
+# ── 5. names and what each gives ────────────────────────────────────────
+def gives_col(i, at, col):
+    sg = sig(i)
+    if not sg: return []
+    return s("", " " * max(2, col - at)) + s("c", "→ ") + ts(sg[1])
+screen("mapx-gives", "Names and what each gives",
+       "Half the types: only what each call gives back. It reads as what createRun gets from each part.",
+       head("calls with what they give") + guides(ROOT, 2, gives_col, col=36), "createRun()  map · calls · gives")
+
+# ── 6. a type map: types as boxes, functions on the arrows ──────────────
+def type_graph():
+    cv = Canvas(RW - 2, 30)
+    def tbox(x, y, name, h=3):
+        w = len(name) + 4
+        cv.box(x, y, w, h, "d3"); cv.put(x + 2, y + 1, name, "ty bold" if name == "Model" else "ty")
+        return x, y, w, h
+    def arrow(x0, x1, y, label):
+        cv.h(x0, x1 - 1, y, "c"); cv.put(x1, y, "▶", "c")
+        if label: cv.put(x0 + 2, y, " " + label + " ", "b")
+    # left: what makes Model
+    g = tbox(0, 1, "Given"); u = tbox(0, 5, "UserRecord")
+    cv.h(g[2], 16, 2, "c"); cv.h(u[2], 16, 6, "c"); cv.v(16, 2, 6, "c")
+    arrow(16, 39, 4, "initialModel")
+    m = tbox(40, 3, "Model")
+    cv.put(40, 1, "↺ withStartRequests", "b")
+    cv.v(43, 2, 3, "c")
+    # Model to Updated, four ways
+    mx = m[0] + m[2] - 1
+    cv.v(mx + 3, 4, 13, "c"); cv.h(mx, mx + 3, 4, "c")
+    for j, nm in enumerate(["update", "change", "command", "unchanged"]):
+        y = 10 + j
+        cv.h(mx + 3, 74, y, "c"); cv.put(75, y, "▶", "c"); cv.put(mx + 5, y, " " + nm + " ", "b")
+    cv.box(76, 9, 11, 6, "d3"); cv.put(78, 10, "Updated", "ty")
+    # Model to RunState
+    arrow(mx, 75, 4, "runStateOf")
+    r = tbox(76, 3, "RunState")
+    rx = r[0] + r[2] - 1
+    cv.put(76, 1, "↺ 13 that give RunState back", "b")
+    cv.v(79, 2, 3, "c")
+    for j, (nm, out) in enumerate([("createPage", "Page"), ("runChange", "Ran"), ("isBeacon", "boolean")]):
+        y = 4 + j * 4
+        if j: cv.v(rx + 2, 4, y, "c")
+        cv.h(rx if j == 0 else rx + 2, 112, y, "c"); cv.put(113, y, "▶", "c"); cv.put(rx + 3, y, " " + nm + " ", "b")
+        tbox(114, y - 1, out)
+    return cv.rows()
+screen("mapx-type-graph", "Types as boxes, functions on the arrows",
+       "A type's map turned inside out. Boxes are types, arrows are the functions that turn one into another. Model is made from Given and UserRecord, becomes Updated four ways, and RunState by runStateOf.",
+       pane_head(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", "types and what turns them", "   > < levels   l opens a box") + type_graph(),
+       "Model  map", cursor="Model", trail="Model")
+
+# ── 7. butterfly: who calls it on the left, what it calls on the right ──
+def butterfly(root):
+    callers = sorted(CALLERS[root], key=lambda c: (is_test(N[c]["path"]), N[c]["path"]))
+    L = []
+    for c in callers:
+        n = N[c]; test = is_test(n["path"])
+        p = n["path"].replace(CORE, "").replace("packages/", "")
+        L.append(s("d3", p + "  ") + s("d3" if test else "b", n["name"] or "(top level)"))
+    R = [N[k]["name"] for k in kids(root)]
+    n = max(len(L), len(R)); mid = n // 2
+    lx = 58
+    cv = Canvas(RW - 2, n)
+    l0 = mid - len(L) // 2; r0 = mid - len(R) // 2
+    for j, seg in enumerate(L):
+        y = l0 + j
+        cv.seg(seg, lx - width(seg), y); cv.h(lx + 1, lx + 3, y, "c")
+    cv.v(lx + 3, l0, l0 + len(L) - 1, "c"); cv.h(lx + 3, lx + 6, mid, "c")
+    nm = N[root]["name"]
+    cv.put(lx + 7, mid, nm, "b bold")
+    bx = lx + 8 + len(nm)
+    cv.h(bx, bx + 3, mid, "c"); cv.v(bx + 3, r0, r0 + len(R) - 1, "c")
+    for j, r in enumerate(R):
+        cv.h(bx + 3, bx + 5, r0 + j, "c"); cv.put(bx + 6, r0 + j, r, "b")
+    return cv.rows()
+screen("mapx-butterfly", "Both ways at once",
+       "Who calls createRun on the left, what it calls on the right. Callers in tests are dim and last: one caller outside tests, WaymarkRoot in react. One picture answers where it sits.",
+       pane_head(crh, "function in run/run.ts:33   called by 16, calls 17", "both ways", "   l opens a side's name") + butterfly(ROOT), "createRun()  map · both ways")
+
+# ── 8. boxes and lines, each function drawn once ────────────────────────
+def dag(root, levels):
+    depth = {root: 0}
+    order = [root]
+    for d in range(levels):
+        for i in list(order):
+            if depth[i] != d: continue
+            for k in kids(i):
+                if k not in depth: depth[k] = d + 1; order.append(k)
+    nodes = set(depth)
+    nd = max(depth.values())
+    cols = [[] for _ in range(nd + 1)]
+    for i in order: cols[depth[i]].append(("n", i))
+    # dummies for edges that skip a column
+    edges = []
+    for i in order:
+        for k in kids(i):
+            if k not in nodes: continue
+            a, b = depth[i], depth[k]
+            if b != a + 1: continue
+            prev = ("n", i)
+            for d in range(a + 1, b):
+                dm = ("d", i, k, d); cols[d].append(dm); edges.append((prev, dm)); prev = dm
+            edges.append((prev, ("n", k)))
+    # barycentre order, once left to right
+    pos = {}
+    for d, col in enumerate(cols):
+        if d:
+            def bc(it):
+                ps = [pos[a] for a, b in edges if b == it and a in pos]
+                return sum(ps) / len(ps) if ps else 0
+            col.sort(key=bc)
+        for y, it in enumerate(col): pos[it] = y * 2
+    colw = [max((len(N[it[1]]["name"]) + 2 if it[0] == "n" else 2) for it in col) for col in cols]
+    gut = []
+    for d in range(nd):
+        parents = [it for it in cols[d] if any(a == it for a, b in edges)]
+        gut.append(len(parents) * 2 + 3)
+    xs, x = [], 0
+    for d in range(nd + 1):
+        xs.append(x); x += colw[d] + (gut[d] if d < nd else 0)
+    H_ = max(len(c) for c in cols) * 2
+    cv = Canvas(x + 2, H_)
+    for d, col in enumerate(cols):
+        for it in col:
+            y = pos[it]
+            if it[0] == "n":
+                cv.put(xs[d], y, " " + N[it[1]]["name"] + " ", "chipb" if it[1] == root else "chip b")
+            else:
+                cv.h(xs[d] - 1, xs[d] + colw[d], y, "d3")
+    for d in range(nd):
+        parents = [it for it in cols[d] if any(a == it for a, b in edges)]
+        x0 = xs[d] + colw[d]
+        for t, p in enumerate(parents):
+            tx = x0 + 1 + t * 2
+            kidsy = [pos[b] for a, b in edges if a == p]
+            py = pos[p]
+            pw = (len(N[p[1]]["name"]) + 2) if p[0] == "n" else colw[d]
+            cv.h(xs[d] + pw, tx, py, "c")
+            cv.v(tx, min(kidsy + [py]), max(kidsy + [py]), "c")
+            for ky in kidsy: cv.h(tx, xs[d + 1] - 1, ky, "c")
+    return cv.rows()
+LINK = byname("createLink")
+screen("mapx-graph", "Boxes and lines, each function once",
+       "A real graph of createLink two calls deep. A function called from two places is drawn once with two lines in, so dictionary and copy show they are shared. Calls between names in the same column are left out, and lines that cross read as joined: the cost of a graph in text.",
+       pane_head(s("b bold", "createLink") + s("pun", "()"), "function in storage/link.ts:63   calls 9", "calls as a graph", "   > < levels") + dag(LINK, 2),
+       "createLink()  map · graph", cursor="createLink()", trail="createLink()")
+
+# ── 9. a matrix: which file calls which ─────────────────────────────────
+def matrix(folder):
+    E = collections.Counter()
+    def ok(p): return p.startswith(CORE) and not is_test(p)
+    for i, n in N.items():
+        if not ok(n["path"]) or not n["path"].startswith(CORE + folder): continue
+        for c, _, _ in n["calls"]:
+            if c in N and ok(N[c]["path"]) and N[c]["path"] != n["path"]:
+                E[(short(n["path"]), short(N[c]["path"]))] += 1
+    rws = sorted({a for a, b in E})
+    cls = sorted({b for a, b in E}, key=lambda p: (not p.startswith(folder), p))
+    lw, cw = 22, 4
+    x0 = lw + 2
+    out = []
+    for j, c in enumerate(cls):
+        r = s("", " " * (x0 + 1))
+        for k in range(j): r += s("d3", "│".ljust(cw))
+        r += s("d3", "┌─ ") + s("fd" if c.startswith(folder) else "c", c)
+        out.append((r, ""))
+    for a in rws:
+        r = s("", " ") + s("fg", posixpath.basename(a).rjust(lw)) + s("", "  ")
+        for c in cls:
+            n = E.get((a, c))
+            r += (s("o", str(n).ljust(cw)) if n else s("d3", "·".ljust(cw)))
+        out.append((r, ""))
+    return out
+screen("mapx-matrix", "A matrix of files",
+       "A folder's map as a grid: each run/ file down the side, every file they call across the top, the number of calls where they meet. It shows the shape of a folder at once, and shows nothing about any one function.",
+       pane_head(s("fg bold", "run/"), "folder in core/src   10 files call into 21", "files as a grid", "") + matrix("run/"),
+       "run/  map · grid", cursor="run/", trail="run/")
+
+# ── 10. in order, a lane for each file ──────────────────────────────────
+def sequence(root):
+    calls = [(c, l) for c, l, _ in N[root]["calls"] if c in N]
+    calls.sort(key=lambda t: t[1])
+    lanes = [HOME]
+    for c, _ in calls:
+        if N[c]["path"] not in lanes: lanes.append(N[c]["path"])
+    lw, cw = 26, 5
+    x0 = lw + 3
+    out = []
+    for j, p in enumerate(lanes):
+        r = s("", " " * x0)
+        for k in range(j): r += s("d3", "│".ljust(cw))
+        nm = posixpath.basename(p).replace(".ts", "")
+        r += s("d3", "┌─ ") + s("fg bold" if p == HOME else "fd", nm)
+        out.append((r, ""))
+    for c, l in calls:
+        t = lanes.index(N[c]["path"])
+        r = s("", " ") + s("c", str(l).rjust(4)) + s("", "  ") + s("b", N[c]["name"].ljust(lw - 6)) + s("", "  ")
+        for k in range(len(lanes)):
+            if k == 0: r += s("c", "●") + s("c", "─" * (cw - 1) if t > 0 else " " * (cw - 1))
+            elif k < t: r += s("c", "─" * cw)
+            elif k == t: r += s("b", "●") + s("", " " * (cw - 1))
+            else: r += s("d3", "│".ljust(cw))
+        out.append((r, ""))
+    return out
+screen("mapx-sequence", "In order, a lane for each file",
+       "Every call createRun makes, in the order of the code, each file a lane. Shows when it touches what: setup first, the storage calls in the middle, the checklist calls at the end.",
+       pane_head(crh, crr, "calls in order", "") + sequence(ROOT), "createRun()  map · in order")
+
+# ── 11. how much each call reaches ──────────────────────────────────────
+def weights(root):
+    ks = sorted(kids(root), key=lambda k: -len(reach(k)))
+    tot = len(reach(root))
+    mx = max(len(reach(k)) for k in ks)
+    bw = 60
+    out = [(s("", " ") + s("c", f"of the {tot} functions createRun reaches, each call reaches"), ""), blank()[0]]
+    for k in ks:
+        n = len(reach(k))
+        w = round(bw * n / mx)
+        r = s("", "   ") + s("b", N[k]["name"].ljust(18)) + (s("bar", " " * w) if w else s("d3", "▏")) + s("c", f" {n}")
+        if N[k]["path"] != HOME: r += s("", " " * (bw + 26 - width(r))) + s("d3", short(N[k]["path"]))
+        out.append((r, ""))
+    return out
+screen("mapx-weight", "How much each call reaches",
+       "A bar for how many functions each call goes on to reach. update is where the weight is. A first look at a big function: which branch to open.",
+       pane_head(crh, crr, "calls by reach", "   l opens") + weights(ROOT), "createRun()  map · by reach")
+
+# ── 12. an icicle: width is how much is under it ────────────────────────
+def icicle(root, levels):
+    bw = RW - 4
+    out = []
+    rowcls = ["chipb", "bar", "bar2", "bar3"]
+    spans = [(root, 0, bw)]
+    out.append((s("", " ") + s("bar", (" " + N[root]["name"]).ljust(bw)), ""))
+    for d in range(1, levels + 1):
+        nxt = []
+        line = [(" ", "")] * bw
+        cells = []
+        for i, x, w in spans:
+            ks = kids(i)
+            if not ks or w < 2: continue
+            tot = sum(len(reach(k)) + 1 for k in ks)
+            at = x
+            small = []
+            for k in sorted(ks, key=lambda k: -len(reach(k))):
+                kw = int(w * (len(reach(k)) + 1) / tot)
+                if kw < len(N[k]["name"]) + 2: small.append(k); continue
+                cells.append((at, kw, N[k]["name"])); nxt.append((k, at, kw)); at += kw
+            if small and x + w - at >= 2:
+                cells.append((at, x + w - at, f"⋯{len(small)}"))
+        r = s("", " ")
+        at = 0
+        for j, (x, w, nm) in enumerate(sorted(cells)):
+            if x > at: r += s("", " " * (x - at))
+            cl = "bar2" if (j % 2 == 0) else "bar3"
+            r += s(cl, (" " + nm).ljust(w - 1)[:w - 1]) + s("", " ")
+            at = x + w
+        out.append((r, ""))
+        spans = nxt
+    return out
+screen("mapx-icicle", "An icicle",
+       "The call tree as nested bars, each as wide as how much is under it, three calls deep. Small calls fold into ⋯ and a count. The shape of a big function in one glance; names get cut where it's thin.",
+       pane_head(crh, crr, "calls as bars", "   > < levels   l zooms in") + icicle(ROOT, 3), "createRun()  map · bars")
+
+# ── 13. every way from one to another ───────────────────────────────────
+def paths(a, b, maxd=5):
+    found = []
+    def dfs(x, path):
+        if len(path) > maxd: return
+        for k in kids(x):
+            if k == b: found.append(path[1:]); continue
+            if k not in path: dfs(k, path + [k])
+    dfs(a, [a])
+    found.sort(key=lambda p: (len(p), [N[i]["name"] for i in p]))
+    col = max(sum(len(N[i]["name"]) + 4 for i in p) for p in found) + len(N[a]["name"]) + 6
+    out = []
+    prev = []
+    for j, p in enumerate(found):
+        r = s("", " ")
+        if j == 0: r += s("b bold", N[a]["name"]) + s("c", " ─┬─")
+        else: r += s("", " " * (len(N[a]["name"]) + 2)) + s("c", "└─" if j == len(found) - 1 else "├─")
+        at = len(N[a]["name"]) + 5
+        for k, i in enumerate(p):
+            same = k < len(prev) and prev[:k + 1] == p[:k + 1]
+            r += s("c", " ") + s("d3" if same else "b", N[i]["name"]) + s("c", " ─")
+            at += len(N[i]["name"]) + 3
+        r += s("c", "─" * (col - at))
+        r += s("c", ("─┬─▶ " if j == 0 else "─┘" if j == len(found) - 1 else "─┤"))
+        if j == 0: r += s("b bold", N[b]["name"])
+        out.append((r, ""))
+        prev = p
+    return out, len(found)
+OPEN = byname("begin", "walkthroughs")
+prow, pn = paths(ROOT, OPEN)
+screen("mapx-paths", "Every way from one to another",
+       f"Pick two functions and see each way the first reaches the second: here the {pn} ways createRun gets to begin. A name already on the line above is dim, so where the ways part is plain.",
+       pane_head(crh + s("c", "  to  ") + s("b bold", "begin") + s("pun", "()"), f"{pn} ways, at most 5 calls deep", "ways between two", "   m marks the second") + prow,
+       "createRun() → begin()  map · ways")
+
+# ── 14. the body cut to its calls ───────────────────────────────────────
+def skeleton(root):
+    lines = open(os.path.join(SRC, "run/run.ts")).read().split("\n")
+    n0, n1 = N[root]["line"], N[root]["end_line"]
+    names = {N[k]["name"] for k in kids(root)}
+    opener = re.compile(r"^(\s*)(?:(?:const|let) (\w+)(?::[^=]+)? = (?:\([^)]*\)|\w+) =>|function (\w+)\(([^)]*)\)|(\w+): (?:\([^)]*\)|\w+) =>|(if) \((.*?)\)(?= )|(\w+): on\()")
+    stack, out = [], []
+    shown = []
+    for ln in range(n0, n1):
+        src = lines[ln]
+        ind = len(src) - len(src.lstrip())
+        while stack and ind <= stack[-1][0] and src.strip().startswith(("}", ")")) is False and ind <= stack[-1][0]:
+            stack.pop()
+        while stack and ind <= stack[-1][0] and src.strip().startswith(("}", "})", "},", "};")):
+            stack.pop(); break
+        m = opener.match(src)
+        found = [(m2.start(), m2.group(1)) for m2 in re.finditer(r"\b(\w+)\(", src) if m2.group(1) in names]
+        if m and ln > n0:
+            label = m.group(2) or m.group(3) or m.group(5) or m.group(8)
+            kind = "if " + cut(m.group(7), 44) if m.group(6) else label
+            stack.append((ind, kind, ln + 1))
+        if found:
+            ctx = tuple(k for _, k, _ in stack)
+            shown.append((ctx, [f for _, f in found], ln + 1))
+    rows = [(s("", " ") + s("b bold", "createRun") + s("pun", "(") + s("fg", "options") + s("pun", ")"), "")]
+    last = ()
+    for ctx, fs, ln in shown:
+        for d in range(len(ctx)):
+            if d >= len(last) or last[d] != ctx[d]:
+                k = ctx[d]
+                lab = s("m it", "if ") + ts(k[3:]) if k.startswith("if ") else s("fg", k) + s("c", " ⇒")
+                rows.append((s("", " " + "   " * (d + 1)) + lab, ""))
+        r = s("", " " + "   " * (len(ctx) + 1))
+        for f in fs: r += s("b", f) + s("", "  ")
+        r += s("", " " * max(1, 64 - width(r))) + s("d3", str(ln))
+        rows.append((r, ""))
+        last = ctx
+    return rows
+screen("mapx-skeleton", "The body cut down to its calls",
+       "createRun with everything but its calls taken out, keeping the closures and ifs they sit in. Shows when a call happens: at once, inside step, or only when a checklist is first asked for. The line on the right.",
+       pane_head(crh, crr, "calls where they happen", "   l opens a call") + skeleton(ROOT), "createRun()  map · where")
+
+# ── 15. a folder map: folders as boxes, calls on the arrows ─────────────
+def folders():
+    def ok(p): return p.startswith(CORE) and not is_test(p)
+    E = collections.Counter(); files = collections.defaultdict(set)
+    for i, n in N.items():
+        if not ok(n["path"]): continue
+        a = posixpath.dirname(short(n["path"])) or "."
+        files[a].add(n["path"])
+        for c, _, _ in n["calls"]:
+            if c in N and ok(N[c]["path"]):
+                b = posixpath.dirname(short(N[c]["path"])) or "."
+                if a != b: E[(a, b)] += 1
+    cv = Canvas(RW - 2, 24)
+    def fbox(x, y, d, w=24):
+        nm = (d + "/") if d != "." else "core/src/ files"
+        cv.box(x, y, w, 4, "d3"); cv.put(x + 2, y + 1, nm, "fg bold"); cv.put(x + 2, y + 2, f"{len(files[d])} file" + ("s" if len(files[d]) != 1 else ""), "c")
+        return (x, y, w)
+    run = fbox(0, 8, "run")
+    mids = {"walkthrough": fbox(50, 1, "walkthrough"), "storage": fbox(50, 8, "storage"), "checklists": fbox(50, 15, "checklists")}
+    dot = fbox(100, 8, ".")
+    def lab(n): return f" {n} call" + ("s " if n != 1 else " ")
+    # run → the three
+    cv.h(24, 34, 10, "c"); cv.v(34, 3, 17, "c")
+    for d, y in [("walkthrough", 3), ("storage", 10), ("checklists", 17)]:
+        cv.h(34, 48, y, "c"); cv.put(49, y, "▶", "c"); cv.put(37, y, lab(E[("run", d)]), "o")
+    # run → . over the top
+    cv.v(12, 0, 7, "c"); cv.h(12, 112, 0, "c"); cv.v(112, 0, 7, "c"); cv.put(112, 7, "▼", "c"); cv.put(60, 0, lab(E[("run", ".")]), "o")
+    # storage → checklists, storage → ., checklists → ., checklists → walkthrough
+    cv.v(62, 12, 14, "c"); cv.put(62, 14, "▼", "c"); cv.put(64, 13, lab(E[("storage", "checklists")]), "o")
+    cv.h(74, 98, 10, "c"); cv.put(99, 10, "▶", "c"); cv.put(80, 10, lab(E[("storage", ".")]), "o")
+    cv.h(74, 108, 17, "c"); cv.v(108, 12, 17, "c"); cv.put(108, 12, "▲", "c"); cv.put(80, 17, lab(E[("checklists", ".")]), "o")
+    cv.h(74, 78, 16, "c"); cv.v(78, 3, 16, "c"); cv.h(75, 78, 3, "c"); cv.put(74, 3, "◀", "c"); cv.put(79, 6, lab(E[("checklists", "walkthrough")]), "o")
+    return cv.rows()
+screen("mapx-folders", "Folders as boxes, calls on the arrows",
+       "A package's map: one box a folder, an arrow where one calls into another, the count on it. run/ calls everything; nothing calls run/. The boundaries, drawn.",
+       pane_head(s("fg bold", "core/src/"), "package core   5 folders", "folders", "   l opens a box") + folders(),
+       "core/src/  map · folders", cursor="core/src/", trail="core/src/")
+
+# ── 16. values as lanes: what each call makes, who takes it ─────────────
+def lanes():
+    # read off createRun's body: each value, the call that makes it, the calls it's handed to
+    V = [("report", "ReportProblem<TStep>"), ("queue", "Queue"), ("adapter", "StorageAdapter"),
+         ("(record)", "UserRecord"), ("model", "Model"), ("runState", "RunState"), ("group", "ChecklistGroup")]
+    R_ = [("problemReporter", 36, [], "report"), ("createQueue", 37, ["report"], "queue"), ("adapterOf", 38, [], "adapter"),
+          ("userRecordAt", 47, ["adapter"], "(record)"), ("initialModel", 47, ["(record)"], "model"),
+          ("runStateOf", 51, ["model"], "runState"), ("createPage", 67, ["queue", "runState"], None),
+          ("createLink", 69, ["adapter", "queue", "report"], None), ("update", 93, ["model"], "model"),
+          ("groupOf", 180, [], "group"), ("viewChecklist", 181, ["group", "runState"], None),
+          ("listen", 197, ["queue"], None), ("openOf", 228, ["runState"], None)]
+    names = [v for v, _ in V]
+    T = dict(V)
+    first = {}; lastu = {}
+    for r, (nm, ln, takes, makes) in enumerate(R_):
+        if makes and makes not in first: first[makes] = r
+        for t in takes: lastu[t] = r
+        if makes: lastu[makes] = max(lastu.get(makes, r), r)
+    lw, cw = 22, 4
+    out = []
+    for r, (nm, ln, takes, makes) in enumerate(R_):
+        row = s("", " ") + s("c", str(ln).rjust(4)) + s("", "  ") + s("b", nm.ljust(lw - 6))
+        lastdot = max([names.index(t) for t in takes] + ([names.index(makes)] if makes else []) + [-1])
+        for k, v in enumerate(names):
+            live = v in first and first[v] <= r <= lastu.get(v, -1)
+            hop = k < lastdot
+            if v in takes: row += s("o", "●") + s("c", "─" * (cw - 1) if hop else " " * (cw - 1))
+            elif v == makes and first[v] == r: row += s("g", "●") + s("c", "─" * (cw - 1) if hop else " " * (cw - 1))
+            elif v == makes: row += s("g", "●") + s("c", "─" * (cw - 1) if hop else " " * (cw - 1))
+            elif hop: row += s("c", "─" * cw)
+            elif live: row += s("d3", "│".ljust(cw))
+            else: row += s("", " " * cw)
+        if makes: row += s("c", " → ") + s("fg", makes) + s("", "  ") + ts(T[makes])
+        out.append((row, ""))
+    return out
+screen("mapx-lanes", "Values as lanes",
+       "Each value createRun makes is a lane that starts at the call that makes it and runs down to the last call it is handed to. Read across a row for what a call takes; down a lane for where a value goes. Types ride on the values, not on every call.",
+       pane_head(crh, crr, "values between calls", "") + lanes(), "createRun()  map · values")
+
+# ── the gallery ─────────────────────────────────────────────────────────
+G = []
+for k, (name, title, cap, body) in enumerate(SHOTS, 1):
+    G.append(f"<h2><small>{k}</small>{H.escape(title)}</h2><p class='cap'>{H.escape(cap)}</p>{body}")
+open("/tmp/seam-tree/v6/map-ideas.html", "w").write(
+    "<!doctype html><html><head><meta charset='utf-8'><style>" + lib.SHOT_CSS.replace("width:1380px", "max-width:1380px") +
+    " h2{color:#c0caf5;font-family:system-ui} .cap{color:#a9b1d6;font-family:system-ui}</style></head><body><main>" + "".join(G) + "</main></body></html>")
+print("\n".join(n for n, *_ in SHOTS))
