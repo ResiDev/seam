@@ -245,10 +245,15 @@ run/
 - **A file's rows** are its exports, then what it keeps to itself, dimmer.
 - **`l` on a function** opens what it calls, in the order they run. `h`
   closes it. Each call has all the views and opens with `l` again.
-- **Where a call lives, without saying it.** A call into this file is plain.
-  A call into another file is underlined, as imports are in the code. A
-  call into another package carries that package's hue bar, as the explorer
-  draws it today.
+- **Where a call lives: underlined.** Decided 2026-10-31 from six marks
+  (`mocks/where-*.png`). A name from this file is plain. A name from another
+  file is underlined. A name from another package is underlined in that
+  package's hue, and its tree row carries the hue bar, as the explorer draws
+  it today. The same mark in the tree and in the code beside it, on every
+  use of the name, not only calls (`[conditions]`, `[detached]`). Names from
+  outside the repo (`useRef`, `useMemo`) stay plain: they have no row.
+  Mocks: `mocks/where-underline-core.png` (update()),
+  `where-underline-react.png` (useOwnedRun() calling core's createRun).
 - **A call already open above** (recursion) is dim and doesn't open.
 - **Each row can show what it takes and gives,** as above, or its used by
   and built from counts. One key flips them, and the choice stays, like `T`
@@ -411,7 +416,8 @@ underlined.
 marks, each the same in the tree and the code beside it, on update() (6
 calls in its own file, 11 in others) and react's useOwnedRun() (createRun
 from core): `mocks/where-{underline,dotted,italic,bold-here,glyph,file}-{core,react}.png`
-(`src/tree/where.py`). B to D of section 1 were not liked; open again.
+(`src/tree/where.py`). **Underline chosen**, see "Where a call lives" in The
+tree. B to D of section 1 were not liked; open again.
 
 ### 2. Switching views
 
