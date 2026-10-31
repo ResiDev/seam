@@ -414,6 +414,15 @@ cut with `…`; or the first level only as names, the rest on `l`.
 - B. The code with every line that makes no named value folded, as try-c's
   `zM`.
 
+Mocked on createRun: `mocks/code-types-a.png`, `-b`, `-c` (7a, the cursor
+on `queue`, its later uses lit), `mocks/code-types-only-a.png` and `-b`
+(7b), `mocks/code-cursor.png` (7d). A value's type is the name in the
+declared return of the call that made it, else the server's inlay hint when
+it's short; the server's hint alone writes raf's aliases out in full
+(`queue` comes back as `Readonly<{ run: …; invoke: …; … }>`), so it never
+names a type. Nothing is added where the type is written, and an arrow
+function gets its return after its parameters, as TypeScript's own hints do.
+
 7c. **Later uses lit,** and the head's trail after `J` `J` `J`.
 
 7d. **The cursor on each kind of name:** a local call, a method
