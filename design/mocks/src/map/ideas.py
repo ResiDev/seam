@@ -717,6 +717,76 @@ screen("mapy-fn-folders", "A function, folders",
        phead(crh, crr, "folders", hint="     > < levels   l opens a box") + fn_folders(ROOT),
        "createRun()  map · folders")
 
+
+# folders, on a function, both sides: who calls it left, what it calls right
+def fn_folders_both(root):
+    def group(ids):
+        g = collections.OrderedDict()
+        for k in ids:
+            path = N[k]["path"]
+            d = posixpath.dirname(short(path)) if path.startswith(CORE) else posixpath.dirname(path.replace("packages/", ""))
+            g.setdefault(d, collections.OrderedDict()).setdefault(posixpath.basename(path), []).append(N[k]["name"] or "(top level)")
+        return g
+    R = group(kids(root))
+    callers = CALLERS[root]
+    real = [c for c in callers if not is_test(N[c]["path"])]
+    tests = [c for c in callers if is_test(N[c]["path"])]
+    L = group(real)
+    def bsize(files): return len(files) + 3
+    def bwidth(files, title):
+        mf = max(len(x) for x in files)
+        return max(mf + 4 + max(len("  ".join(v)) for v in files.values()) + 4, len(title) + 8)
+    rorder = sorted(R, key=lambda d: -sum(len(v) for v in R[d].values()))
+    rh = sum(bsize(R[d]) for d in rorder) + len(rorder) - 1
+    lh = sum(bsize(L[d]) for d in L) + len(L) + 3
+    H_ = max(rh, lh)
+    cv = Canvas(RW - 2, H_)
+    mid = H_ // 2
+    nm = N[root]["name"]
+    cx = 44
+    cv.box(cx, mid - 1, len(nm) + 4, 3, "d3"); cv.put(cx + 2, mid, nm, "b bold"); cv.put(cx + 2, mid + 2, "run/", "c")
+    def draw(files, title, x, y, w, dim=False):
+        cv.box(x, y, w, bsize(files), "d3")
+        cv.put(x + 2, y, " " + title + " ", "c" if dim else "fg bold")
+        mf = max(len(f) for f in files)
+        for j, (f, v) in enumerate(files.items()):
+            cv.put(x + 2, y + 2 + j, f.ljust(mf + 2), "d3" if dim else "fd")
+            cv.put(x + 4 + mf, y + 2 + j, "  ".join(v), "d3" if dim else "b")
+    # left: the callers, by folder, then the tests as a count
+    y = mid - (lh // 2); lys = []
+    for d in L:
+        title = (d + "/")
+        w = bwidth(L[d], title)
+        draw(L[d], title, 0, y, w)
+        lys.append((y + 2, w)); y += bsize(L[d]) + 1
+    tfiles = len({N[c]["path"] for c in tests})
+    cv.put(2, y, f"⋯ {len(tests)} in tests, {tfiles} files", "c"); lys.append((y, len(f"⋯ {len(tests)} in tests, {tfiles} files") + 2))
+    lbus = cx - 6
+    for ay, w in lys:
+        cv.h(w + (0 if w > 30 else 0), lbus, ay, "c")
+    cv.v(lbus, min(a for a, _ in lys + [(mid, 0)]), max(a for a, _ in lys + [(mid, 0)]), "c")
+    cv.h(lbus, cx - 2, mid, "c"); cv.put(cx - 1, mid, "▶", "c")
+    n = len(callers)
+    # right: what it calls
+    rbus = cx + len(nm) + 8
+    bx = rbus + 14
+    y = mid - rh // 2; tops = []
+    cv.h(cx + len(nm) + 4, rbus, mid, "c")
+    for d in rorder:
+        title = (d + "/") if d else "core/src/ files"
+        draw(R[d], title, bx, y, bwidth(R[d], title))
+        ay = y + 2; tops.append(ay)
+        k = sum(len(v) for v in R[d].values())
+        cv.h(rbus, bx - 2, ay, "c"); cv.put(bx - 1, ay, "▶", "c")
+        cv.put(rbus + 2, ay, f" {k} call" + ("s " if k != 1 else " "), "o")
+        y += bsize(R[d]) + 1
+    cv.v(rbus, min(tops + [mid]), max(tops + [mid]), "c")
+    return cv.rows()
+screen("mapy-fn-folders-both", "A function, folders, both sides",
+       "Who calls createRun on the left, by folder, tests folded to a count; what it calls on the right. Every arrow runs from the caller to what it calls, left to right, as both ways does.",
+       phead(crh, "function in run/run.ts:33   called by 16, calls 17", "folders", hint="     > < levels   l opens a box") + fn_folders_both(ROOT),
+       "createRun()  map · folders")
+
 # both ways, on a folder and on a type
 def both(left, right, centre, lw=56):
     n = max(len(left), len(right)); mid = n // 2

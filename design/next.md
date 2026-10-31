@@ -466,16 +466,22 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
 | **tree** | what it calls, tree lines, `> <` levels, `l` opens the call under the cursor | open | open | types as boxes, the functions that turn one into another on the arrows |
-| **both ways** | its callers left (tests dim, last), its calls right | the files outside it that call in, left; the files it calls out to, right; each with the names that cross | the same for a file | who makes it, left; who takes it, right |
-| **folders** | the folders its calls go into, a box each holding the files and names, the count on the arrow | its folders as boxes, the count of calls on each arrow | open | open |
+| **both ways** | its callers left (tests dim, last), its calls right | the files outside it that call in, left; the files it calls out to, right; each with the names that cross | the same for a file | the functions that make it, left; the functions that take it, right. Not the types it is made of: the Types view has those |
+| **folders** | who calls it, by folder, on the left (tests folded to a count); the folders its calls go into on the right; a box each holding the files and names, the count on the arrow | its folders as boxes, the count of calls on each arrow | open | open |
 | **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | open | none |
 
+- **Arrows run from the caller to what it calls,** always left to right:
+  who uses a thing is on its left, what it uses on its right. The first
+  folders mock had only the right side, and its arrows read as pointing the
+  wrong way; with the callers on the left too, the direction reads itself
+  and Used by is in the same picture (`mapy-fn-folders-both.png`).
 - **`T` shows and hides inputs and outputs,** in every display that has
   functions in it, and the choice stays, as `T` does in the tree. In the
   tree it adds the takes and gives columns (`mapx-type-columns.png`); in
   both ways the makers show what they take and the takers what they give.
 - Mocks: `mocks/mapy-fn-tree.png` (`T` off), `mapy-fn-tree-types.png` (`T`
-  on), `mapy-fn-folders.png`, `mapy-folder-both.png` (storage/),
+  on), `mapy-fn-folders-both.png` (`mapy-fn-folders.png` was the right side
+  only), `mapy-folder-both.png` (storage/),
   `mapy-type-both.png` (Model, `T` on), `mapy-folder-size.png` (run/), with
   `mapx-folders.png` (core/src/) and `mapx-type-graph.png` (Model's tree).
 
