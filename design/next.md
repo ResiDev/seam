@@ -407,6 +407,12 @@ calls), `tree-cols-types.png` (`T`: takes and gives, the tree widened to
 createRun's 17 calls are in other files, so under A every row under it is
 underlined.
 
+1c again, after the user found A1 marked only the tree and A2 invisible: six
+marks, each the same in the tree and the code beside it, on update() (6
+calls in its own file, 11 in others) and react's useOwnedRun() (createRun
+from core): `mocks/where-{underline,dotted,italic,bold-here,glyph,file}-{core,react}.png`
+(`src/tree/where.py`). B to D of section 1 were not liked; open again.
+
 ### 2. Switching views
 
 - A. Tabs in the pane's head, `Code  Types  Built from  Used by  Map
