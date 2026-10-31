@@ -61,10 +61,20 @@ the cursor moves.
 
 - **Used by is where it's called.** The cursor on a use shows the caller's
   code around that line, so "used by" and "called at" are one view.
-- **Types expand.** One key opens the type under the cursor a level deeper
-  and one closes it, using the hover verbosity that ts-expand-hover uses in
-  your editor. So `Queue` opens into `run`, `invoke` and `fail` with their
-  signatures.
+- **Types open in place.** `+` on a type's name opens its declaration, as
+  written, under the line it is named on, a bar down its left and its file
+  and line at the top. `+` on a name inside that opens the next one, nested
+  under it: one level a press. `-` closes the one the cursor is in. `l`
+  stays the calls; `+` and `-` are only types. It works on a type's name
+  wherever one is drawn: the tree's rows when they show what they take and
+  give, the pane's head line, the Types view, the Code view's types
+  display, Built from and Used by as signature lines, the Map with `T` on,
+  and Changed, where an opened type carries its own `+`/`-` lines, so a
+  signature that reads the same but takes a changed type shows what changed
+  in it. Mocks: `mocks/open-type-a.png` (StoredRecord opened in
+  RunOptions), `open-type-b.png` (WalkthroughProgress opened inside it),
+  `open-type-changed.png` (keyAction: InputContext lost `collapsed`, gained
+  `dismiss`).
 - **A folder** rolls its files up.
 
 ### Types: the higher view
@@ -281,8 +291,8 @@ Open:
 - `n`/`N`: every name, or only the imports as today?
 - The key for code or types. `v` already turns code into the list, so it
   could cycle code, types, list.
-- The keys that open and close a type. Your editor uses `K` and `J`, which
-  are back and enter here. `zo`/`zc` read like opening a fold.
+- ~~The keys that open and close a type.~~ `+` and `-`, decided with the
+  mocks `mocks/open-type-*.png` (see "Types open in place" above).
 
 ## What changed (git)
 
