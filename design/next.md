@@ -85,6 +85,12 @@ Decided 2026-10-31, from the mocks `mocks/types-view-*.png`:
 - **`Readonly<…>` is left out,** since raf wraps every type in it.
 - **A function's takes and gives are written out under its line,** each
   type's declaration with its doc comment, open by default.
+- **One view at a time, over the full right side** (layout A,
+  `mocks/types-view-layout-a.png`). Tabs in the pane's head name them, the
+  one shown lit; `<Tab>` and `<S-Tab>` step through them. Two views side by
+  side (B) cut the signatures; a band over today's trees (C) breaks the
+  blank line between functions. Built from and Used by become single views
+  in the same pane, redesigned to fit it.
 - **A folder has the views a file has where they make sense:** Types, Built
   from, Used by and Changed. It has no Code.
 
