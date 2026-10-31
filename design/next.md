@@ -71,7 +71,10 @@ the cursor moves.
 
 Decided 2026-10-31, from the mocks `mocks/types-view-*.png`:
 
-- **A line a function, a blank line between functions.**
+- **A blank line between functions, always.** An opened function keeps
+  everything it opens together under its line, its parts one a line and
+  indented, closed by its `}` or `)`, then the blank line before the next
+  function (`mocks/types-view-opened.png`).
 - **A long signature is cut with `…`** at the column, so the arrows and the
   names stay in one column.
 - **A type parameter shows as what it extends,** `(ProblemHandlers<Step>)
