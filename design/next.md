@@ -463,6 +463,18 @@ signature.
 - B. The code as it is now, changed lines marked in the margin, removed
   ones as virtual lines.
 
+Mocked on two real versions of raf core, the base the Oct 17 copy
+(`raf-run-redesign`), now seam's copy of Oct 23, as no git history of raf
+is reachable here: `mocks/changed-tree-a.png`, `-b`, `-c` (8b),
+`mocks/changed-view-a.png` and `-b` (8d, on problems.ts),
+`mocks/changed-lens.png` (8c). A declaration is new, gone or changed by
+its text under treesitter; a changed function's signature changed when its
+written parameters or return differ, else its body. Used by on a changed
+signature lists who uses it now and who used it at the base: storageFailed
+lost its first parameter, five places in three files called it at the
+base, two in a new file call it now. 8a, choosing the base, is not drawn:
+it needs a repo's branches and commits.
+
 ### 9. Boundaries
 
 - A. The table of packages or folders against each other.
