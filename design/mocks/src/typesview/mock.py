@@ -285,3 +285,76 @@ page("types-view-generics", [("A. As written", sig_rows(A, 78)),
                              ("B. A type parameter left out where its default is used, NoInfer and const left out", sig_rows(B, 56)),
                              ("C. Each type parameter replaced by what it extends", sig_rows(C, 56))])
 print("ok")
+
+# ── layouts: where Types sits in today's explorer, on storage/
+def resolve(frm, spec):
+    if not spec.startswith("."): return None
+    p = os.path.normpath(os.path.join(os.path.dirname(frm), spec))
+    for c in (p + ".ts", p + "/index.ts"):
+        if c in F: return c
+    return p
+
+def users_of(folder):
+    out = {}
+    for f in D["files"]:
+        if f["path"].startswith(folder): continue
+        for im in f["imports"]:
+            r = resolve(f["path"], im["from"])
+            if r and r.startswith(folder): out.setdefault(f["path"], []).extend(im["names"])
+    return out
+
+def draws_on(folder):
+    out = {}
+    for f in D["files"]:
+        if not f["path"].startswith(folder): continue
+        for im in f["imports"]:
+            r = resolve(f["path"], im["from"])
+            if r and not r.startswith(folder): out.setdefault(r, []).extend(n for n in im["names"] if n not in out.get(r, []))
+    return out
+
+def file_tree(by, w, bars=False):
+    rows, last = [], None
+    for path in sorted(by, key=lambda p: (p.count("/") == 0, p)):
+        d = os.path.dirname(path) + "/" if "/" in path else ""
+        if d != last:
+            if d: rows.append((s("hcor", "▎") + s("", " ") + s("fd", d), ""))
+            last = d
+        names = by[path]
+        ind = "   " if d else " "
+        head = s("hcor", "▎") + s("", ind) + s("fg", os.path.basename(path)) + s("c", "  " + str(len(names)))
+        rows.append((head, ""))
+        line = ", ".join(names)
+        rows.append((s("hcor", "▎") + s("", ind + "  ") + ts(cut(line, w - len(ind) - 4)), ""))
+    return rows
+
+TY_ROWS = R[:4] + R[4:]  # the folder's Types view as drawn above (opened)
+types_rows = [r for r in R]
+ub, bf = users_of("storage/"), draws_on("storage/")
+
+def shot3(name, cols, status):
+    hd = [(s("c", " Seams › ") + s("fg bold", "storage/"), ""), (s("d3", "─" * W), "")]
+    L = tree({"storage/", "adapter.ts", "link.ts", "records.ts"}, "storage/")
+    n = max([len(L)] + [len(c) for c, _ in cols]) + 1
+    allc = [(L + blank(n - len(L)), LW)] + [(c + blank(n - len(c)), w) for c, w in cols]
+    lib.write_shot(name, compose(hd, allc, status, "<Tab> view   l open   J page   K back"))
+
+# B: Types in the middle, Used by on the right
+MW = 82; UW = W - LW - MW - 2
+plain = [(takes(fn(where.get(n, "storage/records.ts"), n)), n, ret_of(fn(where.get(n, "storage/records.ts"), n))) for n in outside]
+mid = [(s("", " ") + s("fg bold", "storage/") + s("c", "   8 functions and 9 types used outside it"), ""), blank()[0], title("Types"), blank()[0]] + sig_rows(plain, 34, "cut", gap=True)
+right = [(s("", " ") + s("c", "used by  ") + s("fg", f"{len(ub)} files"), ""), blank()[0], title("Used by"), blank()[0]] + file_tree(ub, UW)
+shot3("types-view-layout-b", [(mid, MW), (right, UW)], "storage/  types · used by")
+
+# C: today's two trees, Types across the top of them
+TW = (W - LW - 2) // 2
+band = [(s("", " ") + s("fg bold", "storage/") + s("c", f"   folder in {SRC}storage/   8 functions and 9 types used outside it"), ""), blank()[0]] + \
+       sig_rows(plain, 52, "cut")[:5] + [(s("c", "  ⋯ 3 more"), ""), (s("d3", "─" * (W - LW - 1)), "")]
+bft = [title("built from"), blank()[0]] + file_tree(bf, TW)
+ubt = [title("used by"), blank()[0]] + file_tree(ub, TW)
+n = max(len(bft), len(ubt))
+both = []
+for i in range(n):
+    a = bft[i] if i < len(bft) else ([], ""); b = ubt[i] if i < len(ubt) else ([], "")
+    both.append((lib.pad(a[0], TW) + s("d3", "│") + b[0], ""))
+shot3("types-view-layout-c", [(band + both, W - LW - 1)], "storage/  types · built from · used by")
+print("layouts ok")
