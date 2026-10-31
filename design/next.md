@@ -56,7 +56,7 @@ the cursor moves.
 | **Types** | what comes in and goes out: the types its exports take and give | the same for the file, then the types it declares | what it takes and gives, each type expandable | where it comes from and what it becomes, one step each way; its fields with who sets and reads each |
 | **Built from** | what it draws on, by file | what the file draws on, by file | what it draws on, by file | the types its fields are made of |
 | **Used by** | who imports from it | the files that import it, each line | each place that calls it: the file, the line, and the code there | who takes it and who gives it |
-| **Map** | the folders it draws on, then theirs; or the other way | the files it imports from, then theirs; or the other way | what it calls, then what those call, levels as asked | the functions that take it, the types they give, on from those |
+| **Map** | four displays on `<C-Tab>`: tree, both ways, folders, size (section 6) | the same four | the same four | the same four; its tree is types as boxes, functions on the arrows |
 | **Changed** | its files' diffs | the file's diff | its diff since the base | its declaration's diff |
 
 - **Used by is where it's called.** The cursor on a use shows the caller's
@@ -452,6 +452,38 @@ problems.ts under nearly every file.
 
 6c. **When it's too wide.** Scroll sideways; the levels past the screen
 cut with `…`; or the first level only as names, the rest on `l`.
+
+6d. **Sixteen more drawings** (`mocks/mapx-*.png`, from `src/map/ideas.py`
+on the same index): tree lines, names first with types in columns, names
+and what each gives, by file, file boxes in folder bands, a grid of files,
+folders as boxes, a graph of boxes and lines, both ways, every way between
+two, in order with a lane a file, the body cut to its calls, size by reach,
+an icicle, types as boxes with functions on the arrows, values as lanes.
+
+**Chosen.** The Map has four displays, the same on every kind of row,
+`<C-Tab>` stepping through them. The head lists them, the one shown bold.
+
+| Display | A function | A folder | A file | A type |
+|---|---|---|---|---|
+| **tree** | what it calls, tree lines, `> <` levels, `l` opens the call under the cursor | open | open | types as boxes, the functions that turn one into another on the arrows |
+| **both ways** | its callers left (tests dim, last), its calls right | the files outside it that call in, left; the files it calls out to, right; each with the names that cross | the same for a file | who makes it, left; who takes it, right |
+| **folders** | the folders its calls go into, a box each holding the files and names, the count on the arrow | its folders as boxes, the count of calls on each arrow | open | open |
+| **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | open | none |
+
+- **`T` shows and hides inputs and outputs,** in every display that has
+  functions in it, and the choice stays, as `T` does in the tree. In the
+  tree it adds the takes and gives columns (`mapx-type-columns.png`); in
+  both ways the makers show what they take and the takers what they give.
+- Mocks: `mocks/mapy-fn-tree.png` (`T` off), `mapy-fn-tree-types.png` (`T`
+  on), `mapy-fn-folders.png`, `mapy-folder-both.png` (storage/),
+  `mapy-type-both.png` (Model, `T` on), `mapy-folder-size.png` (run/), with
+  `mapx-folders.png` (core/src/) and `mapx-type-graph.png` (Model's tree).
+
+Open:
+- A file's and a folder's tree: its imports by file, as `map-file.png`, or
+  its functions and what each calls.
+- A file's folders and a type's folders: where it is used, by folder.
+- Whether four displays on every row is too many to keep in mind.
 
 ### 7. The Code view and the code screen
 
