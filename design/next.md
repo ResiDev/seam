@@ -69,6 +69,23 @@ the cursor moves.
 
 ### Types: the higher view
 
+Decided 2026-10-31, from the mocks `mocks/types-view-*.png`:
+
+- **A line a function, a blank line between functions.**
+- **A long signature is cut with `…`** at the column, so the arrows and the
+  names stay in one column.
+- **A type parameter shows as what it extends,** `(ProblemHandlers<Step>)
+  → problemReporter → ReportProblem<Step>`.
+- **One key opens the line under the cursor as written:** the parts it cut,
+  its type parameters, everything. The same key closes it. Which key is
+  still open.
+- **`Readonly<…>` is left out,** since raf wraps every type in it.
+- **A function's takes and gives are written out under its line,** each
+  type's declaration with its doc comment, open by default.
+- **A folder has the views a file has where they make sense:** Types, Built
+  from, Used by and Changed. It has no Code.
+
+
 The Types view is the high-level picture at every level of the tree, with
 no screen of its own. It has one shape everywhere: a line per function,
 what it takes, the function, what it gives, the functions lined up in one

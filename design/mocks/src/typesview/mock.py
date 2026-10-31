@@ -48,16 +48,29 @@ def parts(t):
     return out
 
 def ret_of(fn):
-    if fn.get("ret"): return simple(fn["ret"])
+    if fn.get("ret"): return as_bound(fn, simple(fn["ret"]))
     h = fn.get("hover") or ""
     if "=>" in h: return simple(h.rsplit("=>", 1)[1])
     return "void"
 
+def constraints(fn):
+    tp = (fn.get("tparams") or "").strip("<>")
+    out = {}
+    for part in re.split(r",\s*(?![^<]*>)", tp):
+        m = re.match(r"(?:const\s+)?(\w+)(?:\s+extends\s+([^=]+))?", part.strip())
+        if m: out[m.group(1)] = (m.group(2) or "unknown").strip()
+    return out
+
+def as_bound(fn, t):
+    for name, bound in constraints(fn).items():
+        t = re.sub(r"\b%s\b" % name, bound, t)
+    return t
+
 def takes(fn, generics="written"):
     ps = fn["params"]
     if len(ps) == 1 and ps[0].get("type") and simple(ps[0]["type"]).startswith("{"):
-        return simple(ps[0]["type"])
-    return "(" + ", ".join(simple(p["type"]) if p.get("type") else p["name"] for p in ps) + ")"
+        return as_bound(fn, simple(ps[0]["type"]))
+    return "(" + ", ".join(as_bound(fn, simple(p["type"])) if p.get("type") else p["name"] for p in ps) + ")"
 
 def fn(path, name):
     return next(x for x in F[path]["fns"] if x["name"] == name)
@@ -94,13 +107,14 @@ def wrap(text, w, level=1):
 def cut(text, w):
     return text if len(text) <= w else text[: w - 1] + "…"
 
-def sig_rows(items, pw, mode="wrap", on=None, kept=()):
+def sig_rows(items, pw, mode="wrap", on=None, kept=(), gap=False):
     """items: (takes, name, gives). mode: wrap | cut | parts"""
     nw = max(len(n) for _, n, _ in items)
     if mode == "wrap":  # a first line that can't break inside a type moves the column out
         pw = max([pw] + [len(wrap(tk, pw)[0]) for tk, _, _ in items])
     rows = []
-    for tk, name, gv in items:
+    for k, (tk, name, gv) in enumerate(items):
+        if gap and k: rows.append(([], ""))
         nm = s("fd" if name in kept else "b", name.ljust(nw))
         if mode == "parts" and tk.startswith("{") and len(tk) > pw:
             ps = parts(tk)
@@ -195,7 +209,7 @@ where = {"adapterOf": "storage/adapter.ts", "createLink": "storage/link.ts"}
 items = [(takes(fn(where.get(n, "storage/records.ts"), n)), n, ret_of(fn(where.get(n, "storage/records.ts"), n))) for n in outside]
 R = [(s("", " ") + s("fg bold", "storage/") + s("c", f"   folder in {SRC}storage/   3 files · 8 functions and 9 types used outside it"), ""), blank()[0],
      tabs(["Types", "Built from", "Used by"]), blank()[0],
-     title("functions used outside storage/")] + sig_rows(items, PW) + [blank()[0], title("types used outside storage/")]
+     title("functions used outside storage/")] + sig_rows(items, 52, "cut", gap=True) + [blank()[0], title("types used outside storage/")]
 tys = [("StoredRecord", 5), ("RecordChanges", 3), ("RecordUnreadableError", 3), ("Parsed", 2), ("Read", 2), ("StorageAdapter", 1), ("SaveAdapter", 1), ("SavePartialAdapter", 1), ("DroppedEntry", 1)]
 for n, c in tys:
     R.append((s("", " ") + s("ty", n.ljust(24)) + s("c", f"{c} file" + ("s" if c > 1 else "")), ""))
@@ -206,8 +220,8 @@ up = F["run/update.ts"]["fns"]
 ex = [(takes(x), x["name"], ret_of(x)) for x in up if x["exported"]]
 kp = [(takes(x), x["name"], ret_of(x)) for x in up if not x["exported"]]
 R = [(s("", " ") + s("fg bold", "update.ts") + s("c", f"   file in {SRC}run/   3 exported · 10 kept to itself"), ""), blank()[0],
-     tabs(["Code", "Types", "Built from", "Used by"]), blank()[0], title("exported")] + sig_rows(ex, 40) + \
-    [blank()[0], title("kept in update.ts")] + sig_rows(kp, 40, kept={n for _, n, _ in kp})
+     tabs(["Code", "Types", "Built from", "Used by"]), blank()[0], title("exported")] + sig_rows(ex, 40, "cut", gap=True) + \
+    [blank()[0], title("kept in update.ts")] + sig_rows(kp, 40, "cut", kept={n for _, n, _ in kp}, gap=True)
 shot("types-view-file", "run/update.ts", "update.ts", {"run/", "update.ts", "run.ts"}, R, "update.ts  types")
 
 # 3. a function: createRun
@@ -225,8 +239,8 @@ for f in D["files"]:
         if re.search(r"\bModel\b", g): givers.append((ps, x["name"], g))
         if re.search(r"\bModel\b", ps): takers.append((ps, x["name"], g))
 R = [(s("", " ") + s("ty bold", "Model") + s("c", f"   type in {SRC}state.ts:152   2 functions give one · 7 take one"), ""), blank()[0],
-     tabs(["Code", "Types", "Built from", "Used by"]), blank()[0], title("gives a Model")] + sig_rows(givers, 34, on="Model") + \
-    [blank()[0], title("takes a Model")] + sig_rows(takers, 34, on="Model") + [blank()[0], title("holds a Model")] + \
+     tabs(["Code", "Types", "Built from", "Used by"]), blank()[0], title("gives a Model")] + sig_rows(givers, 34, "cut", on="Model", gap=True) + \
+    [blank()[0], title("takes a Model")] + sig_rows(takers, 34, "cut", on="Model", gap=True) + [blank()[0], title("holds a Model")] + \
     [(s("", " ") + ts("Updated  { model: Model, effects: readonly Effect[] }", on="Model"), ""), blank()[0]] + decl("state.ts", "Model", "")[1:]
 shot("types-view-type", "state.ts › Model", "Model", {"run/"}, R, "Model  types")
 
