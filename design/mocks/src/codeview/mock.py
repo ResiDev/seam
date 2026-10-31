@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lens"))
 import lib
 from lib import s, ts, blank, compose
 lib.W = W = 178
-lib.SHOT_CSS += " .nv .vt{color:#737aa2;font-style:italic} .nv .vtc{color:#545c7e}"
+lib.SHOT_CSS += " .nv .vt{color:#737aa2} .nv .vtc{color:#545c7e}"
 SRC = sys.argv[1].rstrip("/") + "/"
 LINES = {}
 def src(path):
@@ -239,4 +239,10 @@ def grid(name, panes, cw):
         f"<!doctype html><html><head><meta charset='utf-8'><style>{lib.SHOT_CSS}</style></head><body>{top}<br>{bot}</body></html>")
 
 grid("code-cursor", [(call, method), (param, field)], 88)
+# the code screen whole: the cursor on `storage` in line 38, the right side the field
+fpane = head(s("fg bold", "options") + s("pun", ".") + s("pr bold", "storage"), "field of RunOptions, run/types.ts:153") + [tabs(VIEWS, "Types"), blank()[0],
+         label("in", "RunOptions", "type in run/types.ts:145")] + decl("run/types.ts", 145, lit={148, 149, 150, 151, 152, 153}) + [blank()[0],
+         label("is", "StorageAdapter", "type in storage/adapter.ts:57")] + decl("storage/adapter.ts", 57)
+left = LEFT_HEAD + code_lines("inline", 112, on="storage")
+screen("code-cursor-field", left, fpane, 112, "createRun()  code   options.storage: string | StorageAdapter")
 print("ok")
