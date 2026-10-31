@@ -115,6 +115,21 @@ Decided 2026-10-31, from the mocks `mocks/types-view-*.png`:
   and `<C-u>` scroll the pane half a screen, `<C-e>` and `<C-y>` a line, as
   they scroll a window in Vim and a preview in Telescope. In the pane they
   scroll the pane as usual. Every screen with a pane does the same.
+- **A value's type follows its name, dim, upright** (`mocks/code-types-a.png`).
+  An arrow function gets its return after its parameters. Nothing is added
+  where the type is written.
+- **The Code view's types display** is the function's signature line, then
+  each value it makes as `name  Type` in the order made, each closure inside
+  indented under its own signature line (`mocks/code-types-only-a.png`).
+  It differs from the Types view, which shows only what the function takes
+  and gives, each type written out.
+- **The right side only when the code is on the left.** raf's lines are 88
+  wide or less nine times in ten and 134 one in a hundred (measured), so
+  the code wants about 110 columns with its types after the names. With the
+  tree beside it there's no room for a third pane. So in the tree the Code
+  view is the code alone, its types after the names, and `J` puts it on the
+  left with the views on the right, where the cursor on a name fills them
+  (`mocks/code-cursor-field.png`).
 - **A folder has the views a file has where they make sense:** Types, Built
   from, Used by and Changed. It has no Code.
 
@@ -416,7 +431,7 @@ cut with `…`; or the first level only as names, the rest on `l`.
 
 Mocked on createRun: `mocks/code-types-a.png`, `-b`, `-c` (7a, the cursor
 on `queue`, its later uses lit), `mocks/code-types-only-a.png` and `-b`
-(7b), `mocks/code-cursor.png` (7d). A value's type is the name in the
+(7b), `mocks/code-cursor-field.png` (7d). A value's type is the name in the
 declared return of the call that made it, else the server's inlay hint when
 it's short; the server's hint alone writes raf's aliases out in full
 (`queue` comes back as `Readonly<{ run: …; invoke: …; … }>`), so it never
