@@ -107,7 +107,7 @@ def wrap(text, w, level=1):
 def cut(text, w):
     return text if len(text) <= w else text[: w - 1] + "…"
 
-def sig_rows(items, pw, mode="wrap", on=None, kept=(), gap=False):
+def sig_rows(items, pw, mode="wrap", on=None, kept=(), gap=False, opened=()):
     """items: (takes, name, gives). mode: wrap | cut | parts"""
     nw = max(len(n) for _, n, _ in items)
     if mode == "wrap":  # a first line that can't break inside a type moves the column out
@@ -116,6 +116,19 @@ def sig_rows(items, pw, mode="wrap", on=None, kept=(), gap=False):
     for k, (tk, name, gv) in enumerate(items):
         if gap and k: rows.append(([], ""))
         nm = s("fd" if name in kept else "b", name.ljust(nw))
+        if name in opened:
+            if tk.startswith("{"):
+                ps = parts(tk)
+                rows.append((s("", " ") + ts("{".ljust(pw), on=on) + s("c", " → ") + nm + s("c", " → ") + ts(gv, on=on), ""))
+                for p in ps:
+                    rows.append((s("", "   ") + ts(p + ","), ""))
+                rows.append((s("", " ") + ts("}"), ""))
+            else:  # (a, b): a parameter a line
+                rows.append((s("", " ") + ts("(".ljust(pw), on=on) + s("c", " → ") + nm + s("c", " → ") + ts(gv, on=on), ""))
+                for p in parts("(" + tk[1:-1] + ")"):
+                    rows.append((s("", "   ") + ts(p + ",", on=on), ""))
+                rows.append((s("", " ") + ts(")"), ""))
+            continue
         if mode == "parts" and tk.startswith("{") and len(tk) > pw:
             ps = parts(tk)
             first = "{ " + ps[0] + ","
@@ -214,6 +227,8 @@ tys = [("StoredRecord", 5), ("RecordChanges", 3), ("RecordUnreadableError", 3), 
 for n, c in tys:
     R.append((s("", " ") + s("ty", n.ljust(24)) + s("c", f"{c} file" + ("s" if c > 1 else "")), ""))
 shot("types-view-folder", "storage/", "storage/", {"storage/", "adapter.ts", "link.ts", "records.ts"}, R, "storage/  types")
+R = R[:5] + sig_rows(items, 52, "cut", gap=True, opened={"createLink", "changesBetween"}) + R[5 + len(sig_rows(items, 52, "cut", gap=True)):]
+shot("types-view-opened", "storage/", "storage/", {"storage/", "adapter.ts", "link.ts", "records.ts"}, R, "storage/  types  createLink and changesBetween opened")
 
 # 2. a file: run/update.ts, its exports, then what it keeps
 up = F["run/update.ts"]["fns"]
