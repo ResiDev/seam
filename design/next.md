@@ -92,11 +92,13 @@ Decided 2026-10-31, from the mocks `mocks/types-view-*.png`:
   blank line between functions. Built from and Used by become single views
   in the same pane, redesigned to fit it.
 - **A view and its display.** Each view can be shown more than one way,
-  its display. `<Tab>` and `<S-Tab>` change the view; `v` and `V` step its
-  display forward and back. The display chosen stays for that view as the
-  cursor moves, and the pane's head names it after the view's tab. Today
-  `v` and `V` already turn the explorer's trees into the diagram and the
-  map, so the keys keep their meaning: this, shown another way.
+  its display. `<Tab>` and `<S-Tab>` change the view; `<C-Tab>` and
+  `<C-S-Tab>` step its display forward and back. The same keys work in the
+  tree and in the pane, so `v` keeps its own meaning in the pane. The
+  display chosen stays for that view as the cursor moves, and the pane's
+  head names it after the view's tab. Ghostty takes `ctrl+tab` and
+  `ctrl+shift+tab` for its own tabs by default, so they need unbinding in
+  its config (`keybind = ctrl+tab=unbind`) before Neovim sees them.
 - **Used by and Built from open by file,** the point of the view, each file
   then each place with its line of code (`mocks/used-by-a.png`,
   `mocks/built-from-a.png`). Their other displays:
