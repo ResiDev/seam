@@ -150,22 +150,53 @@ local function c(s)
 end
 rows = flow.draw({
   {
-    head = c 'st/',
-    items = { { gutter = '12', cols = { c 's.ts', c 'b', c '(A)', c '→ B' } }, { gutter = '14', cols = { {}, c 'cc', c '()', c 'nothing' } } },
+    head = c 's/',
+    items = { { gutter = '12', cols = { c 's.ts', c 'b' }, tail = c '(A)   →  B' }, { gutter = '14', cols = { {}, c 'cc' }, tail = c '()   nothing' } },
   },
-  { head = c 'ck/', items = { { gutter = '20', cols = { c 'c.ts', c 'd', c '(B, A)', c '→ C' } } } },
-}, { segs = c '(A) → mid → C', gutter = '10' }, { { head = c 'up/', items = { { cols = { c 'u', c '(C)', c 'u.ts:3' } } } } }, { width = 80 })
+  { head = c 'k/', items = { { gutter = '20', cols = { c 'c.ts', c 'd' }, tail = c '(B, A)   →  C' } } },
+}, { segs = { { '(A)' }, { ' → ' }, { 'mid' }, { ' → ' }, { 'C' } }, gutter = '10', out = 5 }, {
+  { head = c 'u/', items = { { cols = { c 'u.ts:3', c 'u' }, tail = c '(C)' } } },
+}, { width = 80 })
+eq(
+  texts(rows),
+  {
+    '      ┌─ s/',
+    '   12 │    s.ts  b    (A)   →  B',
+    '   14 │          cc   ()   nothing',
+    '      │',
+    '      ├─ k/',
+    '   20 │    c.ts  d    (B, A)   →  C',
+    '      │',
+    '   10 └──▶ (A) → mid → C',
+    '             ┌──────┘',
+    '             └─ u/',
+    '                  u.ts:3  u   (C)',
+  },
+  'the flow: heads on the line down into the row, an empty row between them, where and the name in columns, the signature after, the callers from what the row gives, under the row'
+)
+-- a signature too long for the pane goes on under itself, nothing cut
+local long = flow.wrap(c '(Alpha, Beta, Gamma, Delta)   →  Epsilon', 16)
+eq(
+  vim.tbl_map(function(l)
+    return table.concat(vim.tbl_map(function(s)
+      return s[1]
+    end, l))
+  end, long),
+  { '(Alpha, Beta,', 'Gamma, Delta)', '→  Epsilon' },
+  'a line too long breaks between words, nothing cut'
+)
+-- by folder an empty row between files, the line number on the item's row
+rows = flow.draw({
+  { head = c 's/', items = { { gutter = '1', cols = { c 'a.ts', c 'a' } }, { gutter = '2', gap = true, cols = { c 'b.ts', c 'b' } } } },
+}, { segs = c 'mid' }, {}, { width = 80 })
 eq(texts(rows), {
-  '      ┌─ st/',
-  '   12 │    s.ts  b   (A)     → B',
-  '   14 │          cc  ()      nothing',
-  '      ├─ ck/',
-  '   20 │    c.ts  d   (B, A)  → C',
+  '      ┌─ s/',
+  '    1 │    a.ts  a',
   '      │',
-  '   10 └──▶ (A) → mid → C ──┐',
-  '                           └─ up/',
-  '                                u  (C)  u.ts:3',
-}, 'the flow: heads on the line down into the row, each side in columns, the gutter its lines')
+  '    2 │    b.ts  b',
+  '      │',
+  '      └──▶ mid',
+}, 'an empty row between files')
 local many = { { head = c 'a/', items = {} } }
 for i = 1, flow.CAP + 3 do
   many[1].items[i] = { cols = { c('f' .. i) } }

@@ -626,7 +626,7 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
-| **folder** | the flow: its calls above under their folders, each a line, its file, the name, what it takes, what it gives, the line of the call in the gutter; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from its end on down to its callers, set off to the right, under their folders, each with its file and line (tests dim, last). `T`: names only, both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
+| **folder** | the flow: its calls above under their folders, each a line, its file, the name, what it takes, what it gives, the line of the call in the gutter; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from what it gives a step left and on down under the row to its callers, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows; an empty row between folders and between the files the calls are in. `T`: names only, both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
 | **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
@@ -642,6 +642,13 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   declaration as written, comments left out, with how many make and take
   it. `T` on folder gives back the names-only both ways, which is less to
   read when the signatures are not wanted; it opens with the signatures.
+
+- **Nothing in the flow is cut** (2026-11-01, after the user tried it on
+  createRun in a pane about 110 wide). Signatures lined up in a column were
+  cut with `…` at that width and said too little. Now each signature
+  follows its name, ragged, and a long one wraps under itself; empty rows
+  between folders and between files keep it scannable, and the callers
+  hang under the row, not off its right end.
 
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the

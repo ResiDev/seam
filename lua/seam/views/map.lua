@@ -253,6 +253,9 @@ local function type_rank(m, k)
   return type_hit(m, k) and 0 or 1
 end
 
+-- the room between what a function takes and what it gives
+local GAP = '   '
+
 --- folder and type: the row's calls above, gathered under a folder or the
 --- type each gives, the row, its callers below gathered the same way.
 local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
@@ -273,16 +276,16 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   end
   local function takes(e)
     local t = sig(e.id)
-    return t and tsegs('(' .. tv.cut(t, 44) .. ')', true) or {}
+    return t and tsegs('(' .. t .. ')', true) or {}
   end
   local function gives(e)
     local _, g = sig(e.id)
     if not g then
       return {}
     elseif g == 'void' then
-      return { { 'nothing', 'SeamLabel' } }
+      return { { GAP .. 'nothing', 'SeamLabel' } }
     end
-    return cat({ { '→ ', 'SeamLabel' } }, tsegs(tv.cut(g, 26)))
+    return cat({ { GAP .. '→  ', 'SeamLabel' } }, tsegs(g))
   end
   local function place(e)
     return { { folder_text(data.where(m, e.path, home)), 'SeamLabel' }, { e.path:match '[^/]+$', 'SeamText', { kind = 'file', path = e.path } } }
@@ -338,25 +341,28 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
       if by == 'type' then
         head = grp.key == 'void' and { { 'nothing', 'SeamLabel' } }
           or grp.key == '?' and { { '?', 'SeamLabel' } }
-          or tsegs(tv.cut(grp.key, 40), false, type_hit(m, grp.key))
+          or tsegs(grp.key, false, type_hit(m, grp.key))
       else
         head = { { folder_text(grp.key), 'SeamBold', grp.dir and { kind = 'dir', path = grp.dir } or nil } }
       end
+      -- where it is and its name in columns, its signature straight after
       local items, prev = {}, nil
       for _, e in ipairs(grp.list) do
-        local cols
+        local cols, tail
         if by == 'folder' and is_top then
           local f = e.path ~= prev and { { e.path:match '[^/]+$', 'SeamText', { kind = 'file', path = e.path } } } or {}
-          cols = { f, { name(e) }, takes(e), gives(e) }
+          cols, tail = { f, { name(e) } }, cat(takes(e), gives(e))
         elseif by == 'folder' then
-          cols = { { name(e) }, takes(e), gives(e), at_text(e) }
+          cols, tail = { at_text(e), { name(e) } }, cat(takes(e), gives(e))
         elseif is_top then
-          cols = { { name(e) }, takes(e), place(e) }
+          cols, tail = { place(e), { name(e) } }, takes(e)
         else
-          cols = { { name(e) }, takes(e), at_text(e) }
+          cols, tail = { at_text(e), { name(e) } }, takes(e)
         end
+        -- by folder an empty row between the files the calls are in
+        local gap = by == 'folder' and is_top and prev ~= nil and e.path ~= prev
         prev = e.path
-        items[#items + 1] = { cols = cols, gutter = is_top and fn and e.at and tostring(e.at.line) or nil }
+        items[#items + 1] = { cols = cols, tail = tail, gap = gap, gutter = is_top and fn and e.at and tostring(e.at.line) or nil }
       end
       res[#res + 1] = { head = head, items = items }
     end
@@ -366,15 +372,17 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   if fn then
     local t, g = sig(x.id)
     local n = m.graph.nodes[x.id]
-    local segs = {}
+    local segs, out = {}, nil
     if t then
-      segs = cat(tsegs('(' .. tv.cut(t, 60) .. ')'), { { ' → ', 'SeamLabel' } })
+      segs = cat(tsegs('(' .. t .. ')'), { { ' → ', 'SeamLabel' } })
     end
     segs[#segs + 1] = { centre_name, 'SeamMapFnBold' }
     if g then
-      segs = cat(segs, { { ' → ', 'SeamLabel' } }, tsegs(tv.cut(g, 40)))
+      segs = cat(segs, { { ' → ', 'SeamLabel' } })
+      out = #segs + 1
+      segs = cat(segs, tsegs(g))
     end
-    centre = { segs = segs, gutter = tostring(n.line) }
+    centre = { segs = segs, gutter = tostring(n.line), out = out }
   else
     centre = { segs = { { centre_name, x.kind == 'type' and 'SeamTypeBold' or 'SeamBold' } } }
   end
