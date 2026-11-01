@@ -162,6 +162,9 @@ local function tree_display(x, m, ctx, C)
   end
   local root = x.kind == 'fn' and mt.fn(m, x.id) or x.kind == 'file' and mt.file(m, x.path) or mt.dir(m, dir_of(x), dir_label(x))
   local rows = mt.draw(root, o)
+  if #rows == 1 then
+    rows[2] = row():add('   ' .. (x.kind == 'fn' and 'it calls nothing' or 'it calls nothing outside itself'), 'SeamLabel')
+  end
   for _, r in ipairs(rows) do
     if r.meta.tvn and #r.meta.tvn > 0 then
       r.meta.tv = { key = 'm' .. (r.meta.map and r.meta.map.branch or ''), id = 'l', names = r.meta.tvn, chain = {} }
@@ -486,19 +489,37 @@ function M.draw(out, x, m, display, ctx)
       if b and (r.meta.at or i == 1) then
         shift = b.x + 3
       end
-      out[#out + 1] = M.shifted(r, shift)
+      out[#out + 1] = M.shifted(r, shift, ctx.width - 1)
     end
   end
+end
+
+--- Row `r` moved `n` columns right, cut with `…` at `width` when given.
+---@param r table
+---@param n integer
+---@param width? integer
+---@return table
+function M.shifted(r, n, width)
+  if n > 0 then
+    M.moved(r, n)
+  end
+  if width and r.w > width then
+    local text = draw.trunc(r:text(), width)
+    local keep = #text - #'…'
+    r.t, r.b, r.w = { text }, #text, vim.api.nvim_strwidth(text)
+    for _, c in ipairs(r.code or {}) do
+      c[5] = math.max(0, math.min(c[5], keep - c[4]))
+    end
+    r.h[#r.h + 1] = { keep, #text, 'SeamLabel', 200 }
+  end
+  return r
 end
 
 --- Row `r` moved `n` columns right, its marks, code and names with it.
 ---@param r table
 ---@param n integer
 ---@return table
-function M.shifted(r, n)
-  if n <= 0 then
-    return r
-  end
+function M.moved(r, n)
   local pad = string.rep(' ', n)
   table.insert(r.t, 1, pad)
   for _, h in ipairs(r.h) do
