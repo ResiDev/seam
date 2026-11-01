@@ -179,14 +179,27 @@ local function check_tree()
   if x and not (head[1] or ''):find(name, 1, true) then
     fail('the pane head does not name ' .. name .. ': ' .. (head[1] or ''))
   end
-  local shown, display = require('seam.views').shown(x, st.view)
-  local want = x and ((x.kind ~= 'dir' and 'Code     ' or '') .. 'Types     Built from     Used by') or ''
-  if x and require('seam.views.map').has(m, x) then
-    want = want .. '     Map'
+  -- the two tabs, a view aside named after them when shown
+  local V = require 'seam.views'
+  local shown, display = V.shown(x, st.view)
+  local tabs_of = vim.tbl_map(function(v)
+    return v.name
+  end, V.tabs(x))
+  local want_tabs = x and x.kind == 'gone' and 'Code' or x and ((x.kind ~= 'dir' and 'Code     ' or '') .. 'Types') or ''
+  if x and x.kind == 'dir' and table.concat(tabs_of, ' ') == 'Code Types' then
+    want_tabs = 'Code     Types'
   end
+  if table.concat(tabs_of, '     ') ~= want_tabs then
+    fail(('the row has the tabs %q, not %q'):format(table.concat(tabs_of, '     '), want_tabs))
+  end
+  local want = want_tabs
+  if shown and not shown.tab then
+    want = want .. '        ' .. shown.name
+  end
+  local ds = shown and V.displays(shown, x) or {}
   if shown and shown.list then
-    want = want .. '    ' .. table.concat(shown.displays, ' · ')
-  elseif shown and #shown.displays > 1 then
+    want = want .. '    ' .. table.concat(ds, ' · ')
+  elseif #ds > 1 then
     want = want .. '    ' .. display
   end
   local tabs = vim.trim(head[3] or '')
@@ -376,6 +389,28 @@ do
       key(k)
       if st.view.at ~= 'Code' or not vim.deep_equal(lines(st.obuf.pane), before) then
         fail(k .. ' changed the pane with one display')
+      end
+    end
+    -- gu gb gm: the view aside, named after the tabs and hinted where the
+    -- row has it; the same key again, or <Tab>, back to Code
+    local V = require 'seam.views'
+    for _, a in ipairs { { 'gu', 'Used by' }, { 'gb', 'Built from' }, { 'gm', 'Map' } } do
+      where = 'tree ' .. a[1]
+      local has = V.has(tree_screen.subject(), a[2]) ~= nil
+      if has ~= vim.tbl_contains(require('seam.pane').view_hints(tree_screen.subject()), a[1]) then
+        fail(('%s is hinted %s, the row %s'):format(a[1], tostring(not has), has and 'has it' or 'has not'))
+      end
+      if has then
+        key(a[1])
+        check_tree()
+        if (V.shown(tree_screen.subject(), st.view) or {}).name ~= a[2] or not (lines(st.obuf.phead)[3] or ''):find('Types        ' .. a[2], 1, true) then
+          fail(a[1] .. ' did not show ' .. a[2] .. ' named after the tabs: ' .. (lines(st.obuf.phead)[3] or ''))
+        end
+        key(a[1] == 'gb' and '<Tab>' or a[1])
+        check_tree()
+        if st.view.aside or not vim.deep_equal(lines(st.obuf.pane), before) then
+          fail((a[1] == 'gb' and '<Tab>' or a[1]) .. ' on ' .. a[2] .. ' did not come back to Code')
+        end
       end
     end
     -- gf on the row: its declaration; in the code beside it: that line
@@ -839,10 +874,11 @@ do
       if st.code.display ~= 'code' then
         fail '<S-Tab> on the types did not come back to the code'
       end
-      -- <Tab> in the code steps the pane's view
-      local was = st.view.at
+      -- <Tab> in the code flips the pane's tabs, or from a view aside back
+      local V = require 'seam.views'
+      local was, can = (V.shown(screen_code.subject(), st.view) or {}).name, V.can_step(screen_code.subject(), st.view)
       key '<Tab>'
-      if st.view.at == was and #require('seam.views').of(screen_code.subject()) > 1 then
+      if can and (V.shown(screen_code.subject(), st.view) or {}).name == was then
         fail '<Tab> in the code did not step the pane'
       end
       -- gf on a line of the code
@@ -984,11 +1020,8 @@ for ci, c in ipairs(contracts) do
   api.nvim_set_current_win(st.owin.tree)
   for _, name in ipairs { 'Built from', 'Used by' } do
     where = ('%s %s'):format(c.id, name)
-    for _ = 1, 6 do
-      if (views.shown(tree_screen.subject(), st.view) or {}).name == name then
-        break
-      end
-      key '<Tab>'
+    if (views.shown(tree_screen.subject(), st.view) or {}).name ~= name then
+      key(name == 'Used by' and 'gu' or 'gb')
     end
     local v = views.shown(tree_screen.subject(), st.view)
     for di = 1, #v.displays do
@@ -1065,11 +1098,8 @@ for ci, c in ipairs(contracts) do
     x = tree_screen.at()
   end
   if x and x.kind == 'dir' then
-    for _ = 1, 4 do
-      if (views.shown(x, st.view) or {}).name == 'Used by' then
-        break
-      end
-      key '<Tab>'
+    if (views.shown(x, st.view) or {}).name ~= 'Used by' then
+      key 'gu'
     end
     check_seams 'Used by'
   end
@@ -1139,7 +1169,7 @@ do
         fail('the tree is not on ' .. fx)
       end
       for _ = 1, 4 do
-        if st.view.at == 'Types' then
+        if (views.shown(tree_screen.subject(), st.view) or {}).name == 'Types' then
           break
         end
         key '<Tab>'
