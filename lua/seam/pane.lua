@@ -118,6 +118,10 @@ end
 --- `D`: the diff on or off, for the session, both sides drawn again.
 function M.toggle_diff()
   require('seam.views.changed').toggle()
+  local why = st.diff and M.diff_empty()
+  if why then
+    vim.notify('seam: diff on, ' .. why, vim.log.levels.INFO)
+  end
   if st.screen == 'code' then
     require('seam.screen_code').redraw()
   else
@@ -125,8 +129,6 @@ function M.toggle_diff()
   end
 end
 
---- Does `D` act: has the range changes, or is the diff on to turn off?
----@return boolean
 --- Whether the pane holds more than it shows, for `<M-j>` `<M-k>`'s hint.
 ---@return boolean
 function M.can_scroll()
@@ -137,6 +139,8 @@ function M.can_scroll()
   return api.nvim_win_text_height(w.pane, {}).all > api.nvim_win_get_height(w.pane)
 end
 
+--- Does `D` act: has the range changes, or is the diff on to turn off?
+---@return boolean
 function M.can_diff()
   return st.diff == true or require('seam.changes').any()
 end
@@ -162,11 +166,37 @@ function M.view_hints(x)
   return out
 end
 
---- The status line's left begun: `diff on` while it is.
+--- With the diff on and nothing to draw, why: git said no, or the range
+--- holds no change. nil while there are changes or they are being asked.
+---@return string|nil
+function M.diff_empty()
+  local ch = require 'seam.changes'
+  local C = ch.get()
+  if not C or C.pending then
+    return nil
+  end
+  if C.err then
+    if C.err:lower():find('not a git repository', 1, true) then
+      return 'no git repository here'
+    end
+    return 'git: ' .. (C.err ~= '' and C.err or 'no answer')
+  end
+  if #C.list == 0 then
+    local r = ch.range()
+    return 'nothing changed from ' .. r.from .. ' to ' .. (r.to or 'the working tree') .. ', L picks the range'
+  end
+end
+
+--- The status line's left begun: `diff on` while it is, and why it draws
+--- nothing when it does not.
 ---@param left string
 ---@return string
 function M.said(left)
-  return st.diff and ('diff on   ' .. left) or left
+  if not st.diff then
+    return left
+  end
+  local why = M.diff_empty()
+  return 'diff on' .. (why and (' · ' .. why) or '') .. '   ' .. left
 end
 
 --- Scroll the pane from the left, as the key scrolls a window.

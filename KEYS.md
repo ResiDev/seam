@@ -43,7 +43,7 @@ The status line says where you are on the left, and on the right only the keys t
 | `<Tab>` `<S-Tab>` | the pane's tabs, Code and Types, one then the other; from Used by, Built from or the Map, back to the tab you were on. The one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the other |
 | `gu` `gb` `gm` | Used by, Built from, the Map in the pane, named after the tabs, lit; the same key again goes back to the tab you were on. Hinted only where the row has it |
 | `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view, named after its tabs: Used by by file, by name, by user; Built from by file, by name, as signatures; Map tree, both ways, folders, size; Code with the diff on a row that changed, changes only, whole file; Types has one. The display chosen stays for its view. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
-| `D` | the diff, on or off, for the whole session and both screens: Code and Types show what the range changed, the code screen's left too |
+| `D` | the diff, on or off, for the whole session and both screens: Code and Types show what the range changed, the code screen's left too. With nothing to draw it says why, there and in the status line: `nothing changed from HEAD to the working tree, L picks the range`, or `no git repository here` |
 | `n` `N` | in Used by and Built from: into the pane, on its next or previous place, round the ends; a count skips |
 | `<C-d>` `<C-u>` `<M-j>` `<M-k>` | scroll the pane half a screen, the cursor staying in the tree |
 | `<C-e>` `<C-y>` | scroll the pane a line |
