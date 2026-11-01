@@ -636,6 +636,16 @@ goes.
 One picture of the status line hints on each screen, and KEYS.md drafted
 from the chosen mocks.
 
+**Hints chosen 2026-11-01: B, with `?`** (`mocks/keys-*-b.png`,
+`keys-tree-help.png`, `src/keys/mock.py`). The status line names where you
+are on the left and, on the right, only the keys that act there, each key
+lit and its word dim, in three groups always in the same order: the row │
+the pane │ seam. One word a key on every screen (`J` is always "code").
+Hints live only there, not in the pane heads, which list only the views and
+displays. A narrow window drops the seam group first. `?` opens a float of
+every key on the screen, grouped as KEYS.md is. To be corrected once built,
+not by more mocks.
+
 **Draft, 2026-11-01.** One meaning a key, on every screen. A key that has
 nothing to do where the cursor is does nothing, and its hint isn't shown.
 
