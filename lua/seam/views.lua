@@ -4,6 +4,7 @@
 local changed_view = require 'seam.views.changed'
 local code_view = require 'seam.views.code'
 local index = require 'seam.index'
+local map_view = require 'seam.views.map'
 local names_view = require 'seam.views.names'
 local seams_view = require 'seam.views.seams'
 local types_view = require 'seam.views.types'
@@ -93,6 +94,17 @@ M.list = {
     count = function(m, row)
       return changed_view.used_count(m, as_type(row)) or seams_view.used_count(m, as_type(row))
     end,
+  },
+  {
+    name = 'Map',
+    displays = map_view.DISPLAYS,
+    -- the head lists them all, the one shown bold
+    list = true,
+    has = function(row)
+      return map_view.has(index.model(), row)
+    end,
+    draw = map_view.draw,
+    count = map_view.count,
   },
   {
     name = 'Changed',
