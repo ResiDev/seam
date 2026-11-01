@@ -1,7 +1,7 @@
 -- The Map, driven through its keys, from tests/check.lua: on a function,
 -- its file, its folder and a type, reached with gm, each of its displays on
--- <C-Tab>, the head listing them, no row wider than the pane; T on a
--- function's both ways.
+-- <C-Tab>, the head listing them, no row wider than the pane; T on the
+-- folder display, each signature or names only.
 local api = vim.api
 local data = require 'seam.map.data'
 local map_view = require 'seam.views.map'
@@ -91,21 +91,21 @@ return function(t)
       fail(what .. ': <C-Tab> did not come back to ' .. first)
     end
   end
-  -- the function, and T on its both ways
+  -- the function, and T on its folder display: names only, and back
   tree_screen.show(f.id)
   displays('function ' .. f.name)
-  if m.sigs then
-    t.where 'map types'
-    tree_win()
-    local before = table.concat(lines(), '\n')
-    key 'T'
-    if not st.map.types or table.concat(lines(), '\n') == before then
-      fail 'T did not give the functions their types'
-    end
-    key 'T'
-    if st.map.types or table.concat(lines(), '\n') ~= before then
-      fail 'T again did not take the types away'
-    end
+  t.where 'map T'
+  tree_win()
+  st.view.display.Map = 'folder'
+  pane.redraw()
+  local before = table.concat(lines(), '\n')
+  key 'T'
+  if map_view.types_on() or table.concat(lines(), '\n') == before then
+    fail 'T did not take the signatures away'
+  end
+  key 'T'
+  if not map_view.types_on() or table.concat(lines(), '\n') ~= before then
+    fail 'T again did not give the signatures back'
   end
 
   -- its file, and the folder above it

@@ -1,7 +1,6 @@
 -- The Map as data, on a graph written by hand: what a function calls and
 -- reaches, the folders and files the Map names, the calls across an edge;
--- both ways, by folder and file; the size's bars; what a type's takers
--- give.
+-- both ways, by folder and file; the flow; what a type's takers give.
 --   nvim -l tests/map.lua
 -- Exits 0 when nothing failed.
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
@@ -143,17 +142,36 @@ for _, l in ipairs(cut) do
 end
 eq({ both.rooms(10, 80, 100, 10) }, { 10, 68 }, 'the narrower side what it needs, the wider the rest')
 
--- the size's bars
-local size = require 'seam.map.size'
-rows = size.draw {
-  head = 'reaches',
-  second = 'used by',
-  items = { { label = 'big', hl = 'SeamName', n = 10, second = '1' }, { label = 'none', hl = 'SeamName', n = 0, second = '2' } },
-  width = 100,
-}
-expect(rows[1]:text():find 'reaches' and rows[1]:text():find 'used by', 'the bars titled', texts(rows))
-expect(rows[3]:text():find 'big%s+ 10', 'the longest bar, its number after it', texts(rows))
-expect(rows[4]:text():find '▏ 0', 'no reach: a tick', texts(rows))
+-- the flow: the calls above under their heads, a line down through them
+-- into the row, from its end on down to its callers' heads
+local flow = require 'seam.map.flow'
+local function c(s)
+  return { { s } }
+end
+rows = flow.draw({
+  {
+    head = c 'st/',
+    items = { { gutter = '12', cols = { c 's.ts', c 'b', c '(A)', c '→ B' } }, { gutter = '14', cols = { {}, c 'cc', c '()', c 'nothing' } } },
+  },
+  { head = c 'ck/', items = { { gutter = '20', cols = { c 'c.ts', c 'd', c '(B, A)', c '→ C' } } } },
+}, { segs = c '(A) → mid → C', gutter = '10' }, { { head = c 'up/', items = { { cols = { c 'u', c '(C)', c 'u.ts:3' } } } } }, { width = 80 })
+eq(texts(rows), {
+  '      ┌─ st/',
+  '   12 │    s.ts  b   (A)     → B',
+  '   14 │          cc  ()      nothing',
+  '      ├─ ck/',
+  '   20 │    c.ts  d   (B, A)  → C',
+  '      │',
+  '   10 └──▶ (A) → mid → C ──┐',
+  '                           └─ up/',
+  '                                u  (C)  u.ts:3',
+}, 'the flow: heads on the line down into the row, each side in columns, the gutter its lines')
+local many = { { head = c 'a/', items = {} } }
+for i = 1, flow.CAP + 3 do
+  many[1].items[i] = { cols = { c('f' .. i) } }
+end
+rows = flow.draw(many, { segs = c 'mid' }, {}, { width = 80 })
+expect(has(rows, '⋯ 3 more'), 'a side past its cap: ⋯ more', texts(rows))
 
 -- a type's flow: In makes Model by mk; Model taken by tk1 giving Out, tk2
 -- giving Model back, tk3 a boolean; Out taken by o1 giving In

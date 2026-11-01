@@ -71,9 +71,9 @@ M.ways = { 'overview', 'page', 'calls', 'called_by', 'types' }
 
 --- From your own code: seam on what the word under the cursor names. `how`:
 --- 'overview' (the tree on that function or contract, where it lives),
---- 'page' (the same, its Used by in the pane), 'calls' (the code screen on
+--- 'page' (the same, its Map in the pane), 'calls' (the code screen on
 --- that function, K back to its row in the tree), 'called_by' (the tree on
---- it, its Used by in the pane), or 'types' (the Types view of the type it
+--- it, its Map in the pane), or 'types' (the Types view of the type it
 --- names, in the tree's pane). Several by that name, or nothing, the tree's
 --- `/` picker holding the word.
 ---@param how? 'overview'|'page'|'calls'|'called_by'|'types'
@@ -111,11 +111,11 @@ function M.here(how)
         screen.show()
         require('seam.screen_tree').search(word)
       end
-      -- a page is the row's Used by now, and so is called by
+      -- a page is the row's Map now, its callers under it, and so is called by
       local function used_by()
         if how == 'page' or how == 'called_by' then
           st.view = st.view or require('seam.views').new()
-          st.view.aside = 'Used by'
+          st.view.aside = 'Map'
         end
       end
       -- the tree on a function, and for calls its code screen over it
@@ -142,7 +142,7 @@ function M.here(how)
         screen.show(c)
         -- a type has no row: it shows in the pane, its file's row under it
         if (how == 'page' or how == 'called_by') and m.flows and m.flows[c.name] then
-          require('seam.screen_tree').show_type(c.name, 'Used by')
+          require('seam.screen_tree').show_type(c.name, 'Map')
         end
       elseif r.node and not r.node.test then
         fn(r.node)

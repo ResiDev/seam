@@ -1,7 +1,8 @@
 -- The pane on the right of every screen: its head with the tabs over the
 -- view shown, for what the screen says it is about; the keys in it, and
 -- those that reach it from the left: the other tab, a view aside, the next
--- display, the diff, scrolling it, n and N from place to place, + and -.
+-- display, the diff, scrolling it, ]c [c from change to change, + and -,
+-- and the Map's foot following the cursor.
 local api = vim.api
 local draw = require 'seam.draw'
 local index = require 'seam.index'
@@ -64,6 +65,7 @@ function M.show(x, keep)
   local m = index.model()
   odraw.pane_head(st.obuf.phead, m, st.outline, x, st.view)
   odraw.pane(st.obuf.pane, w.pane, m, x, st.view, ctx(x, w), keep)
+  require('seam.map.foot').update()
 end
 
 -- The pane following the cursor, drawn once it rests: moving over rows draws
@@ -144,10 +146,10 @@ function M.step(d, display)
 end
 
 -- the views aside and their keys
-M.ASIDE = { gu = 'Used by', gb = 'Built from', gm = 'Map' }
-M.ASIDE_KEYS = { 'gu', 'gb', 'gm' }
+M.ASIDE = { gm = 'Map' }
+M.ASIDE_KEYS = { 'gm' }
 
---- `gu` `gb` `gm`: the view aside on the key in the pane, or back.
+--- `gm`: the view aside on the key in the pane, or back.
 ---@param k string
 ---@return fun()
 function M.aside(k)
@@ -189,8 +191,8 @@ function M.can_diff()
   return st.diff == true or require('seam.changes').any()
 end
 
---- The keys for the pane's views where they act on `x`: `<Tab>`, `gu` `gb`
---- `gm` each where the row has its view on the code screen (beside the tree
+--- The keys for the pane's views where they act on `x`: `<Tab>`, `gm`
+--- where the row has the Map on the code screen (beside the tree
 --- they are tabs, the keys in `?`), `<C-Tab>` with more than one display.
 ---@param x seam.ORow|nil
 ---@return string[]
@@ -262,8 +264,8 @@ function M.scroll(k)
   end
 end
 
---- The pane's stops for n and N: the places Used by and Built from show;
---- with `what` 'change', the changes the diff shows, for ]c [c.
+--- The pane's stops: with `what` 'change', the changes the diff shows,
+--- for ]c [c.
 ---@param what? 'place'|'change'
 ---@return integer[]
 function M.stops(what)
@@ -323,13 +325,6 @@ function M.next_place(d, what)
   vim.cmd 'redrawstatus'
 end
 
---- Has the view shown places for n and N?
----@return boolean
-function M.has_places()
-  local v = views.shown(M.subject(), st.view)
-  return v ~= nil and (v.name == 'Used by' or v.name == 'Built from') and #M.stops() > 0
-end
-
 --- The keys that act with the cursor in the pane, its three groups.
 ---@param back string the window `<Esc>` goes back to, its word
 ---@return table row, table pane, table seam
@@ -342,9 +337,6 @@ function M.hints(back)
   end
   if c then
     row[#row + 1] = opening.is_more(c) and { '-', 'fewer' } or '-'
-  end
-  if M.has_places() then
-    row[#row + 1] = 'n N'
   end
   if #M.stops 'change' > 0 then
     row[#row + 1] = ']c [c'
@@ -377,10 +369,9 @@ function M.all_keys(back)
       {
         { '+', 'open the type under the cursor, or a function as written; on ⋯ N more, the rest' },
         { '-', 'close the one the cursor is in; on a place it showed, hide the rest again' },
-        { 'n N', 'the next and previous place, in Used by and Built from' },
         { ']c [c', 'the next and previous change, with the diff on' },
         { '<Tab> <S-Tab>', st.screen == 'code' and 'Code or Types; from a view aside, back' or 'the next and previous tab' },
-        { 'gu gb gm', 'Used by, Built from, the Map, and back' },
+        { 'gm', 'the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
         { 'D', 'the diff on or off, both sides, for the session' },
       },
@@ -389,7 +380,7 @@ function M.all_keys(back)
       'The Map',
       {
         { 'l', 'open a side past its ⋯ more; on a name, show it in the tree' },
-        { 'T', 'inputs and outputs, and the choice stays' },
+        { 'T', 'folder: each signature, or names only; the choice stays' },
         { 'J', 'the code screen on the name under the cursor' },
       },
     },
@@ -401,7 +392,7 @@ local function o(buf)
   return { buffer = buf, nowait = true, silent = true }
 end
 
---- `gu` `gb` `gm` and `D` in `buf`, the same on every screen.
+--- `gm` and `D` in `buf`, the same on every screen.
 ---@param buf integer
 function M.view_keys(buf)
   for _, k in ipairs(M.ASIDE_KEYS) do
@@ -425,12 +416,6 @@ function M.keys(buf)
   end, o(buf))
   vim.keymap.set('n', '-', function()
     opening.minus(M.redraw)
-  end, o(buf))
-  vim.keymap.set('n', 'n', function()
-    M.next_place(1)
-  end, o(buf))
-  vim.keymap.set('n', 'N', function()
-    M.next_place(-1)
   end, o(buf))
   vim.keymap.set('n', ']c', function()
     M.next_place(1, 'change')
@@ -479,6 +464,7 @@ function M.autocmds(aug)
         local w = M.wins()
         if w and api.nvim_get_current_win() == w.pane then
           draw.cursor_line(w.pane)
+          require('seam.map.foot').update()
         end
         vim.cmd 'redrawstatus'
       end,
@@ -497,6 +483,7 @@ function M.autocmds(aug)
     buffer = st.obuf.pane,
     callback = function()
       draw.cursor_clear(st.obuf.pane)
+      require('seam.map.foot').close()
     end,
   })
 end

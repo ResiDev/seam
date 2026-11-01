@@ -469,7 +469,7 @@ function M.all_keys()
       'The pane',
       {
         { '<Tab>', 'Code or Types of the name under the cursor; from a view aside, back' },
-        { 'gu gb gm', 'Used by, Built from, the Map, and back' },
+        { 'gm', 'the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display of its view' },
         { '<M-j> <M-k>', 'scroll it half a screen, the cursor staying in the code' },
       },

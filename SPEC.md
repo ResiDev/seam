@@ -49,7 +49,8 @@ against its mocks, its tests, and KEYS.md in step:
 2. **The Types view,** and `+` `-` opening a type in place wherever a type
    is drawn so far (landed 2026-11-01). Replaces the Types screens.
 3. **Used by and Built from,** by file, with their other displays
-   (landed 2026-11-01). Replaces the contract page.
+   (landed 2026-11-01, gone the same day into the Map's flow and its foot).
+   Replaced the contract page.
 4. **The code screen** (landed 2026-11-01). `J` `K` and the trail, every name answering in the
    pane, a value's type after its name, `n` `N` the imports, `<C-Tab>`
    code or types, later uses lit. Replaces Calls.
@@ -59,7 +60,7 @@ against its mocks, its tests, and KEYS.md in step:
 6. **The Map** (landed 2026-11-01). Its displays on each kind of row, `T`, `>` `<`, and the
    arrows as chosen.
 7. **Two tabs and the diff** (landed 2026-11-01). The pane's tabs only Code and Types, `<Tab>`
-   between them; Used by, Built from and the Map aside on `gu` `gb` `gm`.
+   between them; the Map aside on `gm`.
    The Changed tab goes: `D` turns the diff on and off, on the code and the
    types, on both sides of the code screen.
 
@@ -93,41 +94,48 @@ raf's `Readonly<{…}>` aliases, so it gives the shape, never the name.
 
 Every row in the tree, and every name in the code, has the same views on the
 right. Two are tabs, **Code** and **Types**, what you read most; `<Tab>`
-flips between them. **Used by**, **Built from** and the **Map** are aside,
-each on its own key, `gu` `gb` `gm`, the same on the tree, the code screen
-and in the pane; the same key again, or `<Tab>`, goes back to the tab you
-were on. The one chosen stays as the cursor moves. What changed is not a
+flips between them. The **Map** is aside, on `gm`, the same on the tree,
+the code screen and in the pane; the same key again, or `<Tab>`, goes back
+to the tab you were on. The one chosen stays as the cursor moves. What changed is not a
 view: `D` turns the diff on in Code and Types (What changed, below).
 
 | View | A folder | A file | A function | A type |
 |---|---|---|---|---|
 | **Code** | | the file | its body, imports underlined | its declaration |
 | **Types** | what comes in and goes out: the types its exports take and give | the same for the file, then the types it declares | what it takes and gives, each type expandable | where it comes from and what it becomes, one step each way; its fields with who sets and reads each |
-| **Built from** | what it draws on, by file | what the file draws on, by file | what it draws on, by file | the types its fields are made of |
-| **Used by** | who imports from it | the files that import it, each line | each place that calls it: the file, the line, and the code there | who takes it and who gives it |
-| **Map** | two displays on `<C-Tab>`: both ways, size (section 6) | the same two | the same two | the same two |
+| **Map** | two displays on `<C-Tab>`: folder, type (section 6) | the same two | the same two | the same two |
+
+- **Built from, Used by and size are gone** (2026-11-01). The Map's flow
+  shows what Built from and Used by did for a function, each call and
+  caller with what it takes and gives, the line of each call in the gutter,
+  and its foot the line that calls it as written, so the two lists went.
+  The import lines of a file and the types a type is made of went with
+  them: the Map shows which files call in, and the Types view a type's
+  fields. Used by on a changed function (who used it at the range's start)
+  went too. Size added little the flow does not show.
 
 - **Beside the tree, every view a tab; on the code screen, two tabs and the
   others aside** (decided 2026-11-01). Beside the tree the head has all the
-  tabs the row has, Code, Types, Built from, Used by and Map, the one shown
+  tabs the row has, Code, Types and Map, the one shown
   lit (`design/mocks/keys-tree-a.png`, its Changed tab now the diff on `D`);
-  `<Tab>` `<S-Tab>` step through them, and `gu` `gb` `gm` go straight to one
+  `<Tab>` `<S-Tab>` step through them, and `gm` goes straight to the Map
   and back. On the code screen, where the code is read, the head has the two
   tabs, Code and Types, the one shown lit (`design/mocks/tabs-aside.png`). An aside view shown
   is named after them, lit, a gap between, and the two tabs both dim; its
-  display after it. The status line's pane group has `gu` `gb` `gm` there
-  only where the row has that view; beside the tree they are left to `?`. A row with neither Code nor Types shows the
+  display after it. The status line's pane group has `gm` there
+  only where the row has the Map; beside the tree it is left to `?`. A row with neither Code nor Types shows the
   first aside view it has, named in the head; every row has one or the
   other (a folder has Types, a row gone has Code), so this is a fallback.
-- **Used by is where it's called.** The cursor on a use shows the caller's
-  code around that line, so "used by" and "called at" are one view.
+- **Where it's called is the Map's foot.** The cursor on a caller or a
+  call in the Map shows the line that calls it, so "used by" and "called
+  at" are one place.
 - **Types open in place.** `+` on a type's name opens its declaration, as
   written, under the line it is named on, a bar down its left and its file
   and line at the top. `+` on a name inside that opens the next one, nested
   under it: one level a press. `-` closes the one the cursor is in. `l`
   stays the calls; `+` and `-` are only types. It works on a type's name
   wherever one is drawn: the pane's head line, the Types view, the Code view's types
-  display, Built from and Used by as signature lines, the Map with `T` on.
+  display.
   With the diff on, an opened type carries its own `+`/`-` lines, so a
   signature that reads the same but takes a changed type shows what changed
   in it. Mocks: `design/mocks/open-type-a.png` (StoredRecord opened in
@@ -170,7 +178,7 @@ Decided 2026-10-31, from the mocks `design/mocks/types-view-*.png`:
   head names it after the view's tab. Ghostty takes `ctrl+tab` and
   `ctrl+shift+tab` for its own tabs by default, so they need unbinding in
   its config (`keybind = ctrl+tab=unbind`) before Neovim sees them.
-- **Used by and Built from open by file,** the point of the view, each file
+- (Gone 2026-11-01, see The views.) **Used by and Built from open by file,** the point of the view, each file
   then each place with its line of code (`design/mocks/used-by-a.png`,
   `design/mocks/built-from-a.png`). Their other displays:
   - Used by, by name: each thing it hands out with its signature, then
@@ -618,13 +626,28 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
-| **both ways** | its calls left, its callers right (tests dim, last); each side a folder, its files under it, each file's names after it, a line a file into the row, an empty row between folders | the files it calls out to, left; the files outside it that call in, right; each with the names that cross | the same for a file | the functions that make it, left; the functions that take it, right. Not the types it is made of: the Types view has those |
-| **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | each of its functions by how much it reaches, and how many call it | the files that use it most |
+| **folder** | the flow: its calls above under their folders, each a line, its file, the name, what it takes, what it gives, the line of the call in the gutter; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from its end on down to its callers, set off to the right, under their folders, each with its file and line (tests dim, last). `T`: names only, both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
+| **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
+
+- **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
+  `map9-type.png`, `map9-type-cursor-type.png`, rounds seven to nine in
+  `design/mocks/src/map/sigs.py`). Signatures side by side cut each other
+  at the pane's edge; one a line, top to bottom, they have the width, and
+  the line down into the row and on to its callers keeps it a map: what
+  goes in, the row, what comes out. Grouped by folder it says where the
+  row reaches; by type, what it gets back from each. With the cursor in
+  the pane on a name, the foot, a window over the pane's last rows, tells
+  it in full: its signature with the names of what it takes, the line that
+  calls it as written, what that line sits in; on a type's head, its
+  declaration as written, comments left out, with how many make and take
+  it. `T` on folder gives back the names-only both ways, which is less to
+  read when the signatures are not wanted; it opens with the signatures.
 
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
   tree repeated the Built from tab a level at a time, and folders drew the
-  same facts again as boxes. Size stays. With them went `>` `<`, `h` and a
+  same facts again as boxes. Size stayed, then went with Built from and
+  Used by. With them went `>` `<`, `h` and a
   type's boxes with `+` `-` on them. The decisions below on them are kept
   as the record.
 - **What it is built from comes first, who uses it after,** the order of
@@ -781,8 +804,8 @@ nothing to do where the cursor is does nothing, and its hint isn't shown.
 | `<C-Tab>` `<C-S-Tab>` | the next and previous display of what the cursor is in; from the tree, the pane's |
 | `+` `-` | open and close the type under the cursor, one level a press |
 | `>` `<` | a level more or less, in the Map |
-| `T` | inputs and outputs in the Map |
-| `n` `N` | the next and previous stop in what's shown: an import in the code, a use in Used by |
+| `T` | each signature, or names only, in the Map by folder |
+| `n` `N` | the next and previous import in the code |
 | `]c` `[c` | the next and previous change |
 | `gc` | only what changed in the tree, and back |
 | `s` | the tree's order: by folder, most used, most calling |
@@ -1001,7 +1024,7 @@ The screens are locked in the design docs. The code must keep these rules:
     file's highlighting by copying that file's treesitter captures as marks,
     because a fragment of a function does not parse on its own.
   - A gap is a `⋯` row.
-- **Every place on one line.** Used by and Built from show each place as
+- **Every place on one line.** (Used by and Built from are gone; the Map's foot writes a call's line this way.) Used by and Built from showed each place as
   its line of code, copied with its colours from its first letter and cut
   with `…` at the pane's edge, the names it is about marked where they live
   (Built from lights the name the row is about), and what it sits in,
@@ -1047,14 +1070,12 @@ lua/seam/
   draw/outline.lua  the tree's rows and head, the pane's head and tabs
   hints.lua         the keys that act where the cursor is: the status line's three groups and the ? float
   screen_tree.lua   the tree's tab layout, its keys and the pane beside it
-  opening.lua       + and - in the pane: the type or function line under the cursor opened or closed in place, a group's places past four shown or hidden
-  seams.lua         Used by and Built from as data, from the index: the places, what each sits in, by file, by name, by user, by first use
-  views/seams.lua   the Used by and Built from views: by file, by name, by user, as signatures
+  opening.lua       + and - in the pane: the type or function line under the cursor opened or closed in place
   graph.lua         the call graph read through the lens: what each way shows, a function's calls one level on
   scope.lua         a file's bindings from treesitter: what each name resolves to in its function, the uses of a binding
   names.lua         what a name in the code is: a repo function, a type, an import's file, a value, a parameter, a field or method, its type and later uses
   codetypes.lua     the types the code does not write: after a value's name, after a function's parameters; the code's types display
-  pane.lua          the pane beside the tree and the code: drawing it, its keys, its places
+  pane.lua          the pane beside the tree and the code: drawing it, its keys, the Map's foot following its cursor
   screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane, J K n N
   views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
@@ -1066,14 +1087,15 @@ lua/seam/
   signs.lua         the range's signs on the tree's rows, the rows gone kept struck through, gc and ]c [c
   refs.lua          the refs a range can start from and the picker over them, f x in the lens
   warm.lua          the range's changes worked out ahead while you are idle: each changed file parsed and its diffs made, a few at a time
-  views/changed.lua the diff on D: Code with the diff on a function, a type, a file or a folder; a type's own lines; a function's line as it was; Used by now and at from
+  views/changed.lua the diff on D: Code with the diff on a function, a type, a file or a folder; a type's own lines; a function's line as it was
   codediff.lua      the range's changes on the code shown: its changed lines numbered in the signs' colours, or with the diff on drawn inline; ]c [c
   views/codetypes.lua the code screen's types display: the function's line, its values, the functions inside; with the diff, a line as it was
-  views/map.lua     the Map view: its two displays on a function, a folder, a file and a type, T's types, its head's count
+  views/map.lua     the Map view: folder and type on a function, a folder, a file and a type, what each side holds, T's names only, its head's count
   map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows
   map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
-  map/both.lua      both ways: calls left, callers right, each side by folder and file, cut to ⋯ N more
-  map/size.lua      the size display: a bar each, the number after it, a second column
+  map/flow.lua      the flow: calls above under their heads, a line down into the row, on to its callers below, each side in columns, cut to ⋯ N more
+  map/both.lua      folder with T off, names only: calls left, callers right, each side by folder and file, cut to ⋯ N more
+  map/foot.lua      the Map's foot: the name under the pane's cursor in full, a function's signature and the line that calls it, a type's declaration
   map/keys.lua      the Map's keys in the pane, l T J, where each acts, and the name under the cursor for the status line
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
@@ -1084,12 +1106,11 @@ tests/
   here.lua          here's resolution specs, on a model written by hand
   types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
-  seams.lua         Used by and Built from grouped, on a model written by hand
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
-  map.lua           the Map's layouts on graphs written by hand: the facts, the tree, the bands, both ways, folders, size, a type's boxes
-  check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T
-  check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, Used by at from, the lens's range
-  check.lua         every screen through its keys on a real repo
+  map.lua           the Map's layouts on graphs written by hand: the facts, both ways, the flow
+  check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder
+  check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, the lens's range
+  check.lua         every screen through its keys on a real repo, the Map and its foot on each contract
 ```
 
 ## Tests

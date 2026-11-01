@@ -10,7 +10,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `:Seam debug` | write what it knows to `stdpath('state')/seam-debug.txt` |
 | `q` | close seam |
 | `R` | ask the source again for everything shown |
-| `gf` `gd` | that place in your own code: the tab you opened seam from (if it is gone, another that is not seam's, else a new one), the file in its window, the cursor on the line, centred, the jump in the jumplist. Seam's tab stays as it was. On a row naming a function or contract, its declaration; a file, its first line; a folder, nothing; on a line of code or a place in Used by and Built from, that line; on a head, what the screen is about |
+| `gf` `gd` | that place in your own code: the tab you opened seam from (if it is gone, another that is not seam's, else a new one), the file in its window, the cursor on the line, centred, the jump in the jumplist. Seam's tab stays as it was. On a row naming a function or contract, its declaration; a file, its first line; a folder, nothing; on a line of code, that line; on a head, what the screen is about |
 
 ## From your code
 
@@ -19,9 +19,9 @@ In any buffer of the repo, on a name. Seam opens on its repo (indexing it first 
 | Command | Suggested key | Does |
 |---|---|---|
 | `:SeamHere` `:SeamHere overview` | `<leader>kk` | the tree, its cursor on that function or contract where it lives (a contract that is no function, its file), the folders and file down to it opened. Several of that name and none here, or nothing: the tree's `/` holding the word. One the lens hides says so, and searches |
-| `:SeamHere page` | `<leader>kp` | as `overview`, the pane on its Used by; a repo type, its Used by in the pane, the tree's cursor on its file. Several or nothing: the tree's `/` holding the word |
+| `:SeamHere page` | `<leader>kp` | as `overview`, the pane on its Map; a repo type, its Map in the pane, the tree's cursor on its file. Several or nothing: the tree's `/` holding the word |
 | `:SeamHere calls` | `<leader>kc` | the code screen on that function, the tree on its row under it; several, the tree's `/` holding the word |
-| `:SeamHere called_by` | `<leader>kC` | the tree on that function's row, the pane on its Used by; several, the tree's `/` holding the word |
+| `:SeamHere called_by` | `<leader>kC` | the tree on that function's row, the pane on its Map; several, the tree's `/` holding the word |
 | `:SeamHere types` | | the tree, its pane on the Types view of the repo type that word names, the tree's cursor on the file you asked from; otherwise the tree's `/` holding the word |
 | `:Seam` | `<leader>ko` | seam on the repo, as it was when it is open |
 | `:Seam!` | `<leader>kr` | index the repo again |
@@ -40,18 +40,17 @@ The status line says where you are on the left, and on the right only the keys t
 | `l` | open the row: a folder, a file's functions, a function's calls; on an open row, its first row |
 | `h` | close an open row; on a closed one, the row it hangs from |
 | `s` | the order: by folder, most used first, most calling first. The sorted orders are every function in a flat list, each with its package's bar and two counts, used by and calls, the one it sorts by lit; tests and a file's top don't count. Back in the tree, the function the cursor was on is shown where it lives |
-| `<Tab>` `<S-Tab>` | the pane's next and previous tab: Code, Types, Built from, Used by, Map, those the row has. The one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the first it has; on the code screen, where Code and Types are the only tabs, the tab you were on there |
-| `gu` `gb` `gm` | straight to Used by, Built from, the Map, lit among the tabs; the same key again goes back to the tab you were on. In `?`; beside the tree they are tabs, so the status line leaves them out |
-| `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view, named after its tabs: Used by by file, by name, by user; Built from by file, by name, as signatures; Map both ways, size; Code with the diff on a row that changed, changes only, whole file; Types has one. The display chosen stays for its view. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
+| `<Tab>` `<S-Tab>` | the pane's next and previous tab: Code, Types, Map, those the row has. The one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the first it has; on the code screen, where Code and Types are the only tabs, the tab you were on there |
+| `gm` | straight to the Map, lit among the tabs; the same key again goes back to the tab you were on. In `?`; beside the tree it is a tab, so the status line leaves it out |
+| `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view, named after its tabs: Map folder, type; Code with the diff on a row that changed, changes only, whole file; Types has one. The display chosen stays for its view. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
 | `D` | the diff, on or off, for the whole session and both screens: Code and Types show what the range changed, the code screen's left too. With nothing to draw it says why, there and in the status line: `nothing changed from HEAD to the working tree, L picks the range`, or `no git repository here` |
-| `n` `N` | in Used by and Built from: into the pane, on its next or previous place, round the ends; a count skips |
 | `<C-d>` `<C-u>` `<M-j>` `<M-k>` | scroll the pane half a screen, the cursor staying in the tree |
 | `<C-e>` `<C-y>` | scroll the pane a line |
 | `gc` | only what changed in the range, the folders down to it, and back; the status line says so |
 | `]c` `[c` | the next and previous row that changed, round the ends |
 | `/` | search the names: a float over the tree of every function, file and repo type it holds, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` shows the one picked where it lives, its folders and file opened; a type, its Types view in the pane, the tree's cursor where it was, until it moves; `<Esc>` `<C-c>` close it, nothing changed |
 | `J` | the code screen on the row's function or file; `K` there comes back to this row |
-| `T` | with the Map in the pane, on both ways: the types on its functions, as in the pane |
+| `T` | with the Map in the pane, by folder: each signature, or names only, as in the pane |
 | `L` | the lens: what the tree shows, and the range of changes. Files it hides from contracts leave the tree; a function's calls follow built from |
 | `S` | the next source, when there are several |
 | `R` | read the index again |
@@ -61,14 +60,10 @@ The status line says where you are on the left, and on the right only the keys t
 
 ## The pane
 
-Beside the tree: what the row is and where, its tabs, Code, Types, Built from, Used by and Map, those it has, the one shown lit (`design/mocks/keys-tree-a.png`, its Changed tab now the diff on `D`), and the view. On the code screen the tabs are Code and Types, and Used by, Built from or the Map, when one is shown, is named after them, lit (`design/mocks/tabs-aside.png`).
+Beside the tree: what the row is and where, its tabs, Code, Types and Map, those it has, the one shown lit (`design/mocks/keys-tree-a.png`, its Changed tab now the diff on `D`), and the view. On the code screen the tabs are Code and Types, and the Map, when shown, is named after them, lit (`design/mocks/tabs-aside.png`).
 
 - **Code**: a function from its doc comment to its end, a file whole, a type's declaration, with line numbers, each call in it underlined where it lives, as in the tree. A folder has no Code. **With the diff on** (`D`), on a row the range changed: a function's or type's own lines, a file whole, a folder's changed files one after another, about 400 lines at a time, `⋯ N more files` and `+` the next, removed lines where they were, unnumbered on red, added ones numbered on green, the words changed on each lit stronger, from codediff (else Vim's own diff). Changes only folds each unchanged run to `⋯ N lines unchanged` three lines from each change; whole file shows it all. A row gone has Code alone, its lines as they were, all removed. The pane's head says new, signature or body changed, and the types it names that changed.
-- **Built from**: what the row draws on, from the index. By file: each file it draws on (its own first, `this file`), then each name once with its first use, the line of code in its colours, the name lit on it; for a file or folder, what each place sits in at the right. By name: each name in the order first used, its signature (or what it is) and its file, then that line. As signatures: what it calls, a line each in the Types view's shape, in the order called, then the types it names (and the values). A type: the types its fields are made of.
-- **Used by**: who uses the row, from the index. By file: each file with how many places and the names it uses, the files with most places first, then each place's line of code in its colours, the names marked where they live, `in` the function or type it sits in at the right; four a file, then `⋯ N more`. A function: each place that calls or names it, its own file's too; a file: the other files naming its exports; a folder: the places outside it; a type (from `/`): where it is named. By name: each thing it hands out, the functions first with their signatures, then everyone who uses it. By user: each function that uses it as a line in the Types view's shape with its file, or each type, then what it uses.
-- On a function whose signature or body changed in the range, **Used by** is who uses it now, then who used it at the range's start, each file saying how many of its declarations changed or that it is gone; its line as it was and as it is above them when its signature changed. Diff or not.
-- Tests sort after the rest in every display of both.
-- **Map**: a function, a folder, a file or a type (from `/`) drawn with what it reaches, in two displays named in the pane's head, the one shown bold. Both ways: what it is built from on the left, its calls, and who uses it on the right, its callers, tests dim and last, each side a folder, its files under it and each file's names after it, an empty row between folders; a folder's or a file's, the files across its edge with the names that cross, those it calls out to left; a type's, its makers left and takers right. Size: a bar each, as long as how much it goes on to reach: a function's calls, a file's functions with how many use each, a folder's files by what each reaches outside itself with how many outside use it, a type's files by how many times each names it. The status line says the name under the cursor.
+- **Map**: a function, a folder, a file or a type (from `/`) drawn with what it reaches, in two displays named in the pane's head, the one shown bold (`design/mocks/map9-folder.png`, `map9-type.png`). Both draw the flow: what the row calls above, each a line, gathered under heads, a line down the left through the heads into the row, written as what it takes → its name → what it gives, and from its end on down to its callers, set off to the right, gathered the same way, tests dim and last. Folder: each head a folder, each line its file (once), the name, what it takes, what it gives; a call's line in the gutter, a caller's file and line at its right. Type: each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file. A folder's or a file's flow is the names crossing its edge, those it calls out to above; a type's its makers above, its takers below. `T` on folder: names only, today's both ways, each side a folder, its files and each file's names after them, an empty row between folders. **The foot**: with the cursor in the pane on a name, a window over the pane's last rows tells it in full: its signature with the names of what it takes and where it lives, then the line that calls it in its colours and what that line sits in; on a type's head, where it is declared, how many make and take it, and its declaration as written, comments left out, seven lines then `⋯ N more lines`. The status line says the name under the cursor.
 - **Types**: a line a function, what it takes → its name → what it gives, the names in one column, a long one cut with `…`, a type parameter as what it extends, `Readonly<…>` left out, a blank line between. A function: its line, then each type it takes and gives written out under it, its declaration with its doc comment. A file: its exported functions, then those it keeps, then the types it declares. A folder: its functions used outside it, then its types used outside it with how many files use each. A type (from `/`): the functions that give it, then those that take it, the type lit, then its declaration. Each fact from the written signature (treesitter), else the TypeScript server's hover; until the server has answered, one dim line says why there are none. **With the diff on**: a function whose signature changed has its line as it was, `-` on red, over its line as it is, `+` on green, a new one its line `+`; each type written out or opened carries its own `+` and `-` lines and `~ changed` by its name.
 
 Seam maps no key to go into the pane: Vim's own window keys do.
@@ -77,15 +72,14 @@ Seam maps no key to go into the pane: Vim's own window keys do.
 |---|---|
 | `<Esc>` | back to the tree, or to the code on the code screen |
 | `K` | on the code screen, back as there |
-| `+` | in the Types view, on a type's name (and on the pane's head when it names one, and in the signature lines of Used by and Built from): its declaration as written, under the line it is named on, a bar down its left and its file and line at its top; on a name inside that, the next one nested under it, one level a press. On a function's line, off a name: the function as written, a part a line, the type parameters as written. On `⋯ N more` in Used by: the rest of that group's places. Hinted only where it acts |
-| `-` | close the type the cursor is in, and what was opened inside it, the cursor back on the line naming it; on a function opened as written, close it; on a place `+` showed, hide them again, the cursor on `⋯ N more`. What is open stays for the row as long as seam is open |
-| `n` `N` | in Used by and Built from: the next or previous place, round the ends; a count skips. The line under the cursor is lit |
+| `+` | in the Types view, on a type's name (and on the pane's head when it names one): its declaration as written, under the line it is named on, a bar down its left and its file and line at its top; on a name inside that, the next one nested under it, one level a press. On a function's line, off a name: the function as written, a part a line, the type parameters as written. Hinted only where it acts |
+| `-` | close the type the cursor is in, and what was opened inside it, the cursor back on the line naming it; on a function opened as written, close it. What is open stays for the row as long as seam is open |
 | `]c` `[c` | with the diff on, in Code and Types: the next or previous change, round the ends |
 | `l` | in the Map, on a side's `⋯ N more`, the rest of it; on a name, show it in the tree (a type, its Map in the pane) |
-| `T` | in the Map's both ways, what the calls take and the callers give, or what makers take and takers give; the choice stays across rows, ` · types` in the status line |
+| `T` | in the Map by folder: each signature, or names only; the choice stays across rows, ` · names` in the status line while off |
 | `J` | in the Map, the code screen on the function or file under the cursor |
-| `<Tab>` `<S-Tab>` `gu` `gb` `gm` `<C-Tab>` `<C-S-Tab>` `D` | as in the tree |
-| `gf` `gd` | in your own code: on a line of code or a place, that line; on a name's line in Used by and Built from, its declaration; on a file's line, the file (in Used by, at its first place); on a function's line, its declaration; on the head, the row's |
+| `<Tab>` `<S-Tab>` `gm` `<C-Tab>` `<C-S-Tab>` `D` | as in the tree |
+| `gf` `gd` | in your own code: on a line of code, that line; on a file's line, the file; on a function's line, its declaration; on the head, the row's |
 | `L` | the lens, as from the tree |
 | `?` | every key here |
 | `q` | close seam |
@@ -109,7 +103,7 @@ The name under the cursor answers in the pane, or off a name the nearest on its 
 | `D` | the diff, on or off, here and in the pane, as beside the tree |
 | `+` `-` | in its types, open or close the type under the cursor, as in the pane |
 | `<Tab>` | the pane's other tab, Code or Types, for the name under the cursor; from an aside, back |
-| `gu` `gb` `gm` | Used by, Built from, the Map in the pane, and back, as beside the tree |
+| `gm` | the Map in the pane, and back, as beside the tree |
 | `<C-Tab>` `<C-S-Tab>` | the pane's next and previous display, as beside the tree |
 | `<M-j>` `<M-k>` | scroll the pane half a screen, the cursor staying in the code |
 | `/` | search the names, as in the tree: a function or a file goes on to its code screen, a type shows in the pane |
