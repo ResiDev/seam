@@ -361,20 +361,21 @@ return function(t)
   api.nvim_set_current_win(st.owin.tree)
   key 'L'
   local lens = api.nvim_buf_get_lines(api.nvim_get_current_buf(), 0, 3, false)
-  if not (lens[2] or ''):find('changes   from  HEAD   to  working tree', 1, true) then
+  if not (lens[2] or ''):find('changes   from  HEAD   to  the working tree', 1, true) then
     fail('the lens does not start with the range: ' .. tostring(lens[2]))
   end
   local refs = require 'seam.refs'
-  if (refs.list(repo, 'to')[1] or {}).name ~= 'working tree' or (refs.list(repo, 'from')[1] or {}).id ~= 'HEAD' then
-    fail 'the pickers do not start with the default'
+  if (refs.list(repo)[1] or {}).id ~= 'HEAD' then
+    fail 'the picker does not start with HEAD'
   end
   key 'q'
-  st.range = { from = 'HEAD', to = 'HEAD' }
+  -- from the repo's own commit, which the working tree is: nothing changed
+  st.range = { from = head }
   ask()
   tree_screen.redraw(true)
-  local head = api.nvim_buf_get_lines(st.obuf.head, 0, 1, false)[1] or ''
-  if not head:find('changes HEAD → HEAD', 1, true) then
-    fail('the head does not name the range: ' .. head)
+  local hl = api.nvim_buf_get_lines(st.obuf.head, 0, 1, false)[1] or ''
+  if not hl:find('changes ' .. head .. ' → now', 1, true) then
+    fail('the head does not name the range: ' .. hl)
   end
   for _, r in ipairs(st.orows) do
     if r.sign then

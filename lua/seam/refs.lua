@@ -1,7 +1,7 @@
--- The refs a range of changes can be from or to, git's say: the default
--- first (HEAD, the working tree), then the branches, the tags and the
--- recent commits; and the picker over them, a ref typed narrowing it, or
--- taken as it is when git knows it.
+-- The refs a range of changes can start from, git's say: HEAD first, then
+-- the branches, the tags and the recent commits; and the picker over them,
+-- a ref typed narrowing it, or taken as it is when git knows it. The range
+-- always ends at the working tree: to see another branch, check it out.
 local api = vim.api
 local draw = require 'seam.draw'
 local picker = require 'seam.picker'
@@ -24,21 +24,17 @@ end
 ---@field what string a branch, a tag, a commit
 ---@field note string its subject
 
---- What `from` or `to` can be: the default first, then the branches, the
---- tags and the 40 last commits.
+--- What `from` can be: HEAD first, then the branches, the tags and the 40
+--- last commits.
 ---@param root string
----@param which 'from'|'to'
 ---@return seam.Ref[]
-function M.list(root, which)
+function M.list(root)
   local out, seen = {}, {}
   local function add(id, name, what, note)
     if not seen[id] then
       seen[id] = true
       out[#out + 1] = { id = id, name = name, used_by = 0, what = what, note = note or '' }
     end
-  end
-  if which == 'to' then
-    add('', 'working tree', 'what is not committed yet')
   end
   add('HEAD', 'HEAD', 'the last commit', vim.trim(git(root, { 'log', '-1', '--format=%s' })))
   local refs = git(
@@ -70,23 +66,22 @@ local function ref_row(p, W)
   return r
 end
 
---- The picker of what `which` can be, over window `over`; `done(ref)` with
---- the ref picked, nil for the working tree; not called when nothing is.
+--- The picker of what `from` can be, over window `over`; `done(ref)` with
+--- the ref picked; not called when nothing is.
 ---@param root string
----@param which 'from'|'to'
 ---@param over integer
----@param done fun(ref: string|nil)
+---@param done fun(ref: string)
 ---@param closed fun()
-function M.pick(root, which, over, done, closed)
+function M.pick(root, over, done, closed)
   picker.open {
-    title = which,
+    title = 'from',
     noun = 'refs',
     keys = '<CR> pick it, or the ref typed   <C-n>/<C-p> next   <Esc> back',
     over = over,
     col = 0,
     width = api.nvim_win_get_width(over) - 2,
     rows = math.min(20, vim.o.lines - 8),
-    items = M.list(root, which),
+    items = M.list(root),
     node = function()
       return {}
     end,
@@ -99,18 +94,18 @@ function M.pick(root, which, over, done, closed)
         return done(q)
       end
       if p then
-        done(p.id ~= '' and p.id or nil)
+        done(p.id)
       end
     end,
     closed = closed,
   }
 end
 
---- `f` `t` in the lens: the picker of what the range's `from` or `to`
---- can be, over its window, the range set to what is picked; `x`, the
---- range back to HEAD and the working tree. `after` once it is done.
+--- `f` in the lens: the picker of what the range's `from` can be, over its
+--- window, the range set to what is picked; `x`, the range back to HEAD.
+--- `after` once it is done.
 ---@param host seam.LensHost
----@param which 'from'|'to'|'reset'
+---@param which 'from'|'reset'
 ---@param win integer
 ---@param after fun()
 function M.lens(host, which, win, after)
@@ -118,14 +113,8 @@ function M.lens(host, which, win, after)
     host.set_range { from = 'HEAD' }
     return after()
   end
-  M.pick(host.root(), which, win, function(ref)
-    local r = vim.deepcopy(host.range())
-    if which == 'from' then
-      r.from = ref or 'HEAD'
-    else
-      r.to = ref
-    end
-    host.set_range(r)
+  M.pick(host.root(), win, function(ref)
+    host.set_range { from = ref }
   end, after)
 end
 

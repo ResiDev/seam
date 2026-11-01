@@ -183,7 +183,7 @@ function M.diff_empty()
   end
   if #C.list == 0 then
     local r = ch.range()
-    return 'nothing changed from ' .. r.from .. ' to ' .. (r.to or 'the working tree') .. ', L picks the range'
+    return 'nothing changed from ' .. r.from .. ' to the working tree, L picks the range'
   end
 end
 

@@ -380,14 +380,17 @@ Open:
 
 ## What changed (git)
 
-A range of git, `from` and `to`. By default from `HEAD` to the working
-tree: what isn't committed yet. Then:
+A range of git, from a commit to the working tree, the files as seam reads
+them. By default from `HEAD`: what isn't committed yet. The range always
+ends at the working tree, so the code drawn is always the range's end and
+the diff can be drawn over it. To see another branch, check it out, or open
+seam in its worktree, and pick its start with `f`. Then:
 
 - **The range lives in the lens** (`L`), on its first row, above the
-  rules: `changes  from HEAD  to working tree`. `f` and `t` work from any row
-  of the lens, the cursor where it is: each opens a picker of branches,
+  rules: `changes  from HEAD  to the working tree`. `f` works from any row
+  of the lens, the cursor where it is: it opens a picker of branches,
   tags and recent commits, a ref typed narrows it, and its first entry is
-  the default (`HEAD`, the working tree), so picking it resets. The
+  the default, `HEAD`, so picking it resets; `x` resets too. The
   head names the range when it isn't the default
   (`design/mocks/changed-range.png`).
 - **The tree carries git signs,** in the left column, as gitsigns draws
@@ -1034,7 +1037,7 @@ lua/seam/
   changes.lua       what changed in the range, from git: the files, each end's lines, each declaration new, gone, signature or body changed, where a name was used at from
   diff.lua          two versions of some lines compared: the hunks, the words changed, laid out with removed lines where they were and unchanged runs folded
   signs.lua         the range's signs on the tree's rows, the rows gone kept struck through, gc and ]c [c
-  refs.lua          the refs a range can be from or to and the picker over them, f t x in the lens
+  refs.lua          the refs a range can start from and the picker over them, f x in the lens
   views/changed.lua the diff on D: Code with the diff on a function, a type, a file or a folder; a type's own lines; a function's line as it was; Used by now and at from
   codediff.lua      the range's changes on the code shown: its changed lines numbered in the signs' colours, or with the diff on drawn inline; ]c [c
   views/codetypes.lua the code screen's types display: the function's line, its values, the functions inside; with the diff, a line as it was

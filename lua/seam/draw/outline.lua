@@ -90,7 +90,7 @@ end
 function M.range(r)
   local g = changes.range()
   if not changes.is_default(g) then
-    r:add('   changes ', 'SeamLabel'):add(g.from, 'SeamRange'):add(' → ', 'SeamLabel'):add(g.to or 'now', 'SeamRange')
+    r:add('   changes ', 'SeamLabel'):add(g.from, 'SeamRange'):add(' → ', 'SeamLabel'):add('now', 'SeamRange')
   end
   return r
 end
@@ -193,8 +193,7 @@ function M.rows(buf, m, o, rows)
   end
   if #out == 0 then
     out[1] = row():add(
-      o.only_changed and '  nothing changed from ' .. changes.range().from .. ' to the ' .. changes.name(changes.range().to)
-        or '  nothing the lens lets through',
+      o.only_changed and '  nothing changed from ' .. changes.range().from .. ' to the working tree' or '  nothing the lens lets through',
       'SeamLabel'
     )
   end

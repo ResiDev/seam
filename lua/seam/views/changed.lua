@@ -255,7 +255,7 @@ end
 ---@return table[] lines, boolean changed
 function M.block_diff(d, lines)
   local C = changes.get()
-  local dc = C and not C.range.to and changes.decl(C, d.path, d.name)
+  local dc = C and changes.decl(C, d.path, d.name)
   if not dc then
     return lines, false
   end
@@ -360,13 +360,12 @@ local function was_line(r, key, d, name, gives)
 end
 
 --- How the function `node` changed, for its line in Types with the diff
---- on: its declaration's change when it is new or its signature changed and
---- the range ends at the working tree, which the lines drawn are.
+--- on: its declaration's change when it is new or its signature changed.
 ---@param node table
 ---@return seam.DeclChange|nil
 function M.fn_state(node)
   local C = changes.get()
-  local d = C and not C.range.to and changes.decl(C, node.path, node.name)
+  local d = C and changes.decl(C, node.path, node.name)
   return d and (d.state == 'new' or d.state == 'signature') and d or nil
 end
 
@@ -377,7 +376,7 @@ end
 ---@return boolean
 function M.type_changed(path, name)
   local C = changes.get()
-  return C ~= nil and not C.range.to and changes.decl(C, path, name) ~= nil
+  return C ~= nil and changes.decl(C, path, name) ~= nil
 end
 
 --- What a function took and gave at the range's start, as written then.

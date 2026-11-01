@@ -9,14 +9,13 @@ local diff = require 'seam.diff'
 local draw = require 'seam.draw'
 local M = {}
 
---- The lines of `path` as it is that the range changed, when it ends at the
---- working tree: each `add`, `change` or, the line after lines removed,
+--- The lines of `path` as it is that the range changed: each `add`, `change` or, the line after lines removed,
 --- `delete`; and the lines where each change starts, in order.
 ---@param path string
 ---@return table<integer, string>, integer[]
 function M.marks(path)
   local C = changes.get()
-  if not (C and not C.range.to and C.files[path] and C.files[path] ~= 'gone') then
+  if not (C and C.files[path] and C.files[path] ~= 'gone') then
     return {}, {}
   end
   C.marks = C.marks or {}
@@ -94,7 +93,7 @@ function M.next_line(win, path, d)
 end
 
 --- The range's changes to `path` as it is, line by line, when the diff is
---- on and the range ends at the working tree: the lines added with the
+--- on: the lines added with the
 --- bytes changed on each, the lines removed before each line, and the
 --- lines a change starts on. With `name`, the function of that name only,
 --- its lines then against its lines now, as the pane's Code diffs it, so
@@ -105,7 +104,7 @@ end
 ---@return { add: table<integer, integer[][]|true>, del: table<integer, table[]>, start: table<integer, true> }|nil
 function M.diff_of(path, name)
   local C = changes.get()
-  if not (changed.on() and not C.range.to and C.files[path] and C.files[path] ~= 'gone') then
+  if not (changed.on() and C.files[path] and C.files[path] ~= 'gone') then
     return nil
   end
   local out = { add = {}, del = {}, start = {} }
