@@ -262,6 +262,8 @@ function M.ask_changes()
   require('seam.changes').ask(root, function()
     if st.root == root then
       M.types_landed()
+      -- the diffs made ahead while you are idle
+      require('seam.warm').changes(require('seam.changes').get())
     end
   end)
 end

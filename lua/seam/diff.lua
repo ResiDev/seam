@@ -263,7 +263,7 @@ function M.hunks(a, b)
   local k = table.concat(a, '\n') .. '\0\0' .. table.concat(b, '\n')
   local got = memo[k]
   if not got then
-    if memo_n >= 256 then
+    if memo_n >= 4096 then
       memo, memo_n = {}, 0
     end
     got = hunks(a, b)

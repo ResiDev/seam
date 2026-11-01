@@ -97,6 +97,17 @@ return function(t)
   elseif not (C.files[path] == 'changed' and #C.list == 1) then
     fail('the range is not the one file changed: ' .. vim.inspect(C.files, { newline = ' ', indent = '' }))
   else
+    -- worked out ahead while nothing is pressed: the file's pieces all done
+    local warm = require 'seam.warm'
+    if warm.left() == 0 and not changes.file(C, path) then
+      fail 'nothing was worked out ahead'
+    end
+    vim.wait(5000, function()
+      return warm.left() == 0
+    end, 20)
+    if warm.left() > 0 then
+      fail(('the changes were not worked out ahead while idle: %d pieces left'):format(warm.left()))
+    end
     local f = changes.file(C, path)
     local function state(name)
       return f.by[name] and f.by[name].state
