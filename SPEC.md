@@ -56,7 +56,7 @@ against its mocks, its tests, and KEYS.md in step:
 5. **Changed** (landed 2026-11-01). The range in the lens, the git signs, `gc`, `]c` `[c`, the
    Changed view drawn with codediff, a changed type opening with its own
    lines.
-6. **The Map.** Its displays on each kind of row, `T`, `>` `<`, and the
+6. **The Map** (landed 2026-11-01). Its displays on each kind of row, `T`, `>` `<`, and the
    arrows as chosen.
 
 ## The primitives
@@ -986,6 +986,16 @@ lua/seam/
   signs.lua         the range's signs on the tree's rows, the rows gone kept struck through, gc and ]c [c
   refs.lua          the refs a range can be from or to and the picker over them, f t x in the lens
   views/changed.lua the Changed view: a function's, a type's, a file's or a folder's changes; Used by now and at from; the code's changed lines and ]c [c
+  views/map.lua     the Map view: its four displays on a function, a folder, a file and a type, T's columns, a box's declaration opened under it, its head's count
+  map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows
+  map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
+  map/tree.lua      the tree display: levels, branches opened and closed, ⋯ N more, a name seen higher; a folder's and a file's a rank down a level
+  map/both.lua      both ways: callers left, calls right, cut to ⋯ N more
+  map/folders.lua   the folders display: boxes of folders with their files and names, the counts on the arrows
+  map/fgraph.lua    a folder's own folders as boxes in ranks, arrows over, under and back into a box
+  map/size.lua      the size display: a bar each, the number after it, a second column
+  map/typegraph.lua a type's tree: types as boxes, functions on the arrows, makers on the left, what gives it back above
+  map/keys.lua      the Map's keys in the pane, l h > < T J, where each acts, and the name under the cursor for the status line
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
   types.lua         types.json: the TypeScript server's hover of each callable, in a headless nvim of its own
@@ -997,6 +1007,8 @@ tests/
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
   seams.lua         Used by and Built from grouped, on a model written by hand
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
+  map.lua           the Map's layouts on graphs written by hand: the facts, the tree, the ranks, both ways, folders, size, a type's boxes
+  check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, > <, l h, T, + - on a box
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, the Changed view, Used by at from, the lens's range
   check.lua         every screen through its keys on a real repo
 ```
