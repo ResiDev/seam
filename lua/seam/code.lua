@@ -42,6 +42,22 @@ function M.file(path)
   return P
 end
 
+--- Another version of a file, git's say, read as files are under `key`:
+--- its lines, coloured as `path` is.
+---@param key string
+---@param path string
+---@param lines string[]
+function M.virtual(key, path, lines)
+  files[key] = { lines = lines, lang = lang_of(path), caps = {} }
+end
+
+--- Is `key` read already, a file or another version of one?
+---@param key string
+---@return boolean
+function M.has(key)
+  return files[key] ~= nil
+end
+
 local function tree(P)
   if P.root == nil then
     P.root = false
