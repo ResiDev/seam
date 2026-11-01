@@ -1,7 +1,7 @@
--- The Map view: four displays on every kind of row, tree, both ways,
--- folders and size (seam.map.*), drawn from the call graph and the types;
--- the levels, the branches opened with l h and T kept per row in st.map;
--- the keys that act on it, l h > < T J, and what is under the cursor.
+-- The Map view: two displays on every kind of row, both ways and size
+-- (seam.map.*), drawn from the call graph and the types; each row's ⋯ more
+-- opened and T kept in st.map; the keys that act on it, l T J, and what is
+-- under the cursor (seam.map.keys).
 local api = vim.api
 local data = require 'seam.map.data'
 local draw = require 'seam.draw'
@@ -12,8 +12,7 @@ local tv = require 'seam.typesview'
 local types_view = require 'seam.views.types'
 local M = {}
 
-M.DISPLAYS = { 'tree', 'both ways', 'folders', 'size' }
-M.LEVELS, M.MAX_LEVELS = 2, 8
+M.DISPLAYS = { 'both ways', 'size' }
 
 local row = draw.row
 
@@ -47,13 +46,13 @@ local function dir_label(x)
   return (x.item.segs and table.concat(x.item.segs, '/') or dir_of(x):match '[^/]+$') .. '/'
 end
 
---- What the Map keeps for a row: its levels, the branches opened and their ⋯ more.
+--- What the Map keeps for a row: the sides and bars opened past ⋯ more.
 ---@param x seam.ORow
----@return { levels: integer, open: table<string, boolean>, more: table<string, boolean> }
+---@return { more: table<string, boolean> }
 function M.state(x)
   st.map = st.map or { rows = {}, types = false }
   local k = subject(x).key or ''
-  st.map.rows[k] = st.map.rows[k] or { levels = M.LEVELS, open = {}, more = {} }
+  st.map.rows[k] = st.map.rows[k] or { more = {} }
   return st.map.rows[k]
 end
 
@@ -64,14 +63,6 @@ function M.types_on()
 end
 
 ---------------------------------------------------------------- facts
-
--- the node ids `list` as the both ways' and the folders' crossings
-local function as_cross(m, list)
-  return vim.tbl_map(function(id)
-    local n = m.graph.nodes[id]
-    return { path = n.path, id = id, name = data.label(n) }
-  end, list)
-end
 
 -- what a function takes and gives as the Map writes them: an object `{ … }`
 local function sig_text(C, id)
@@ -117,38 +108,6 @@ local function cat(...)
 end
 
 ---------------------------------------------------------------- the displays
-
-local function tree_display(x, m, ctx, C)
-  local s = M.state(x)
-  local o = { levels = s.levels, open = s.open, more = s.more, width = ctx.width - 2 }
-  if x.kind == 'type' then
-    o.opened = function(name)
-      return tv.is_open(ctx.open, nil, 'map|box:' .. name)
-    end
-    return require('seam.map.typegraph').draw(m, x.name, o)
-  end
-  local mt = require 'seam.map.tree'
-  if M.types_on() and m.sigs then
-    o.types = function(id)
-      return sig_text(C, id)
-    end
-    o.paint = function(r, text)
-      r.meta.tvn = r.meta.tvn or {}
-      types_view.typed(r, text, C.known, r.meta.tvn)
-    end
-  end
-  local root = x.kind == 'fn' and mt.fn(m, x.id) or x.kind == 'file' and mt.file(m, x.path) or mt.dir(m, dir_of(x), dir_label(x))
-  local rows = mt.draw(root, o)
-  if #rows == 1 then
-    rows[2] = row():add('   ' .. (x.kind == 'fn' and 'it calls nothing' or 'it calls nothing outside itself'), 'SeamLabel')
-  end
-  for _, r in ipairs(rows) do
-    if r.meta.tvn and #r.meta.tvn > 0 then
-      r.meta.tv = { key = 'm' .. (r.meta.map and r.meta.map.branch or ''), id = 'l', names = r.meta.tvn, chain = {} }
-    end
-  end
-  return rows
-end
 
 local function both_display(x, m, ctx, C)
   local both = require 'seam.map.both'
@@ -236,128 +195,6 @@ local function both_display(x, m, ctx, C)
   local L = both.side(left, rl, { each = T, all = s.more.left, side = 'left' })
   local R = both.side(right, rr, { each = T, all = s.more.right, side = 'right' })
   return both.draw(L, R, centre, w)
-end
-
--- a folder's folders: its folders as boxes, else its files
-local function folder_graph(x, m, ctx)
-  local dir = dir_of(x)
-  local g = m.graph
-  local files = {}
-  for p in pairs(outline.files(m)) do
-    if p:sub(1, #dir + 1) == dir .. '/' then
-      files[#files + 1] = p
-    end
-  end
-  table.sort(files)
-  local units, at, unit_of = {}, {}, {}
-  local function add(key, label, hit)
-    if not at[key] then
-      at[key] = { key = key, label = label, hit = hit, n = 0 }
-      units[#units + 1] = at[key]
-    end
-    at[key].n = at[key].n + 1
-    return key
-  end
-  local by_folder = false
-  for _, p in ipairs(files) do
-    if p:sub(#dir + 2):find '/' then
-      by_folder = true
-    end
-  end
-  for _, p in ipairs(files) do
-    local seg = p:sub(#dir + 2):match '^([^/]+)/'
-    if not by_folder then
-      unit_of[p] = add(p, p:match '[^/]+$', { kind = 'file', path = p })
-    elseif seg then
-      unit_of[p] = add(dir .. '/' .. seg, seg .. '/', { kind = 'dir', path = dir .. '/' .. seg })
-    else
-      unit_of[p] = add(dir, dir_label(x) .. ' files')
-    end
-  end
-  for _, u in ipairs(units) do
-    u.sub = by_folder and draw.plural(u.n, 'file') or nil
-  end
-  local E, edges = {}, {}
-  for id, n in pairs(g.nodes) do
-    local a = not n.test and unit_of[n.path]
-    for _, e in ipairs(a and g.down[id] or {}) do
-      local c = g.nodes[e.to]
-      local b = not c.test and unit_of[c.path]
-      if b and b ~= a then
-        local k = a .. '\n' .. b
-        if not E[k] then
-          E[k] = { from = a, to = b, n = 0 }
-          edges[#edges + 1] = E[k]
-        end
-        E[k].n = E[k].n + 1
-      end
-    end
-  end
-  table.sort(edges, function(p, q)
-    return p.from < q.from or (p.from == q.from and p.to < q.to)
-  end)
-  if #units == 0 then
-    return { row():add(' no file here', 'SeamLabel') }
-  end
-  return require('seam.map.fgraph').draw(units, edges, { width = ctx.width - 2, word = { 'call', 'calls' } })
-end
-
-local function folders_display(x, m, ctx)
-  if x.kind == 'dir' then
-    return folder_graph(x, m, ctx)
-  end
-  local o = { width = ctx.width - 2, top = {}, bottom = {}, word = { 'call', 'calls' }, flow = 'up' }
-  local function said(n, one, more)
-    return n .. ' ' .. (n == 1 and one or more)
-  end
-  if x.kind == 'fn' then
-    local n = m.graph.nodes[x.id]
-    local callers, tests = data.callers(m, x.id)
-    o.top, o.bottom = as_cross(m, data.calls(m, x.id)), as_cross(m, callers)
-    local tf = {}
-    for _, id in ipairs(tests) do
-      tf[m.graph.nodes[id].path] = true
-    end
-    o.tests, o.tfiles = #tests, vim.tbl_count(tf)
-    o.centre, o.centre_hl, o.home = data.label(n), 'SeamMapFnBold', n.path
-    o.sub = data.where(m, n.path, n.path)
-  elseif x.kind == 'file' then
-    local into, outs = data.crossing(m, data.within(x.path))
-    o.top = as_cross(
-      m,
-      vim.tbl_map(function(e)
-        return e.to
-      end, outs)
-    )
-    o.bottom = as_cross(
-      m,
-      vim.tbl_map(function(e)
-        return e.from
-      end, into)
-    )
-    local tests, tf = 0, {}
-    for _, id in ipairs(data.fns_in(m, x.path)) do
-      local _, t = data.callers(m, id)
-      for _, c in ipairs(t) do
-        tests = tests + 1
-        tf[m.graph.nodes[c].path] = true
-      end
-    end
-    o.tests, o.tfiles = tests, vim.tbl_count(tf)
-    o.centre, o.centre_hl, o.home = x.path:match '[^/]+$', 'SeamBold', x.path
-    o.sub = data.where(m, x.path, x.path)
-  else
-    local makers, takers = data.flow(m, x.name)
-    o.top, o.bottom = as_cross(m, makers), as_cross(m, takers)
-    o.centre, o.centre_hl, o.home = x.name, 'SeamTypeBold', x.path
-    o.word, o.flow, o.sub = { 'function', 'functions' }, 'down', x.path:match '[^/]+$'
-    o.top_says, o.bottom_says = 'made by ' .. said(#makers, 'function', 'functions'), 'taken by ' .. said(#takers, 'function', 'functions')
-  end
-  if x.kind ~= 'type' then
-    o.top_says = said(#o.top, 'call', 'calls')
-    o.bottom_says = 'called from ' .. said(#o.bottom, 'function', 'functions')
-  end
-  return require('seam.map.folders').draw(m, o)
 end
 
 local function size_display(x, m, ctx)
@@ -449,99 +286,14 @@ end
 ---@param ctx seam.ViewCtx
 function M.draw(out, x, m, display, ctx)
   x = subject(x)
-  local path = x.kind == 'dir' and dir_of(x) or x.path
-  local C = types_view.context(m, ctx, path)
   local rows
-  if display == 'both ways' then
-    rows = both_display(x, m, ctx, C)
-  elseif display == 'folders' then
-    rows = folders_display(x, m, ctx)
-  elseif display == 'size' then
+  if display == 'size' then
     rows = size_display(x, m, ctx)
   else
-    rows = tree_display(x, m, ctx, C)
+    local C = types_view.context(m, ctx, x.kind == 'dir' and dir_of(x) or x.path)
+    rows = both_display(x, m, ctx, C)
   end
-  -- a type opened with + under the row naming it, a box's under the drawing
-  local after = {}
-  for _, r in ipairs(rows) do
-    out[#out + 1] = r
-    local t = r.meta.tv
-    if t and #t.names > 0 then
-      local names, seen = {}, {}
-      for _, n in ipairs(t.names) do
-        if not seen[n.name] then
-          seen[n.name] = true
-          names[#names + 1] = n.name
-        end
-      end
-      local items = types_view.lay(C, { { id = t.id, names = names, path = path } }, t.key, {}, {})
-      table.remove(items, 1)
-      if t.after then
-        vim.list_extend(after, items)
-      else
-        types_view.render(out, C, items)
-      end
-    end
-  end
-  -- each box's declaration under the box, its line down to it
-  if #after > 0 then
-    local blocks = {}
-    types_view.render(blocks, C, after)
-    local shift = 0
-    for i, r in ipairs(blocks) do
-      local t = r.meta.tv
-      local name = t and t.key and t.key:match '^map|box:([^|]+)'
-      local b = name and rows[1].meta.boxes and rows[1].meta.boxes[name]
-      if b and (r.meta.at or i == 1) then
-        shift = b.x + 3
-      end
-      out[#out + 1] = M.shifted(r, shift, ctx.width - 1)
-    end
-  end
-end
-
---- Row `r` moved `n` columns right, cut with `…` at `width` when given.
----@param r table
----@param n integer
----@param width? integer
----@return table
-function M.shifted(r, n, width)
-  if n > 0 then
-    M.moved(r, n)
-  end
-  if width and r.w > width then
-    local text = draw.trunc(r:text(), width)
-    local keep = #text - #'…'
-    r.t, r.b, r.w = { text }, #text, vim.api.nvim_strwidth(text)
-    for _, c in ipairs(r.code or {}) do
-      c[5] = math.max(0, math.min(c[5], keep - c[4]))
-    end
-    r.h[#r.h + 1] = { keep, #text, 'SeamLabel', 200 }
-  end
-  return r
-end
-
---- Row `r` moved `n` columns right, its marks, code and names with it.
----@param r table
----@param n integer
----@return table
-function M.moved(r, n)
-  local pad = string.rep(' ', n)
-  table.insert(r.t, 1, pad)
-  for _, h in ipairs(r.h) do
-    h[1], h[2] = h[1] + n, h[2] + n
-  end
-  for _, v in ipairs(r.virt or {}) do
-    v[1] = v[1] + n
-  end
-  for _, c in ipairs(r.code or {}) do
-    c[4] = c[4] + n
-  end
-  for _, x in ipairs(r.meta.tv and r.meta.tv.names or {}) do
-    x.s, x.e = x.s + n, x.e + n
-  end
-  r.b, r.w = r.b + n, r.w + n
-  return r
+  vim.list_extend(out, rows)
 end
 
 --- What the pane's head says of the row in the Map.

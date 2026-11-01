@@ -1,7 +1,7 @@
 -- The Map's both ways display: what the row is built from on the left, who
 -- uses it on the right, the order of the tabs; each side gathered into
--- folders, their files, each file's names after it, a line from each file
--- into the row. A function's calls and callers, a folder's or a file's
+-- folders, an empty row between them, their files, each file's names after
+-- it, a line from each file into the row. A function's calls and callers, a folder's or a file's
 -- files across its edge with the names that cross, a type's makers and
 -- takers. Pure: the items come as pieces, the rows go out with what each
 -- name stands for in `meta.hits`.
@@ -58,7 +58,7 @@ local function group(items)
 end
 
 --- A side's lines: a folder, then its files indented under it, each with
---- its names after it in lines of at most `room` columns, or one a line
+--- its names after it, an empty row before the next folder in lines of at most `room` columns, or one a line
 --- when `each`; cut to CAP names unless `all`, `⋯ N more` last standing
 --- for `side`.
 ---@param items seam.BothItem[]
@@ -72,7 +72,11 @@ function M.side(items, room, o)
     items = vim.list_slice(items, 1, M.CAP)
   end
   local out = {}
-  for _, g in ipairs(group(items)) do
+  for i, g in ipairs(group(items)) do
+    -- an empty row between one folder and the next
+    if i > 1 then
+      out[#out + 1] = { segs = {}, join = false }
+    end
     out[#out + 1] = { segs = { { g.title, 'SeamBold', g.dir and { kind = 'dir', path = g.dir } or nil } }, join = false }
     local mf = 0
     for _, f in ipairs(g.files) do

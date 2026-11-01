@@ -1276,6 +1276,7 @@ def grouped_side(items, room):
         if nm not in g[where(path)][posixpath.basename(path)]: g[where(path)][posixpath.basename(path)].append(nm)
     lines = []   # (segs, joins)
     for d, files in g.items():
+        if lines: lines.append(([], False))
         lines.append((s("fg bold", d), False))
         mf = max(len(f) for f in files)
         for f, names in files.items():

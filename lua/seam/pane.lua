@@ -388,9 +388,7 @@ function M.all_keys(back)
     {
       'The Map',
       {
-        { 'l', "open the call under the cursor a level deeper in the Map's tree, or its ⋯ more; elsewhere show it" },
-        { 'h', 'close it again' },
-        { '> <', 'a level more or less, everywhere at once' },
+        { 'l', 'open a side past its ⋯ more; on a name, show it in the tree' },
         { 'T', 'inputs and outputs, and the choice stays' },
         { 'J', 'the code screen on the name under the cursor' },
       },
@@ -448,11 +446,11 @@ function M.keys(buf)
       require('seam.screen_code').back(vim.v.count1)
     end
   end, o(buf))
-  -- the Map's keys; elsewhere l and h move as they do
+  -- the Map's keys; elsewhere l moves as it does
   local mk = require 'seam.map.keys'
-  for _, k in ipairs { 'l', 'h', '>', '<', 'T', 'J' } do
+  for _, k in ipairs { 'l', 'T', 'J' } do
     vim.keymap.set('n', k, function()
-      if not mk.key(k) and (k == 'l' or k == 'h') then
+      if not mk.key(k) and k == 'l' then
         vim.cmd('normal! ' .. vim.v.count1 .. k)
       end
     end, o(buf))

@@ -26,7 +26,6 @@ M.WORD = {
   ['n N'] = 'place',
   [']c [c'] = 'change',
   gc = 'only changed',
-  ['> <'] = 'levels',
   T = 'types',
   gu = 'used by',
   gb = 'built from',

@@ -1,10 +1,9 @@
 -- The Map, driven through its keys, from tests/check.lua: on a function,
--- its file, its folder and a type, reached with gm, each of the four displays on <C-Tab>,
--- the head listing them, no row wider than the pane; on the tree > and <,
--- l and h on a branch, T; on a type's tree + and - on a box.
+-- its file, its folder and a type, reached with gm, each of its displays on
+-- <C-Tab>, the head listing them, no row wider than the pane; T on a
+-- function's both ways.
 local api = vim.api
 local data = require 'seam.map.data'
-local draw = require 'seam.draw'
 local map_view = require 'seam.views.map'
 local pane = require 'seam.pane'
 local tree_screen = require 'seam.screen_tree'
@@ -61,9 +60,10 @@ return function(t)
     if (views.shown(pane.subject(), st.view) or {}).name ~= 'Map' then
       key 'gm'
     end
-    st.view.display.Map = 'tree'
+    local first = map_view.DISPLAYS[1]
+    st.view.display.Map = first
     pane.redraw()
-    if shown() ~= 'tree' then
+    if shown() ~= first then
       return fail('the Map is not shown on ' .. what)
     end
     local width = api.nvim_win_get_width(st.owin.pane)
@@ -87,52 +87,13 @@ return function(t)
       end
       key '<C-Tab>'
     end
-    if shown() ~= 'tree' then
-      fail(what .. ': <C-Tab> did not come back to the tree')
+    if shown() ~= first then
+      fail(what .. ': <C-Tab> did not come back to ' .. first)
     end
   end
-  -- the pane's cursor on the first row `pred` takes
-  local function pane_on(pred)
-    for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
-      local col = pred(draw.meta(st.obuf.pane, i), i)
-      if col then
-        api.nvim_set_current_win(st.owin.pane)
-        api.nvim_win_set_cursor(st.owin.pane, { i, col == true and 0 or col })
-        return true
-      end
-    end
-  end
-
-  -- the function: its tree a level deeper and back, a branch opened and closed, T
+  -- the function, and T on its both ways
   tree_screen.show(f.id)
   displays('function ' .. f.name)
-  t.where 'map levels'
-  local s = map_view.state(pane.subject())
-  local two = #lines()
-  key '>'
-  if s.levels ~= map_view.LEVELS + 1 or #lines() < two then
-    fail(('> did not add a level: %d levels, %d rows from %d'):format(s.levels, #lines(), two))
-  end
-  key '<lt>'
-  if s.levels ~= map_view.LEVELS or #lines() ~= two then
-    fail(('< did not take the level away: %d levels, %d rows, not %d'):format(s.levels, #lines(), two))
-  end
-  t.where 'map branches'
-  local mt = require 'seam.map.tree'
-  if not pane_on(function(meta)
-    return meta.map and mt.can(meta.map, s) == 'open'
-  end) then
-    fail('no branch of ' .. f.name .. "'s tree opens")
-  else
-    key 'l'
-    if #lines() <= two then
-      fail 'l did not open the branch'
-    end
-    key 'h'
-    if #lines() ~= two then
-      fail(('h did not close the branch: %d rows, not %d'):format(#lines(), two))
-    end
-  end
   if m.sigs then
     t.where 'map types'
     tree_win()
@@ -166,42 +127,11 @@ return function(t)
     end
   end
 
-  -- the type: its boxes, + on one opens its declaration under it, - closes it
+  -- the type
   if ty then
     tree_win()
     tree_screen.show_type(ty, 'Map')
     displays('type ' .. ty)
-    t.where 'map type box'
-    local n = #lines()
-    if
-      not pane_on(function(meta)
-        for _, b in ipairs(meta.tv and meta.tv.names or {}) do
-          if b.name == ty then
-            return b.s
-          end
-        end
-      end)
-    then
-      fail('no box of ' .. ty .. ' to open')
-    else
-      key '+'
-      local decl = m.flows[ty].decls[1]
-      local first = vim.trim(require('seam.code').file(decl.path).lines[decl.line] or '')
-      if #lines() <= n or not table.concat(lines(), '\n'):find(first, 1, true) then
-        fail(('+ on the box did not open %s under it: %s:%d %q'):format(ty, decl.path, decl.line, first))
-      end
-      pane_on(function(meta)
-        for _, b in ipairs(meta.tv and meta.tv.names or {}) do
-          if b.name == ty then
-            return b.s
-          end
-        end
-      end)
-      key '-'
-      if #lines() ~= n then
-        fail(('- did not close the declaration: %d rows, not %d'):format(#lines(), n))
-      end
-    end
     tree_win()
     key 'j'
     key 'k'

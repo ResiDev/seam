@@ -1,16 +1,13 @@
 -- The Map as data, on a graph written by hand: what a function calls and
 -- reaches, the folders and files the Map names, the calls across an edge;
--- the tree with its levels, a branch opened and closed, the cut past three
--- and a name seen higher; a folder's and a file's ranks; both ways; the
--- folders' boxes and the folder graph's ranks; the size's bars; a type's
--- boxes with its makers, its takers' outputs and what gives it back.
+-- both ways, by folder and file; the size's bars; what a type's takers
+-- give.
 --   nvim -l tests/map.lua
 -- Exits 0 when nothing failed.
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
 vim.opt.runtimepath:prepend(root)
 local index = require 'seam.index'
 local data = require 'seam.map.data'
-local mtree = require 'seam.map.tree'
 
 local failures, checks = {}, 0
 local function expect(ok, what, got)
@@ -112,69 +109,6 @@ eq(
 )
 eq(#out, 5, 'out of run.ts: a b c d e')
 
--- the tree on a function: two levels, every call of the root, three of the rest
-local o = { levels = 2, open = {}, more = {}, width = 120 }
-local rows = mtree.draw(mtree.fn(m, RUN), o)
-eq(texts(rows), {
-  ' run',
-  ' ├─ a',
-  ' │  ├─ a1',
-  ' │  ├─ a2',
-  ' │  ├─ a3',
-  ' │  └─ ⋯ 2 more',
-  ' ├─ b',
-  ' │  └─ c',
-  ' ├─ c',
-  ' ├─ d',
-  ' └─ e',
-}, 'the tree, two levels, the cut past three')
-eq(rows[6].meta.map.more, '\n' .. A, 'the ⋯ more stands for its branch')
-eq({ mtree.can(rows[3].meta.map, o) }, { 'open', false }, 'l opens a1, a leaf at the last level')
-eq({ mtree.can(rows[2].meta.map, o) }, { nil, true }, 'h closes a, open')
-eq({ mtree.can(rows[4].meta.map, o) }, { nil, false }, 'a2 calls nothing: neither')
-o.more['\n' .. A] = true
-expect(has(mtree.draw(mtree.fn(m, RUN), o), '└─ a5'), 'the ⋯ more opened shows them all')
-o.open['\n' .. A .. '\n' .. A1] = true
-rows = mtree.draw(mtree.fn(m, RUN), o)
-local seen
-for _, r in ipairs(rows) do
-  if r.meta.map and r.meta.map.seen then
-    seen = r
-  end
-end
-expect(seen and seen:text():find 'run', 'a1 opened: run, seen at the root, dim and stopping', texts(rows))
-o.open['\n' .. A] = false
-eq(#mtree.draw(mtree.fn(m, RUN), o), 7, 'a closed: its calls gone')
-o = { levels = 1, open = {}, more = {}, width = 120 }
-eq(#mtree.draw(mtree.fn(m, RUN), o), 6, 'one level: the root and its calls')
--- with T: the columns, and what each takes and gives
-o.types = function(nid)
-  return nid == A and 'In' or nil, nid == A and 'Out' or nil
-end
-rows = mtree.draw(mtree.fn(m, RUN), o)
-expect(rows[1]:text():find 'takes' and rows[1]:text():find 'gives', 'T: the columns titled', texts(rows))
-expect(rows[3]:text():find 'a%s+In%s+Out', 'T: a takes In and gives Out', texts(rows))
-
--- a folder's and a file's ranks
-o = { levels = 2, open = {}, more = {}, width = 120 }
-eq(texts(mtree.draw(mtree.dir(m, 'pa/src/run', 'run/'), o)), {
-  ' run/',
-  ' ├─ st/                           2 names',
-  ' │  └─ s.ts',
-  ' ├─ pa/src/ files                 1 name',
-  ' │  └─ top.ts',
-  ' └─ pb/src/                       1 name',
-  '    └─ x.ts',
-}, 'a folder: the folders it calls into, the most names first, then their files')
-o.levels = 3
-expect(has(mtree.draw(mtree.dir(m, 'pa/src/run', 'run/'), o), '└─ c()'), 'a level more: the functions in each file')
-o.levels = 2
-eq(
-  texts(mtree.draw(mtree.file(m, 'pa/src/run/run.ts'), o))[2],
-  ' ├─ s.ts                          2 names',
-  'a file: the files it calls into, the most names first'
-)
-
 -- both ways: each side a folder, its files, each file's names after it
 local both = require 'seam.map.both'
 local function it(folder, path, name)
@@ -188,11 +122,12 @@ local L = both.side(
 rows = both.draw(L, both.side({ it('up/', 'a/up/u.ts', 'u') }, 40, { side = 'right' }), { { 'mid', 'SeamBold' } }, 80)
 eq(texts(rows), {
   ' st/',
-  '   s.ts  b  b2 ╶┐             up/',
-  '   t.ts  d ╶────┼──╴mid ╶──────╴u.ts  u',
+  '   s.ts  b  b2 ╶┐',
+  '   t.ts  d ╶────┤             up/',
+  '                ├──╴mid ╶──────╴u.ts  u',
   ' ck/            │',
   '   c.ts  c ╶────┘',
-}, 'both ways: the folders with the most first, a file a line, its names after it, joined to the centre')
+}, 'both ways: the folders with the most first, an empty row between them, a file a line, its names after it, joined to the centre')
 local many = {}
 for i = 1, both.CAP + 2 do
   many[i] = it('st/', 'a/st/s.ts', 'f' .. i)
@@ -208,72 +143,6 @@ for _, l in ipairs(cut) do
 end
 eq({ both.rooms(10, 80, 100, 10) }, { 10, 68 }, 'the narrower side what it needs, the wider the rest')
 
--- the folders' boxes: what it is built from above, who uses it below
-local folders = require 'seam.map.folders'
-rows = folders.draw(m, {
-  centre = 'run',
-  centre_hl = 'SeamBold',
-  sub = 'run/',
-  bottom = { { path = 'pa/src/run/up.ts', id = A1, name = 'a1' } },
-  top = { { path = 'pa/src/st/s.ts', id = B, name = 'b' }, { path = 'pa/src/st/s.ts', id = C, name = 'c' }, { path = 'pb/src/x.ts', id = E, name = 'e' } },
-  top_says = '3 calls',
-  bottom_says = 'called from 1 function',
-  tests = 1,
-  tfiles = 1,
-  word = { 'call', 'calls' },
-  flow = 'up',
-  home = RUN,
-  width = 120,
-})
-local function row_of(s)
-  for i, r in ipairs(rows) do
-    if r:text():find(s, 1, true) then
-      return i
-    end
-  end
-end
-expect(has(rows, 'st/  2 calls') and has(rows, 's.ts  b  c'), 'a box a folder, its count in its border, its files and names', texts(rows))
-expect(row_of 's.ts' < row_of '│ run │' and row_of '│ run │' < row_of 'up.ts', 'built from above the row, used by below', texts(rows))
-expect(has(rows, '3 calls') and has(rows, 'called from 1 function'), 'what each line stands for beside it', texts(rows))
-expect(has(rows, '▲'), 'the arrows point at what is used', texts(rows))
-expect(has(rows, '⋯ 1 in tests, 1 files'), 'tests folded to a count', texts(rows))
-local long = {}
-for i = 1, 30 do
-  long[i] = { path = 'pa/src/st/s.ts', id = B, name = 'name' .. i }
-end
-rows = folders.draw(m, { centre = 'run', centre_hl = 'SeamBold', sub = '', top = long, bottom = {}, word = { 'call', 'calls' }, home = RUN, width = 60 })
-local cut = false
-for _, r in ipairs(rows) do
-  cut = cut or r:text():find('…', 1, true) ~= nil or r.w > 61
-end
-expect(not cut and has(rows, 'name30'), 'names wrap to the room, none cut', texts(rows))
-
--- a folder's folders: a band after everything it calls, what calls nothing first
-local fgraph = require 'seam.map.fgraph'
-local units = { { key = 'r', label = 'run/' }, { key = 's', label = 'st/' }, { key = 'c', label = 'ck/' }, { key = 't', label = 'top' } }
-local edges = {
-  { from = 'r', to = 's', n = 3 },
-  { from = 'r', to = 't', n = 5 },
-  { from = 's', to = 'c', n = 2 },
-  { from = 'c', to = 't', n = 1 },
-  { from = 'c', to = 's', n = 1 },
-}
-local bands = fgraph.bands(units, edges)
-expect(bands.t == 0 and bands.c > bands.t and bands.r > bands.s and bands.r > bands.c, 'what is used in a band before what uses it', bands)
-rows = fgraph.draw(units, edges, { width = 160, word = { 'call', 'calls' } })
-local function at(s)
-  for i, r in ipairs(rows) do
-    if r:text():find(s, 1, true) then
-      return i
-    end
-  end
-  return 0
-end
-expect(at '─ top ─' < at '─ run/ ─', 'the used above the user', texts(rows))
-expect(has(rows, 'calls nothing here'), 'a box calling nothing says so', texts(rows))
-expect(has(rows, 'top  5 calls') and has(rows, 'st/  3 calls'), 'each box what it calls and how often', texts(rows))
-expect(has(rows, '▲'), 'the arrows point up at what is used', texts(rows))
-
 -- the size's bars
 local size = require 'seam.map.size'
 rows = size.draw {
@@ -286,7 +155,7 @@ expect(rows[1]:text():find 'reaches' and rows[1]:text():find 'used by', 'the bar
 expect(rows[3]:text():find 'big%s+ 10', 'the longest bar, its number after it', texts(rows))
 expect(rows[4]:text():find '▏ 0', 'no reach: a tick', texts(rows))
 
--- a type's boxes: In makes Model by mk; Model taken by tk1 giving Out, tk2
+-- a type's flow: In makes Model by mk; Model taken by tk1 giving Out, tk2
 -- giving Model back, tk3 a boolean; Out taken by o1 giving In
 local function sig(params, ret)
   local ps = {}
@@ -317,23 +186,5 @@ local tm = {
 }
 eq({ data.gives(tm, TK1) }, { 'Out', true }, 'tk1 gives Out, a repo type')
 eq({ data.gives(tm, TK3) }, { 'boolean', false }, 'tk3 gives a boolean')
-local tg = require 'seam.map.typegraph'
-rows = tg.draw(tm, 'Model', { levels = 2, open = {}, more = {}, width = 140 })
-expect(has(rows, '↺ tk2'), 'tk2 gives Model back: above its box', texts(rows))
-expect(has(rows, ' mk ') and has(rows, '│ In │'), 'the maker on the left, from the type it takes', texts(rows))
-expect(has(rows, 'tk1 ') and has(rows, '│ Out ├') and has(rows, '│ boolean │'), 'the takers on the arrows, a box an output', texts(rows))
-expect(has(rows, ' o1 '), 'two levels: Out on into what takes it', texts(rows))
-local tvrow
-for _, r in ipairs(rows) do
-  if r.meta.tv and r.meta.tv.names[1].name == 'Model' then
-    tvrow = r
-  end
-end
-expect(tvrow and tvrow.meta.tv.key == 'map' and tvrow.meta.tv.after, "the box's name for +: its declaration under the drawing")
-rows = tg.draw(tm, 'Model', { levels = 1, open = {}, more = {}, width = 140 })
-expect(not has(rows, ' o1 '), 'one level: Out stops')
-rows = tg.draw(tm, 'Model', { levels = 1, open = { ['\nOut'] = true }, more = {}, width = 140 })
-expect(has(rows, ' o1 '), 'l on the Out box: its branch alone a level deeper')
-
 io.stdout:write(('map: %d checks, %d failures\n'):format(checks, #failures))
 os.exit(#failures == 0 and 0 or 1)
