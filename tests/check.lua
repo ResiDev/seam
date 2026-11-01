@@ -874,6 +874,15 @@ do
       if st.code.display ~= 'code' then
         fail '<S-Tab> on the types did not come back to the code'
       end
+      -- L opens the lens over the code; q closes it, back in the code
+      key 'L'
+      if not require('seam.lens_panel').is_open() then
+        fail 'L on the code screen did not open the lens'
+      end
+      key 'q'
+      if require('seam.lens_panel').is_open() or st.screen ~= 'code' or api.nvim_get_current_win() ~= st.cwin.code then
+        fail 'q on the lens did not come back to the code'
+      end
       -- <Tab> in the code flips the pane's tabs, or from a view aside back
       local V = require 'seam.views'
       local was, can = (V.shown(screen_code.subject(), st.view) or {}).name, V.can_step(screen_code.subject(), st.view)

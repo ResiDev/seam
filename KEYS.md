@@ -89,6 +89,7 @@ Seam maps no key to go into the pane: Vim's own window keys do.
 | `+` `-` | on a box of a type's tree in the Map, its declaration opened under the drawing on a line down from the box, and closed |
 | `<Tab>` `<S-Tab>` `gu` `gb` `gm` `<C-Tab>` `<C-S-Tab>` `D` | as in the tree |
 | `gf` `gd` | in your own code: on a line of code or a place, that line; on a name's line in Used by and Built from, its declaration; on a file's line, the file (in Used by, at its first place); on a function's line, its declaration; on the head, the row's |
+| `L` | the lens, as from the tree |
 | `?` | every key here |
 | `q` | close seam |
 
@@ -115,6 +116,7 @@ The name under the cursor answers in the pane, or off a name the nearest on its 
 | `<C-Tab>` `<C-S-Tab>` | the pane's next and previous display, as beside the tree |
 | `<M-j>` `<M-k>` | scroll the pane half a screen, the cursor staying in the code |
 | `/` | search the names, as in the tree: a function or a file goes on to its code screen, a type shows in the pane |
+| `L` | the lens, as from the tree; closed, the code and the pane drawn again under it |
 | `gf` `gd` | in your own code: the line under the cursor; on the head, what the code is |
 | `?` | every key here |
 | `q` | close seam |

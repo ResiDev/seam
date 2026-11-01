@@ -479,6 +479,7 @@ function M.all_keys()
       'Seam',
       {
         { '/', 'search the names: a function or file on the code screen, a type in the pane' },
+        { 'L', 'the lens: what seam shows, and the range of changes' },
         { 'gf gd', 'that place in your own code' },
         { 'q', 'close seam' },
       },
@@ -529,7 +530,7 @@ function M.status()
   if pane.can_scroll() then
     pg[#pg + 1] = '<M-j> <M-k>'
   end
-  return hints.status(left, { rg, pg, { '/', 'q' } }, rules)
+  return hints.status(left, { rg, pg, { '/', 'L', 'q' } }, rules)
 end
 
 local function o(buf)
@@ -592,6 +593,9 @@ local function code_keys(buf)
         end
       end,
     })
+  end, o(buf))
+  vim.keymap.set('n', 'L', function()
+    S().open_lens()
   end, o(buf))
   vim.keymap.set('n', '?', function()
     hints.open(M.all_keys())
