@@ -58,7 +58,7 @@ against its mocks, its tests, and KEYS.md in step:
    lines.
 6. **The Map** (landed 2026-11-01). Its displays on each kind of row, `T`, `>` `<`, and the
    arrows as chosen.
-7. **Two tabs and the diff.** The pane's tabs only Code and Types, `<Tab>`
+7. **Two tabs and the diff** (landed 2026-11-01). The pane's tabs only Code and Types, `<Tab>`
    between them; Used by, Built from and the Map aside on `gu` `gb` `gm`.
    The Changed tab goes: `D` turns the diff on and off, on the code and the
    types, on both sides of the code screen.
@@ -1009,7 +1009,7 @@ lua/seam/
   code.lua          a code pane: copied lines, copied captures painted in view, enclosing function
   draw/init.lua     rows, putting them in a buffer, the pieces both screens share
   outline.lua       the tree as data: folders, files, functions, the calls under each, the orders, reveal
-  views.lua         the pane's views, a registry: which rows each has, its displays, how it draws
+  views.lua         the pane's views, a registry: the two tabs and the views aside, which rows each has, its displays, how it draws
   views/code.lua    the Code view: a function, a file, a type's declaration, each call underlined where it lives
   views/types.lua   the Types view: a line a function, takes → name → gives; a folder's, a file's, a type's; types opened in place
   typesview.lua     the Types view as data: a function's line, the names that are types, the types opened as a set of keys laid out
@@ -1025,7 +1025,7 @@ lua/seam/
   names.lua         what a name in the code is: a repo function, a type, an import's file, a value, a parameter, a field or method, its type and later uses
   codetypes.lua     the types the code does not write: after a value's name, after a function's parameters; the code's types display
   pane.lua          the pane beside the tree and the code: drawing it, its keys, its places
-  screen_code.lua   the code screen: the trail, the code or its types, the name under the cursor answered in the pane, J K n N
+  screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane, J K n N
   views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
   lens_panel.lua    the lens float and its keys
@@ -1035,7 +1035,9 @@ lua/seam/
   diff.lua          two versions of some lines compared: the hunks, the words changed, laid out with removed lines where they were and unchanged runs folded
   signs.lua         the range's signs on the tree's rows, the rows gone kept struck through, gc and ]c [c
   refs.lua          the refs a range can be from or to and the picker over them, f t x in the lens
-  views/changed.lua the diff on D: Code with the diff on a function, a type, a file or a folder; a type's own lines; a function's line as it was; Used by now and at from; the code's changed lines and ]c [c
+  views/changed.lua the diff on D: Code with the diff on a function, a type, a file or a folder; a type's own lines; a function's line as it was; Used by now and at from
+  codediff.lua      the range's changes on the code shown: its changed lines numbered in the signs' colours, or with the diff on drawn inline; ]c [c
+  views/codetypes.lua the code screen's types display: the function's line, its values, the functions inside; with the diff, a line as it was
   views/map.lua     the Map view: its four displays on a function, a folder, a file and a type, T's columns, a box's declaration opened under it, its head's count
   map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows
   map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
