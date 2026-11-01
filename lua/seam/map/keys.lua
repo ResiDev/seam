@@ -1,7 +1,6 @@
--- The Map's keys in the pane: l opens a branch of its tree a level
--- deeper, or its ⋯ more, or shows a name elsewhere in the tree; h closes a
--- branch; > < a level more or less; T inputs and outputs; J the code
--- screen on the name. What is under the cursor, for them and the status line.
+-- The Map's keys in the pane: l opens a side's ⋯ more, or shows a name
+-- in the tree; T inputs and outputs; J the code screen on the name. What
+-- is under the cursor, for them and the status line.
 local api = vim.api
 local data = require 'seam.map.data'
 local draw = require 'seam.draw'
@@ -65,31 +64,25 @@ end
 
 -- does the display draw functions that T gives columns to?
 local function typed_display(x, d)
-  return (d == 'tree' and x.kind ~= 'type') or (d == 'both ways' and (x.kind == 'fn' or x.kind == 'type'))
+  return d == 'both ways' and (x.kind == 'fn' or x.kind == 'type')
 end
 
 --- What each of the Map's keys would do where the pane's cursor is, nil where nothing.
----@return { l: string|nil, h: boolean, levels: boolean, T: boolean, J: table|nil }
+---@return { l: string|nil, T: boolean, J: table|nil }
 function M.acts()
   local x, d = shown()
-  local out = { h = false, levels = false, T = false }
+  local out = { T = false }
   if not x then
     return out
   end
   local m = index.model()
-  out.levels = d == 'tree'
   out.T = m.sigs ~= nil and typed_display(x, d)
   local it = M.under()
   if not it then
     return out
   end
-  if d == 'tree' and x.kind ~= 'type' then
-    local s = map_view.state(x)
-    out.l, out.h = require('seam.map.tree').can(it, s)
-  elseif it.more then
+  if it.more then
     out.l = 'more'
-  elseif it.box then
-    out.l, out.h = it.can and 'open' or nil, it.shown == true
   elseif it.kind == 'fn' or it.kind == 'file' or (it.kind == 'dir' and it.path) or (it.kind == 'type' and m.flows[it.name]) then
     out.l = 'show'
   end
@@ -114,11 +107,11 @@ local function show_in_tree(it)
   end
 end
 
---- A Map key, `l` `h` `>` `<` `T` or `J`, where the pane's cursor is: true when it acted.
+--- A Map key, `l` `T` or `J`, where the pane's cursor is: true when it acted.
 ---@param k string
 ---@return boolean
 function M.key(k)
-  local x, d = shown()
+  local x = shown()
   if not x then
     return false
   end
@@ -127,21 +120,9 @@ function M.key(k)
   local it = M.under() or {}
   if k == 'l' and a.l == 'more' then
     s.more[it.more] = true
-  elseif k == 'l' and a.l == 'open' then
-    s.open[it.branch] = true
   elseif k == 'l' and a.l == 'show' then
     show_in_tree(it)
     return true
-  elseif k == 'h' and a.h then
-    s.open[it.branch] = false
-  elseif (k == '>' or k == '<') and a.levels then
-    local n = math.max(1, math.min(map_view.MAX_LEVELS, s.levels + (k == '>' and 1 or -1)))
-    if n == s.levels then
-      return true
-    end
-    s.levels = n
-    -- a level more or less everywhere at once: what l and h did is forgotten
-    s.open = {}
   elseif k == 'T' and a.T then
     st.map.types = not st.map.types
   elseif k == 'J' and a.J then
@@ -164,13 +145,7 @@ end
 function M.hints()
   local a, out = M.acts(), {}
   if a.l then
-    out[#out + 1] = a.l == 'more' and { 'l', 'more' } or a.l == 'show' and { 'l', 'show' } or 'l'
-  end
-  if a.h then
-    out[#out + 1] = 'h'
-  end
-  if a.levels then
-    out[#out + 1] = '> <'
+    out[#out + 1] = a.l == 'more' and { 'l', 'more' } or { 'l', 'show' }
   end
   if a.T then
     out[#out + 1] = 'T'

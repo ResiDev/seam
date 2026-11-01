@@ -319,7 +319,6 @@ function M.all_keys()
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
         { 'D', 'the diff on or off, here and on the code screen, for the session' },
         { 'n N', 'into it, on the next and previous place, in Used by and Built from' },
-        { '> <', 'a level more or less, in the Map' },
         { 'T', 'inputs and outputs, in the Map' },
         { '<C-d> <C-u> <M-j> <M-k>', 'scroll it half a screen' },
         { '<C-e> <C-y>', 'scroll it a line' },
@@ -370,11 +369,8 @@ function M.status()
     return hints.status(left, { pane.hints 'tree' }, rules)
   end
   local row, pgroup = {}, pane.view_hints(px)
-  -- the Map's levels and types, from the tree too
+  -- the Map's types, from the tree too
   local ma = require('seam.map.keys').acts()
-  if ma.levels then
-    pgroup[#pgroup + 1] = '> <'
-  end
   if ma.T then
     pgroup[#pgroup + 1] = 'T'
   end
@@ -460,11 +456,9 @@ local function tree_keys(buf)
     S().ask_changes()
   end, o(buf))
   vim.keymap.set('n', 'gc', M.only_changed, o(buf))
-  for _, k in ipairs { '>', '<', 'T' } do
-    vim.keymap.set('n', k, function()
-      require('seam.map.keys').key(k)
-    end, o(buf))
-  end
+  vim.keymap.set('n', 'T', function()
+    require('seam.map.keys').key 'T'
+  end, o(buf))
   vim.keymap.set('n', ']c', function()
     M.next_change(1)
   end, o(buf))
