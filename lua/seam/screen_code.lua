@@ -224,8 +224,7 @@ local function moved()
   if st.code.shown ~= key then
     st.code.shown = key
     st.code.subject = x
-    pane.show(x)
-    S().paint()
+    pane.follow(x)
   end
   vim.cmd 'redrawstatus'
 end

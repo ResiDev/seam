@@ -56,6 +56,7 @@ end
 ---@param x seam.ORow|nil
 ---@param keep? boolean
 function M.show(x, keep)
+  M.cancel()
   local w = M.wins()
   if not w then
     return
@@ -63,6 +64,49 @@ function M.show(x, keep)
   local m = index.model()
   odraw.pane_head(st.obuf.phead, m, st.outline, x, st.view)
   odraw.pane(st.obuf.pane, w.pane, m, x, st.view, ctx(x, w), keep)
+end
+
+-- The pane following the cursor, drawn once it rests: moving over rows draws
+-- nothing until the cursor stops, so a row slow to draw (a big file's diff,
+-- a file seen for the first time) never holds the cursor up. 0 draws at once,
+-- for the checks.
+M.DELAY = 50
+local timer, pending
+
+--- The pane for `x` once the cursor has rested `M.DELAY` ms, the screen
+--- painted after.
+---@param x seam.ORow|nil
+function M.follow(x)
+  pending = { x = x }
+  if M.DELAY <= 0 then
+    return M.flush()
+  end
+  timer = timer or vim.uv.new_timer()
+  timer:stop()
+  timer:start(M.DELAY, 0, vim.schedule_wrap(M.flush))
+end
+
+--- A pane waiting on the cursor drawn now, before a key acts on it.
+function M.flush()
+  local p = pending
+  if not p then
+    return
+  end
+  pending = nil
+  if timer then
+    timer:stop()
+  end
+  M.show(p.x)
+  require('seam.screen').paint()
+  vim.cmd 'redrawstatus'
+end
+
+--- Nothing waiting: the pane is being drawn now.
+function M.cancel()
+  pending = nil
+  if timer then
+    timer:stop()
+  end
 end
 
 --- The pane drawn again for what it shows, where it was scrolled.
@@ -204,6 +248,7 @@ end
 ---@return fun()
 function M.scroll(k)
   return function()
+    M.flush()
     local w = M.wins()
     if not w then
       return
@@ -239,6 +284,7 @@ end
 ---@param d integer
 ---@param what? 'place'|'change'
 function M.next_place(d, what)
+  M.flush()
   local list = M.stops(what)
   if #list == 0 then
     return
@@ -442,6 +488,7 @@ function M.autocmds(aug)
       group = aug,
       buffer = b,
       callback = function()
+        M.flush()
         vim.cmd 'redrawstatus'
       end,
     })
