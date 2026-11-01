@@ -162,17 +162,28 @@ local function name(r, p, bold, room)
 end
 
 -- names a comma between, cut where the row ends
-local function names(r, list, w)
+local function names(r, list, w, sep)
+  sep = sep or ', '
   for i, n in ipairs(list) do
-    local more = (i > 1 and 2 or 0) + width(n.name)
-    if r.w + more > w - 2 then
-      r:add(i > 1 and ', …' or '…', 'SeamLabel')
+    local more = (i > 1 and #sep or 0) + width(n.name)
+    -- room for the name and, after it, for what says some are left out
+    if r.w + more > w - (i < #list and #sep + 1 or 0) then
+      r:add(i > 1 and (sep .. '…') or '…', 'SeamLabel')
       break
     end
     if i > 1 then
-      r:add(', ', 'SeamLabel')
+      r:add(sep, 'SeamLabel')
     end
     name(r, n, false)
+  end
+  return r
+end
+
+-- `text` dim after a row, cut to what is left of `W`, or left out
+local function after(r, text, W)
+  local room = W - r.w - 3
+  if room >= 6 then
+    r:add('   ' .. draw.trunc(text, room), 'SeamLabel')
   end
   return r
 end
@@ -266,10 +277,11 @@ local function signature(r, C, p, room)
   if not f then
     return false
   end
-  local takes = tv.cut(f.takes, math.max(12, math.floor(room * 0.6)))
+  room = math.max(room, 20)
+  local takes = tv.cut(f.takes, math.floor(room * 0.6))
   types_view.typed(r, takes, C.known, {}, nil)
   r:add(' → ', 'SeamLabel')
-  types_view.typed(r, tv.cut(f.gives, math.max(8, room - width(takes) - 3)), C.known, {}, nil)
+  types_view.typed(r, tv.cut(f.gives, room - width(takes) - 3), C.known, {}, nil)
   return true
 end
 
@@ -302,8 +314,10 @@ end
 local function name_places(out, m, places, short, marks, W, key, open, lw, tw)
   local shown, more = seams.cut(places, open[key])
   for _, p in ipairs(shown) do
-    local r = place_row(p, open[key] and key or nil):add('   '):add(short(p.path) .. ':' .. p.line, 'SeamPath')
-    r:to(3 + lw + 2):add(p.top and p.top.name or '', 'SeamLabel'):to(3 + lw + 2 + tw + (tw > 0 and 2 or 0))
+    local at = ':' .. p.line
+    local r = place_row(p, open[key] and key or nil):add '   '
+    r:add(draw.trunc(short(p.path), lw - #at) .. at, 'SeamPath')
+    r:to(3 + lw + 2):add(draw.trunc(p.top and p.top.name or '', tw), 'SeamLabel'):to(3 + lw + 2 + tw + (tw > 0 and 2 or 0))
     code_line(r, m, p, W - r.w, marks(p))
     out[#out + 1] = r
   end
@@ -320,16 +334,17 @@ local function used_by_name(out, m, list, x, ctx, W, C)
     lw = math.max(lw, width(short(p.path) .. ':' .. p.line))
     tw = math.max(tw, width(p.top and p.top.name or ''))
   end
+  lw, tw = math.min(lw, math.floor(W * 0.3)), math.min(tw, 24)
   for _, g in ipairs(seams.by_name(list)) do
     blank(out)
     local h = row({ at = g.decl and { path = g.decl.path, line = g.decl.line, name = g.name } }):add ' '
     name(h, g, true)
+    local count = plural(#g.places, 'place') .. ' in ' .. plural(g.files, 'file')
     h:add '   '
-    if signature(h, C, g, math.max(20, math.floor(W / 2))) then
+    if signature(h, C, g, W - h.w - 3 - width(count)) then
       h:add '   '
     end
-    h:add(plural(#g.places, 'place') .. ' in ' .. plural(g.files, 'file'), 'SeamLabel')
-    out[#out + 1] = h
+    out[#out + 1] = h:add(draw.trunc(count, W - h.w), 'SeamLabel')
     name_places(out, m, g.places, short, marks, W, 'more:n:' .. g.name, ctx.open, lw, tw)
   end
 end
@@ -349,9 +364,9 @@ local function used_by_user(out, m, list, x, W, C)
     local first = g.places[1]
     if g.f then
       local i = #out + 1
-      cols.gw = gives_room(cols, W) - 3 - width(short(g.path))
+      cols.gw = math.max(8, gives_room(cols, W) - 3 - math.min(width(short(g.path)), 30))
       types_view.fn_rows(out, C, g.f, cols, false)
-      out[i]:add('   ' .. short(g.path), 'SeamLabel')
+      after(out[i], short(g.path), W)
       out[i].meta.place = true
     else
       local r = row({ at = { path = g.path, line = g.top and g.top.line or first.line }, place = true }):add ' '
@@ -364,7 +379,7 @@ local function used_by_user(out, m, list, x, W, C)
       else
         r:add('top level', 'SeamText')
       end
-      out[#out + 1] = r:add('   ' .. short(g.path), 'SeamLabel')
+      out[#out + 1] = after(r, short(g.path), W)
     end
     local u = row({ at = { path = first.path, line = first.line, col = first.col and first.col - 1 } }):add('   uses ', 'SeamLabel')
     out[#out + 1] = names(u, g.names, W)
@@ -417,19 +432,17 @@ local function built_by_name(out, m, list, x, W, C)
     blank(out)
     local h = row({ at = p.decl and { path = p.decl.path, line = p.decl.line, name = p.name } }):add ' '
     name(h, p, true)
+    local where = p.decl and short(p.decl.path) or ''
     h:add '   '
-    if not signature(h, C, p, math.max(20, math.floor(W / 2))) then
+    if not signature(h, C, p, W - h.w - 3 - math.min(width(where), 30)) then
       h:add(kind_word(m, p), 'SeamLabel')
     end
-    if p.decl then
-      h:add('   ' .. short(p.decl.path), 'SeamLabel')
-    end
-    out[#out + 1] = h
+    out[#out + 1] = after(h, where, W)
     numbered(out, m, p, W, far and in_of(p) or nil, marks(p))
   end
 end
 
-local function built_signatures(out, m, list, C)
+local function built_signatures(out, m, list, C, W)
   local fns, tys, vals = seams.signatures(list)
   local fs, alone = {}, {}
   for _, p in ipairs(fns) do
@@ -442,7 +455,7 @@ local function built_signatures(out, m, list, C)
     end
   end
   local cols = types_view.columns(C, fs, 40)
-  cols.gw = gives_room(cols, C.width - 1)
+  cols.gw = gives_room(cols, W)
   for _, f in ipairs(fs) do
     blank(out)
     local i = #out + 1
@@ -452,14 +465,9 @@ local function built_signatures(out, m, list, C)
   for _, group in ipairs { { 'calls', alone }, { 'types', tys }, { 'values', vals } } do
     if #group[2] > 0 then
       blank(out)
-      local r = row({ at = { path = group[2][1].path, line = group[2][1].line } }):add(' ' .. group[1] .. '  ', 'SeamLabel')
-      for i, p in ipairs(group[2]) do
-        if i > 1 then
-          r:add '   '
-        end
-        name(r, p, false)
-      end
-      out[#out + 1] = r
+      local first = group[2][1]
+      local r = row { at = first.decl and { path = first.decl.path, line = first.decl.line, name = first.name }, place = true }
+      out[#out + 1] = names(r:add(' ' .. group[1] .. '  ', 'SeamLabel'), group[2], W, '   ')
     end
   end
 end
@@ -511,7 +519,7 @@ function M.built_from(out, x, m, display, ctx)
   if display == 'by name' then
     built_by_name(out, m, list, x, W, C)
   elseif display == 'as signatures' then
-    built_signatures(out, m, list, C)
+    built_signatures(out, m, list, C, W)
   else
     built_by_file(out, m, list, x, W)
   end
