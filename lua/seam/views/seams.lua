@@ -294,12 +294,14 @@ end
 
 local function used_by_file(out, m, list, x, ctx, W)
   local short, marks = shortener(list, x), on_lines(list)
+  -- a function or a type hands out one name: no need to say it each time
+  local one = #seams.by_name(list) == 1
   for _, g in ipairs(seams.by_file(list)) do
     blank(out)
     local key = 'more:f:' .. g.path
     local h = row({ at = { path = g.path, line = g.places[1].line } }):add(' '):add(short(g.path), 'SeamBold')
-    h:add('   ' .. plural(#g.places, 'place') .. '   ', 'SeamLabel')
-    out[#out + 1] = names(h, g.names, W)
+    h:add('   ' .. plural(#g.places, 'place'), 'SeamLabel')
+    out[#out + 1] = one and h or names(h:add '   ', g.names, W)
     local shown, more = seams.cut(g.places, ctx.open[key])
     for _, p in ipairs(shown) do
       numbered(out, m, p, W, in_of(p), marks(p), nil, ctx.open[key] and key or nil)
