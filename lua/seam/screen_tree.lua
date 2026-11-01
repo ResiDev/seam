@@ -128,8 +128,11 @@ function M.redraw(keep)
   vim.wo[w].winbar = odraw.titles(o)
   odraw.rows(st.obuf.tree, m, o, st.orows)
   local i = outline.find(st.orows, o.cursor) or 1
+  -- from the top while the row is in the first screen, else a third down
+  local h = api.nvim_win_get_height(w)
+  local top = keep and o.top or (i <= math.floor(h * 2 / 3) and 1 or i - math.floor(h / 3))
   api.nvim_win_call(w, function()
-    vim.fn.winrestview { topline = keep and o.top or math.max(1, i - math.floor(api.nvim_win_get_height(w) / 3)), lnum = i, col = 0 }
+    vim.fn.winrestview { topline = top, lnum = i, col = 0 }
   end)
   st.drawing = false
   st.oshown = nil
