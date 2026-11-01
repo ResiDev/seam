@@ -43,7 +43,7 @@ The status line says where you are on the left, and on the right only the keys t
 | `<Tab>` `<S-Tab>` | the pane's next and previous view: Code, Types, Built from, Used by, Map, Changed (on a row that changed in the range); the one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the next it has |
 | `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view, named after its tabs: Used by by file, by name, by user; Built from by file, by name, as signatures; Map tree, both ways, folders, size; Changed changes only, whole file; Code and Types have one. The display chosen stays for its view. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
 | `n` `N` | in Used by and Built from: into the pane, on its next or previous place, round the ends; a count skips |
-| `<C-d>` `<C-u>` | scroll the pane half a screen, the cursor staying in the tree |
+| `<C-d>` `<C-u>` `<M-j>` `<M-k>` | scroll the pane half a screen, the cursor staying in the tree |
 | `<C-e>` `<C-y>` | scroll the pane a line |
 | `gc` | only what changed in the range, the folders down to it, and back; the status line says so |
 | `]c` `[c` | the next and previous row that changed, round the ends |
@@ -92,20 +92,22 @@ Seam maps no key to go into the pane: Vim's own window keys do.
 
 ## The code
 
-`J` on a function's or a file's row: its code on the left, as wide as it needs up to 112 columns, a longer line cut with `…` at its edge; the pane on the right as beside the tree. The head is the trail, `Seams › createRun() › createQueue()`; the code's own head says what it is and where, and its display. Each line its number and the source as written, its colours from treesitter; a name from another file underlined where it lives, as in the tree; after a value's name with no type written, its type, dim, from the declared return of the call that made it (nothing when that is not written), and after a function's parameters its return the same way.
+`J` on a function's or a file's row: its code on the left, as wide as it needs up to 112 columns and 60% of the screen, the pane keeping 40% or more, a longer line cut with `…` at its edge; the pane on the right as beside the tree. The head is the trail, `Seams › createRun() › createQueue()`; the code's own head says what it is and where, and its display. Each line its number and the source as written, its colours from treesitter; a name from another file underlined where it lives, as in the tree; after a value's name with no type written, its type, dim, from the declared return of the call that made it (nothing when that is not written), and after a function's parameters its return the same way.
 
-The name under the cursor answers in the pane: a call its function (`called at line N`), a type its views, an imported value its file, a value, a parameter, a field or a method its Types view, headed with where it was made (`queue  made by createQueue, line 37  used 12 times`), what it is a parameter of, or the type it is in and its file. A field or method shows the type it is in with its lines lit, then each repo type it names written out under `is`, `takes` or `gives`. A value's or a call's later uses in the code are lit, the name and its line. The status line says the name under the cursor and its type.
+The name under the cursor answers in the pane, or off a name the nearest on its line; a line with none, the function: a call its function (`called at line N`), a type its views, an imported value its file, a value, a parameter, a field or a method its Types view, headed with where it was made (`queue  made by createQueue, line 37  used 12 times`), what it is a parameter of, or the type it is in and its file. A field or method shows the type it is in with its lines lit, then each repo type it names written out under `is`, `takes` or `gives`. A value's or a call's later uses in the code are lit, the name and its line. The status line says the name under the cursor and its type.
 
 | Key | Does |
 |---|---|
-| `j` `k` and Vim's motions | move; the pane follows the name under the cursor |
+| `j` `k` and Vim's motions | move; the pane follows the name under the cursor, else the nearest on the line |
 | `n` `N` | the next or previous import: a name from another file, round the ends |
 | `]c` `[c` | the next or previous change in the range, its lines numbered in the signs' colours; when the range ends at the working tree |
 | `J` | on a call or an imported name, the code screen on its function or file, on top of the trail |
 | `K` | back: the previous on the trail, the cursor on the very name you left from; a count goes back more (`3K`); from the first, the tree on its row |
-| `<C-Tab>` `<C-S-Tab>` | the code, or its types: the function's line, then its values in the order made, `name  Type`, each function inside under its own line, indented; a file, its declarations |
+| `<S-Tab>` | the code, or its types: the function's line, then its values in the order made, `name  Type`, each function inside under its own line, indented; a file, its declarations |
 | `+` `-` | in its types, open or close the type under the cursor, as in the pane |
-| `<Tab>` `<S-Tab>` | the pane's next and previous view of the name under the cursor |
+| `<Tab>` | the pane's next view of the name under the cursor |
+| `<C-Tab>` `<C-S-Tab>` | the pane's next and previous display, as beside the tree |
+| `<M-j>` `<M-k>` | scroll the pane half a screen, the cursor staying in the code |
 | `/` | search the names, as in the tree: a function or a file goes on to its code screen, a type shows in the pane |
 | `gf` `gd` | in your own code: the line under the cursor; on the head, what the code is |
 | `?` | every key here |

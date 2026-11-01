@@ -20,7 +20,8 @@ local M = {}
 local row = draw.row
 local ns = api.nvim_create_namespace 'seam.uses'
 -- the code's widest and narrowest, and the least the pane keeps
-M.W, M.MIN, M.PANE = 112, 60, 50
+-- the code's width at most, at least, and its share of the screen: the pane has 40% or more
+M.W, M.MIN, M.SHARE = 112, 60, 0.6
 M.DISPLAYS = { 'code', 'types' }
 
 local function S()
@@ -174,7 +175,7 @@ local function rows_of(m, e, display, width)
   return out
 end
 
--- the code's width: what its lines take with their types, between the narrowest and the widest
+-- the code's width: what its lines take with their types, between the narrowest and the widest, the pane keeping 40% of the screen
 local function width_of(rows)
   local w = 0
   for _, r in ipairs(rows) do
@@ -184,7 +185,7 @@ local function width_of(rows)
     end
     w = math.max(w, x)
   end
-  return math.max(M.MIN, math.min(w + 2, M.W, vim.o.columns - M.PANE))
+  return math.min(math.max(M.MIN, w + 2), M.W, math.floor(vim.o.columns * M.SHARE))
 end
 
 local function heads(m, e)
@@ -223,10 +224,11 @@ local function answer()
   if st.code.display == 'types' then
     return meta.name and names.at(m, e.path, meta.name.line, meta.name.col) or nil
   end
-  if meta.kind ~= 'code' or not meta.start or cur[2] < meta.start then
+  if meta.kind ~= 'code' or not meta.start then
     return nil
   end
-  return names.at(m, e.path, meta.lnum, cur[2] - meta.start)
+  -- the name under the cursor, else the nearest on its line
+  return names.near(m, e.path, meta.lnum, math.max(cur[2] - meta.start, -1))
 end
 
 -- the later uses of the value under the cursor lit, their lines and the names on them
@@ -504,10 +506,17 @@ function M.all_keys()
         { 'J', 'the code screen on the function or file the name under the cursor is' },
         { 'K', 'back to the very name you left from; 3K three back; from the first, the tree' },
         { '+ -', 'in its types, open and close the type under the cursor' },
-        { '<C-Tab> <C-S-Tab>', 'the code, or its types' },
+        { '<S-Tab>', 'the code, or its types' },
       },
     },
-    { 'The pane', { { '<Tab> <S-Tab>', 'next and previous view of the name under the cursor' } } },
+    {
+      'The pane',
+      {
+        { '<Tab>', 'next view of the name under the cursor' },
+        { '<C-Tab> <C-S-Tab>', 'next and previous display of its view' },
+        { '<M-j> <M-k>', 'scroll it half a screen, the cursor staying in the code' },
+      },
+    },
     {
       'Seam',
       {
@@ -555,10 +564,12 @@ function M.status()
   end
   rg[#rg + 1] = 'K'
   local pg = {}
+  rg[#rg + 1] = '<S-Tab>'
   if #views.of(M.subject()) > 1 then
     pg[#pg + 1] = '<Tab>'
   end
   pg[#pg + 1] = '<C-Tab>'
+  pg[#pg + 1] = '<M-j> <M-k>'
   return hints.status(left, { rg, pg, { '/', 'q' } }, rules)
 end
 
@@ -587,14 +598,16 @@ local function code_keys(buf)
       require('seam.views.changed').next_line(st.cwin.code, top().path, k[2])
     end, o(buf))
   end
+  -- <S-Tab> the left side, the code or its types; <Tab> and <C-Tab> the pane's
+  vim.keymap.set('n', '<S-Tab>', function()
+    M.step_display(1)
+  end, o(buf))
+  vim.keymap.set('n', '<Tab>', pane.step(1), o(buf))
   for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
-    vim.keymap.set('n', k[1], function()
-      M.step_display(k[2])
-    end, o(buf))
+    vim.keymap.set('n', k[1], pane.step(k[2], true), o(buf))
   end
-  for _, k in ipairs { { '<Tab>', 1 }, { '<S-Tab>', -1 } } do
-    vim.keymap.set('n', k[1], pane.step(k[2]), o(buf))
-  end
+  vim.keymap.set('n', '<M-j>', pane.scroll '<C-d>', o(buf))
+  vim.keymap.set('n', '<M-k>', pane.scroll '<C-u>', o(buf))
   vim.keymap.set('n', '+', function()
     opening.plus(M.redraw)
   end, o(buf))
