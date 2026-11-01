@@ -174,9 +174,15 @@ function M.draw(units, edges, o)
     slots[g], inlab[g], turnlab[g] = 0, 0, 0
   end
   local tops, bottoms = 0, 0
-  local function take(g)
-    slots[g] = slots[g] + 1
-    return slots[g]
+  -- a gap's verticals, those with lines only to their left first and only
+  -- to their right last, so a line leaving a box never runs along one
+  -- entering a box on the same row
+  local wants = {}
+  for g = 1, ncol + 1 do
+    wants[g] = {}
+  end
+  local function take(g, e, field, side)
+    table.insert(wants[g], { e = e, field = field, side = side })
   end
   for _, e in ipairs(edges) do
     local a, b = at[e.from], at[e.to]
@@ -184,15 +190,15 @@ function M.draw(units, edges, o)
     table.insert(a.rrows, e)
     if b.col == a.col then
       e.turn = true
-      e.s1 = take(e.gx)
+      take(e.gx, e, 's1', 1)
       table.insert(b.rrows, { into = e })
       turnlab[e.gx] = math.max(turnlab[e.gx], W(lab(e.n)))
     else
       table.insert(b.lrows, e)
       inlab[e.ge] = math.max(inlab[e.ge], W(lab(e.n)))
-      e.s1 = take(e.gx)
       if b.col ~= a.col + 1 then
-        e.s2 = take(e.ge)
+        take(e.gx, e, 's1', 1)
+        take(e.ge, e, 's2', 3)
         if b.col < a.col then
           bottoms = bottoms + 1
           e.track = -bottoms
@@ -200,8 +206,23 @@ function M.draw(units, edges, o)
           tops = tops + 1
           e.track = tops
         end
+      else
+        take(e.gx, e, 's1', 2)
       end
     end
+  end
+  for g = 1, ncol + 1 do
+    local list = wants[g]
+    for i, w in ipairs(list) do
+      w.i = i
+    end
+    table.sort(list, function(p, q)
+      return p.side < q.side or (p.side == q.side and p.i < q.i)
+    end)
+    for i, w in ipairs(list) do
+      w.e[w.field] = i
+    end
+    slots[g] = #list
   end
   -- across: each gap, then its rank's boxes
   local gx, bw, sx = {}, {}, {}
