@@ -21,9 +21,17 @@ M.WORD = {
   L = 'lens',
   q = 'close seam',
   ['<Esc>'] = 'tree',
-  ['<CR>'] = 'page',
   c = 'calls',
+  ['n N'] = 'place',
 }
+
+-- a key and its word: the key's own, or the one given with it
+local function said(k)
+  if type(k) == 'table' then
+    return k[1], k[2]
+  end
+  return k, M.WORD[k]
+end
 
 local GAP, BAR = '   ', '  │  '
 
@@ -32,7 +40,8 @@ local function plain(groups)
   for _, g in ipairs(groups) do
     local items = {}
     for _, k in ipairs(g) do
-      items[#items + 1] = k .. ' ' .. M.WORD[k]
+      local key, word = said(k)
+      items[#items + 1] = key .. ' ' .. word
     end
     parts[#parts + 1] = table.concat(items, GAP)
   end
@@ -43,7 +52,7 @@ end
 --- that fit, the last group dropped first; a lens with rules said in its
 --- red far right, `L lens 3`, in place of `L lens`.
 ---@param left string
----@param groups string[][] the row's keys, the pane's, seam's
+---@param groups (string|string[])[][] the row's keys, the pane's, seam's: a key, or a key and its word here
 ---@param rules integer the lens's rules
 ---@return string
 function M.status(left, groups, rules)
@@ -68,7 +77,8 @@ function M.status(left, groups, rules)
   for _, g in ipairs(gs) do
     local items = {}
     for _, k in ipairs(g) do
-      items[#items + 1] = '%#SeamStatusKey#' .. k .. '%#SeamStatusKeyWord# ' .. M.WORD[k]
+      local key, word = said(k)
+      items[#items + 1] = '%#SeamStatusKey#' .. key .. '%#SeamStatusKeyWord# ' .. word
     end
     parts[#parts + 1] = table.concat(items, '%#SeamStatus#' .. GAP)
   end

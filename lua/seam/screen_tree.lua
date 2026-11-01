@@ -3,6 +3,7 @@
 -- each, the status line's hints, and `?`. The windows and helpers it shares
 -- are seam.screen's.
 local api = vim.api
+local draw = require 'seam.draw'
 local hints = require 'seam.hints'
 local index = require 'seam.index'
 local odraw = require 'seam.draw.outline'
@@ -16,10 +17,6 @@ local M = {}
 -- seam.screen requires this module, so it is asked for when needed
 local function S()
   return require 'seam.screen'
-end
-
-local function say(msg)
-  api.nvim_echo({ { msg, 'SeamLabel' } }, false, {})
 end
 
 --- Are the tree's four windows there?
@@ -321,22 +318,6 @@ function M.search(query)
   }
 end
 
--- the bridges to today's screens, until the views replace them
-local function page()
-  local x = M.at()
-  local m = index.model()
-  local c = x and x.id and m.byid[x.id]
-  if c and (c.nusers or 0) > 0 then
-    return S().open_page(c)
-  end
-  say((x and odraw.name(m, x) or 'this row') .. ' has no page: only exported functions used from another file do')
-end
-
-local function contract_of(x)
-  local c = x and x.id and index.model().byid[x.id]
-  return c and (c.nusers or 0) > 0 and c or nil
-end
-
 local function redraw_pane()
   show_pane(subject(), true)
   S().paint()
@@ -345,6 +326,57 @@ end
 
 local function plus()
   opening.plus(redraw_pane)
+end
+
+-- the pane's stops for n and N: the places Used by and Built from show
+local function stops()
+  local out = {}
+  if not valid() then
+    return out
+  end
+  for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
+    if draw.meta(st.obuf.pane, i).place then
+      out[#out + 1] = i
+    end
+  end
+  return out
+end
+
+--- `n` `N`: the cursor to the next place in the pane, or the one before,
+--- round the ends; from the tree, into the pane.
+---@param d integer
+function M.next_place(d)
+  local list = stops()
+  if #list == 0 then
+    return
+  end
+  local w = st.owin.pane
+  local cur = api.nvim_win_get_cursor(w)[1]
+  local i
+  if d > 0 then
+    i = #list + 1
+    for k, l in ipairs(list) do
+      if l > cur then
+        i = k
+        break
+      end
+    end
+    i = i + vim.v.count1 - 1
+  else
+    i = 0
+    for k = #list, 1, -1 do
+      if list[k] < cur then
+        i = k
+        break
+      end
+    end
+    i = i - vim.v.count1 + 1
+  end
+  api.nvim_set_current_win(w)
+  api.nvim_win_set_cursor(w, { list[(i - 1) % #list + 1], 0 })
+  draw.cursor_line(w)
+  S().paint()
+  vim.cmd 'redrawstatus'
 end
 
 local function minus()
@@ -358,8 +390,9 @@ local function all_keys()
       {
         'The pane',
         {
-          { '+', 'open the type under the cursor, or a function as written' },
-          { '-', 'close the one the cursor is in' },
+          { '+', 'open the type under the cursor, or a function as written; on ⋯ N more, the rest' },
+          { '-', 'close the one the cursor is in; on a place it showed, hide the rest again' },
+          { 'n N', 'the next and previous place, in Used by and Built from' },
           { '<Tab> <S-Tab>', 'next and previous view' },
           { '<C-Tab> <C-S-Tab>', 'next and previous display' },
         },
@@ -379,7 +412,6 @@ local function all_keys()
         { 'j k', 'move' },
         { 'l', 'open it: a folder, a file, the calls' },
         { 'h', 'close it, or up a level' },
-        { '<CR>', 'its page, until the views hold it' },
         { 'c', 'its calls, on the Calls screen' },
       },
     },
@@ -388,6 +420,7 @@ local function all_keys()
       {
         { '<Tab> <S-Tab>', 'next and previous view' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
+        { 'n N', 'into it, on the next and previous place, in Used by and Built from' },
         { '<C-d> <C-u>', 'scroll it half a screen' },
         { '<C-e> <C-y>', 'scroll it a line' },
       },
@@ -420,13 +453,17 @@ function M.status()
   if v and #v.displays > 1 then
     pane[#pane + 1] = '<C-Tab>'
   end
+  local places = v and (v.name == 'Used by' or v.name == 'Built from') and #stops() > 0
   if in_pane() then
     local o, c = opening.keys()
     if o then
-      row[#row + 1] = '+'
+      row[#row + 1] = opening.is_more(o) and { '+', 'more' } or '+'
     end
     if c then
-      row[#row + 1] = '-'
+      row[#row + 1] = opening.is_more(c) and { '-', 'fewer' } or '-'
+    end
+    if places then
+      row[#row + 1] = 'n N'
     end
     seam = { '<Esc>', 'q' }
   elseif x then
@@ -436,11 +473,11 @@ function M.status()
     if x.open or outline.parent(st.orows, i) then
       row[#row + 1] = 'h'
     end
-    if contract_of(x) then
-      row[#row + 1] = '<CR>'
-    end
     if x.kind == 'fn' then
       row[#row + 1] = 'c'
+    end
+    if places then
+      row[#row + 1] = 'n N'
     end
     seam = { 's', '/', 'L', 'q' }
   else
@@ -472,6 +509,12 @@ end
 
 local function tree_keys(buf)
   shared_keys(buf)
+  vim.keymap.set('n', 'n', function()
+    M.next_place(1)
+  end, o(buf))
+  vim.keymap.set('n', 'N', function()
+    M.next_place(-1)
+  end, o(buf))
   for _, k in ipairs { 'l', 'h', 's' } do
     vim.keymap.set('n', k, press(k), o(buf))
   end
@@ -491,7 +534,6 @@ local function tree_keys(buf)
     index.load()
     M.redraw(true)
   end, o(buf))
-  vim.keymap.set('n', '<CR>', page, o(buf))
   vim.keymap.set('n', 'c', function()
     local x = M.at()
     if x and x.kind == 'fn' then
@@ -507,6 +549,12 @@ local function pane_keys(buf)
   shared_keys(buf)
   vim.keymap.set('n', '+', plus, o(buf))
   vim.keymap.set('n', '-', minus, o(buf))
+  vim.keymap.set('n', 'n', function()
+    M.next_place(1)
+  end, o(buf))
+  vim.keymap.set('n', 'N', function()
+    M.next_place(-1)
+  end, o(buf))
   vim.keymap.set('n', '<Esc>', function()
     if valid() then
       api.nvim_set_current_win(st.owin.tree)
@@ -547,10 +595,20 @@ function M.init()
       group = s.aug,
       buffer = b,
       callback = function()
+        if valid() and api.nvim_get_current_win() == st.owin.pane then
+          draw.cursor_line(st.owin.pane)
+        end
         vim.cmd 'redrawstatus'
       end,
     })
   end
+  api.nvim_create_autocmd('WinLeave', {
+    group = s.aug,
+    buffer = st.obuf.pane,
+    callback = function()
+      draw.cursor_clear(st.obuf.pane)
+    end,
+  })
   for _, b in ipairs { st.obuf.phead, st.obuf.pane, st.obuf.tree } do
     api.nvim_create_autocmd('WinEnter', {
       group = s.aug,

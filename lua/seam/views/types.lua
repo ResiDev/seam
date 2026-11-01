@@ -284,7 +284,7 @@ local function fn_rows(out, C, f, cols, kept, top)
     code.add_name(r, node.path, node.line, node.name, 'SeamName', cols.nw)
   end
   r:to(1 + cols.pw + 3 + cols.nw):add(' → ', 'SeamLabel')
-  typed(r, f.gives, C.known, names, C.lit)
+  typed(r, cols.gw and tv.cut(f.gives, cols.gw) or f.gives, C.known, names, C.lit)
   local line = { id = 'l', names = {}, path = node.path }
   local seen = {}
   for _, n in ipairs(names) do
@@ -475,6 +475,37 @@ local function type_view(out, C, x)
   render(out, C, lay(C, block(C, x, true).lines, 'decl', {}, { [x.name] = true }))
 end
 
+--- What function lines are drawn with, here and in the views that show
+--- them (Used by and Built from as signature lines): the types opened in
+--- place for the pane's row, the pane's width, the types `path` names.
+---@param m table
+---@param ctx seam.ViewCtx
+---@param path string
+---@return table
+function M.context(m, ctx, path)
+  local C = {
+    m = m,
+    open = ctx.open,
+    defaults = {},
+    top_keys = {},
+    blocks = {},
+    width = ctx.width,
+    path = path,
+    known = is_type(m, path),
+  }
+  ctx.defaults = C.defaults
+  return C
+end
+
+--- A function as its line writes it, under the key `key`, nil without a signature.
+M.fn_of = fn_of
+--- The columns for a list of functions.
+M.columns = columns
+--- A function's line, and the types opened under it.
+M.fn_rows = fn_rows
+--- Text coloured as a signature is.
+M.typed = typed
+
 --- Why there are no types to show, said in one dim line.
 ---@return string
 function M.why()
@@ -498,17 +529,7 @@ function M.draw(out, x, m, ctx)
     return
   end
   local path = x.kind == 'dir' and outline.full(x.item) or x.path
-  local C = {
-    m = m,
-    open = ctx.open,
-    defaults = {},
-    top_keys = {},
-    blocks = {},
-    width = ctx.width,
-    path = path,
-    known = is_type(m, path),
-  }
-  ctx.defaults = C.defaults
+  local C = M.context(m, ctx, path)
   -- the type the pane's head names, opened over the view
   if ctx.head then
     local items = lay(C, { { id = 1, names = { ctx.head }, path = path } }, 'head', {}, {})

@@ -1,6 +1,7 @@
 -- `+` and `-` in the pane: which type, or which function's line, the cursor
 -- is on in the Types view, and opening or closing it in the set of what is
--- open for the pane's row (st.pctx.open, seam.typesview's keys).
+-- open for the pane's row (st.pctx.open, seam.typesview's keys); in Used by
+-- and Built from, a group's places past four, shown and hidden again.
 local api = vim.api
 local draw = require 'seam.draw'
 local st = require 'seam.state'
@@ -48,10 +49,31 @@ local function to_open(t, n)
   end
 end
 
+-- the row under the cursor in the pane: the `⋯ N more` of a group, or one
+-- of the places it showed
+local function pane_more()
+  local w = api.nvim_get_current_win()
+  if not (st.pctx and st.owin and w == st.owin.pane) then
+    return nil
+  end
+  return draw.meta(api.nvim_win_get_buf(w), api.nvim_win_get_cursor(w)[1])
+end
+
+--- Is the key one of a group's places past four, not a type?
+---@param k string|nil
+---@return boolean
+function M.is_more(k)
+  return k ~= nil and k:match '^more:' ~= nil
+end
+
 --- What `+` and `-` would open and close where the cursor is, nil where
 --- they do nothing.
 ---@return string|nil open, string|nil close
 function M.keys()
+  local meta = pane_more()
+  if meta and (meta.more or meta.less) then
+    return meta.more, meta.less
+  end
   local t, n, head = pane_tv()
   if not t then
     return nil, nil
@@ -86,6 +108,15 @@ function M.minus(redraw)
   end
   tv.close(st.pctx.open, k)
   redraw()
+  if M.is_more(k) then
+    for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
+      if draw.meta(st.obuf.pane, i).more == k then
+        api.nvim_win_set_cursor(st.owin.pane, { i, 0 })
+        return
+      end
+    end
+    return
+  end
   local parent, id = k:match '^(.*)|([^|]*)$'
   local name = id:match ':(.*)$'
   id = id:match '^(.-):' or 'l'

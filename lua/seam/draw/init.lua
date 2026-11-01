@@ -225,6 +225,14 @@ function M.cursor_line(win)
   api.nvim_buf_set_extmark(buf, ns_cursor, r, 0, { line_hl_group = 'CursorLine', priority = 95 })
 end
 
+--- The line lit by cursor_line in `buf` no longer lit.
+---@param buf integer
+function M.cursor_clear(buf)
+  if api.nvim_buf_is_valid(buf) then
+    api.nvim_buf_clear_namespace(buf, ns_cursor, 0, -1)
+  end
+end
+
 --- A path with its package in the package's hue, and `:line` when given.
 ---@param r table
 ---@param path string
