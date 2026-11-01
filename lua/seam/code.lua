@@ -60,6 +60,15 @@ local function tree(P)
   return P.root or nil
 end
 
+--- A file's treesitter tree and the text it parsed, nil when it does not.
+---@param path string
+---@return any|nil root, string|nil text
+function M.tree(path)
+  local P = M.file(path)
+  local root = tree(P)
+  return root, P.text
+end
+
 -- the captures of rows r0..r1 (0-based), cached per row
 local function captures(P, r0, r1)
   local root = tree(P)

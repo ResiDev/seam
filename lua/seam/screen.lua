@@ -1581,6 +1581,8 @@ function M.types_landed()
     show_calls()
   elseif st.screen == 'types' and st.types and types_valid() then
     show_types()
+  elseif st.screen == 'tree' then
+    tree_screen.redraw(true)
   end
   vim.cmd 'redrawstatus'
 end

@@ -186,6 +186,8 @@ function M.names(t)
 end
 
 local TYPE_KIND = { interface = true, type = true, class = true, enum = true }
+--- The kinds of export that declare a type.
+M.KIND = TYPE_KIND
 
 --- Hang the signatures on a model and build its flows: `m.sigs` by node id,
 --- `m.flows` by type name, `m.flowlist` the most travelled first.

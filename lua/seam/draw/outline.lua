@@ -40,6 +40,8 @@ function M.name(m, x)
     return shape(m.graph.nodes[x.id])
   elseif x.kind == 'file' then
     return x.path:match '[^/]+$'
+  elseif x.kind == 'type' then
+    return x.name
   end
   return dir_name(x.item)
 end
@@ -194,6 +196,17 @@ function M.pane_head(buf, m, o, x, sv)
     h:add(M.name(m, x), 'SeamBold'):add('   file in ', 'SeamLabel')
     draw.path(h, x.path:match '^(.*/)' or '')
     h:add(', ' .. draw.plural(#outline.functions(m, x.path), 'function'), 'SeamLabel')
+  elseif x and x.kind == 'type' then
+    local s0 = h.b
+    code.add_name(h, x.path, x.line, x.name, 'SeamTypeBold', 60)
+    h.h[#h.h + 1] = { s0, h.b, 'SeamBold', 80 }
+    h.meta.tv = { key = 'head', id = 1, names = { { s = s0, e = h.b, name = x.name } }, chain = {} }
+    h:add('   ' .. x.decl_kind .. ' in ', 'SeamLabel')
+    draw.path(h, x.path, x.line)
+    local f = m.flows and m.flows[x.name]
+    if f then
+      h:add(('   %s give one · %d take one'):format(draw.plural(#f.gives, 'function'), #require('seam.types').takers(f)), 'SeamLabel')
+    end
   elseif x then
     h:add(M.name(m, x), 'SeamBold'):add('   folder, ' .. draw.plural(outline.files_under(m, outline.full(x.item)), 'file'), 'SeamLabel')
   end
@@ -213,20 +226,30 @@ function M.pane_head(buf, m, o, x, sv)
   draw.put(buf, { h, row(), t })
 end
 
---- The view shown for the row, in the pane, from its top.
+--- The view shown for the row, in the pane, from its top unless `keep`
+--- keeps where it was scrolled and the cursor.
 ---@param buf integer
 ---@param win integer|nil
 ---@param m table
 ---@param x seam.ORow|nil
 ---@param sv seam.ViewState
-function M.pane(buf, win, m, x, sv)
+---@param ctx seam.ViewCtx
+---@param keep? boolean
+function M.pane(buf, win, m, x, sv, ctx, keep)
   local out = {}
   local v, display = views.shown(x, sv)
   if v then
-    v.draw(out, x, m, display)
+    v.draw(out, x, m, display, ctx)
   end
+  local view = keep and win and api.nvim_win_is_valid(win) and api.nvim_win_call(win, vim.fn.winsaveview)
   draw.put(buf, out)
-  code.scroll_to(win, 1, 1)
+  if view then
+    api.nvim_win_call(win, function()
+      vim.fn.winrestview(view)
+    end)
+  else
+    code.scroll_to(win, 1, 1)
+  end
 end
 
 return M
