@@ -251,6 +251,19 @@ function M.types_landed()
   vim.cmd 'redrawstatus'
 end
 
+---------------------------------------------------------------- changes
+
+--- Ask git what changed in the range, the screen shown drawn again once it
+--- has said: the signs, the Changed view.
+function M.ask_changes()
+  local root = st.root
+  require('seam.changes').ask(root, function()
+    if st.root == root then
+      M.types_landed()
+    end
+  end)
+end
+
 ---------------------------------------------------------------- lens
 
 --- The lens changed: save it, filter every source, redraw what is shown.
@@ -305,6 +318,7 @@ function M.open(root)
         st.from_tab = from
       end
       api.nvim_set_current_tabpage(st.tab)
+      M.ask_changes()
       return
     end
     M.close()
@@ -317,6 +331,7 @@ function M.open(root)
   st.lens = lens.load(root)
   if st.loaded_root ~= root then
     st.models, st.names, st.hues, st.cur, st.outline, st.view, st.opens, st.ptype = {}, {}, nil, nil, nil, nil, nil, nil
+    st.range, st.changes = nil, nil
     st.loaded_root = root
   end
   code.root = root
@@ -378,6 +393,7 @@ function M.open(root)
   vim.o.laststatus = 3
   vim.o.showtabline = 0
   tree_screen.show()
+  M.ask_changes()
   vim.defer_fn(function()
     index.load()
     index.types(root)

@@ -95,7 +95,8 @@ M.under = code_view.under
 function M.of(row)
   local out = {}
   for _, v in ipairs(M.list) do
-    if row and v.has(row) then
+    -- a row gone has only what it was
+    if row and (row.kind ~= 'gone' or v.gone) and v.has(row) then
       out[#out + 1] = v
     end
   end

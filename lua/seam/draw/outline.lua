@@ -1,10 +1,12 @@
 -- The tree drawn: the head over everything, the rows on the left, and the
 -- pane beside them, its head with the tabs over the view shown.
 local api = vim.api
+local changes = require 'seam.changes'
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
 local outline = require 'seam.outline'
+local signs = require 'seam.signs'
 local theme = require 'seam.theme'
 local tree = require 'seam.tree'
 local views = require 'seam.views'
@@ -44,6 +46,8 @@ function M.name(m, x)
     return x.name
   elseif x.kind == 'name' then
     return (x.n.object and (x.n.object .. '.') or '') .. x.n.name
+  elseif x.kind == 'gone' then
+    return x.file and x.name or (x.name .. (x.decl.kind == 'fn' and '()' or ''))
   end
   return dir_name(x.item)
 end
@@ -80,6 +84,17 @@ local function call_mark(m, x, node)
   end
 end
 
+--- The range of changes on a head, when it is not from HEAD to the working tree.
+---@param r table a row
+---@return table r
+function M.range(r)
+  local g = changes.range()
+  if not changes.is_default(g) then
+    r:add('   changes ', 'SeamLabel'):add(g.from, 'SeamRange'):add(' → ', 'SeamLabel'):add(changes.name(g.to), 'SeamRange')
+  end
+  return r
+end
+
 --- The head over the screen: the row under the cursor, or the order.
 ---@param buf integer
 ---@param m table
@@ -95,7 +110,7 @@ function M.head(buf, m, o, x)
     end
     r:add(' › ', 'SeamLabel'):add(M.name(m, x), 'SeamBold')
   end
-  draw.put(buf, { r })
+  draw.put(buf, { M.range(r) })
 end
 
 --- The tree's bar over its rows: blank in the tree, the counts' titles in
@@ -132,9 +147,10 @@ function M.rows(buf, m, o, rows)
   local flat = WORDS[o.order] ~= nil
   for _, x in ipairs(rows) do
     local r = tree_row(m, x)
+    -- the range's sign in the left column
+    r:add(x.sign or ' ', x.sign and signs.HL[x.sign])
     if flat then
       -- the package's bar down the left, on the functions listed
-      r:add ' '
       if x.depth == 0 then
         tree.bar(r, index.pkg_of(m, x.path))
       else
@@ -142,7 +158,7 @@ function M.rows(buf, m, o, rows)
       end
       r:add ' '
     else
-      r:add '  '
+      r:add ' '
     end
     r:add(string.rep('  ', x.depth))
     local room = (flat and USED_END - 6 or M.LW - 1) - r.w
@@ -159,6 +175,8 @@ function M.rows(buf, m, o, rows)
         r:to(USED_END - #tostring(x.used)):add(tostring(x.used), lit)
         r:to(CALLS_END - #tostring(x.calls)):add(tostring(x.calls), dim)
       end
+    elseif x.kind == 'gone' then
+      r:add(trunc(M.name(m, x), room), 'SeamGone')
     else
       if x.can_open and not x.open then
         r:add('▸ ', 'SeamText')
@@ -174,7 +192,11 @@ function M.rows(buf, m, o, rows)
     out[#out + 1] = r
   end
   if #out == 0 then
-    out[1] = row():add('  nothing the lens lets through', 'SeamLabel')
+    out[1] = row():add(
+      o.only_changed and '  nothing changed from ' .. changes.range().from .. ' to the ' .. changes.name(changes.range().to)
+        or '  nothing the lens lets through',
+      'SeamLabel'
+    )
   end
   draw.put(buf, out)
 end
@@ -258,6 +280,12 @@ function M.pane_head(buf, m, o, x, sv)
     end
   elseif x and x.kind == 'name' then
     M.name_head(h, x.n)
+  elseif x and x.kind == 'gone' then
+    h:add(M.name(m, x), 'SeamBold'):add('   ' .. (x.file and 'file' or x.decl.kind == 'fn' and 'function' or 'class') .. ' in ', 'SeamLabel')
+    draw.path(h, x.file and (x.path:match '^(.*/)' or '') or x.path)
+    if count then
+      h:add('   ' .. count, 'SeamLabel')
+    end
   elseif x and count then
     h:add(M.name(m, x), 'SeamBold'):add('   folder in ', 'SeamLabel')
     draw.path(h, outline.full(x.item) .. '/')

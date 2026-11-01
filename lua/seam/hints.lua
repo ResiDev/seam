@@ -22,6 +22,8 @@ M.WORD = {
   q = 'close seam',
   ['<Esc>'] = 'tree',
   ['n N'] = 'place',
+  [']c [c'] = 'change',
+  gc = 'only changed',
 }
 
 -- a key and its word: the key's own, or the one given with it
