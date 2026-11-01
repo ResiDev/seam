@@ -522,11 +522,15 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
-| **tree** | what it calls, tree lines, `> <` levels, `l` opens the call under the cursor | open | open | types as boxes, the functions that turn one into another on the arrows |
+| **tree** | what it calls, tree lines, `> <` levels, `l` opens the call under the cursor | the folders it calls into, then their files, then the functions | the files it calls into, then the functions it uses in each | types as boxes, the functions that turn one into another on the arrows; `+` on a box opens its declaration under it |
 | **both ways** | its callers left (tests dim, last), its calls right | the files outside it that call in, left; the files it calls out to, right; each with the names that cross | the same for a file | the functions that make it, left; the functions that take it, right. Not the types it is made of: the Types view has those |
-| **folders** | who calls it, by folder, on the left (tests folded to a count); the folders its calls go into on the right; a box each holding the files and names, the count on the arrow | its folders as boxes, the count of calls on each arrow | open | open |
-| **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | open | none |
+| **folders** | who calls it, by folder, on the left (tests folded to a count); the folders its calls go into on the right; a box each holding the files and names, the count on the arrow, every arrow pointing at the function | its folders as boxes, the count of calls on each arrow | as a function's, the file's functions together | the folders that make it, left; that take it, right |
+| **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | each of its functions by how much it reaches, and how many call it | two displays in its place: **by field**, each field by how often it is read, with the files that read it most; **by file**, the files that use it most |
 
+- **In folders, every arrow points at the row** (`mocks/mapz-fn-folders-in.png`,
+  chosen 2026-11-01 over left to right and over no heads,
+  `mapz-fn-folders-none.png`): its callers use it, the folders on the right
+  are what it is built from. The other displays keep the rule below.
 - **Arrows run from the caller to what it calls,** always left to right:
   who uses a thing is on its left, what it uses on its right. The first
   folders mock had only the right side, and its arrows read as pointing the
@@ -552,7 +556,12 @@ Filled 2026-11-01, drawn to be looked at (`src/map/ideas.py`, round three):
   (`mapz-file-folders.png`).
 - **A type's folders** is its both ways gathered into folders: the folders
   that make it, left; that take it, right (`mapz-type-folders.png`).
-- **A file has no size,** as a type has none: three displays.
+- **A file's size** is a function's, for each of its functions
+  (`mapz-file-size.png`, update.ts).
+- **A type has five displays:** tree, both ways, folders, by field, by file
+  (`mapz-type-size-fields.png`, `mapz-type-size-files.png`). `<C-Tab>`
+  reaches both sizes, so no other key.
+- **A type's tree opens its boxes with `+`** (`mapz-type-tree-open.png`).
 
 ### 7. The Code view and the code screen
 

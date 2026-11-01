@@ -658,6 +658,7 @@ screen("mapx-lanes", "Values as lanes",
 
 # ── round two: the picks, on every kind of row ──────────────────────────
 DISP = ["tree", "both ways", "folders", "size"]
+TDISP = ["tree", "both ways", "folders", "by field", "by file"]
 def phead(title, rest, cur, opts=DISP, hint=""):
     r = s("", " ") + s("c", "display  ")
     for j, o in enumerate(opts):
@@ -1040,7 +1041,7 @@ mk = [(CORE + p, x["name"]) for p, x in gives_t("Model")]
 tk = [(CORE + p, x["name"]) for p, x in takes_t("Model")]
 screen("mapz-type-folders", "A type, folders",
        "Model as a box: the functions that make it on the left, by folder; the functions that take it on the right. Both ways, gathered into folders.",
-       phead(s("ty bold", "Model"), f"type in state.ts:152   made by {len(mk)}, taken by {len(tk)}", "folders", opts=DISP[:3], hint="     l opens a box") +
+       phead(s("ty bold", "Model"), f"type in state.ts:152   made by {len(mk)}, taken by {len(tk)}", "folders", opts=TDISP, hint="     l opens a box") +
        folders_both("Model", "state.ts", mk, tk, ccls="ty bold", word=("function", "functions")),
        "Model  map · folders", cursor="Model", trail="Model")
 
@@ -1109,7 +1110,7 @@ def type_graph_open():
     return out
 screen("mapz-type-tree-open", "A type, tree, + on Model",
        "+ on a box opens its declaration under it, as a type opens anywhere else. + on a name inside opens that one, - closes it.",
-       phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", "tree", opts=DISP[:3] + ["size"], hint="     + opens a type   > < levels   l opens") + type_graph_open(),
+       phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", "tree", opts=TDISP, hint="     + opens a type   > < levels   l opens") + type_graph_open(),
        "Model  map · tree", cursor="Model", trail="Model")
 
 # size, on a type: A each field by how often it is read; B the files that use it most
@@ -1148,10 +1149,10 @@ def files_size():
         if n > 0: items.append((p, n, ""))
     items.sort(key=lambda t: -t[1])
     return [(s("", "   ") + s("c", "the files that use it, by how many times"), ""), blank()[0]] + bars(items[:16], 30, cls="fg")
-for nm, cap, body in (("mapz-type-size-fields", "A type, size, by field", fields_size()),
-                      ("mapz-type-size-files", "A type, size, by file", files_size())):
+for nm, cap, body, d in (("mapz-type-size-fields", "A type, size, by field", fields_size(), "by field"),
+                      ("mapz-type-size-files", "A type, size, by file", files_size(), "by file")):
     screen(nm, cap, "Model, size: " + cap,
-           phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", "size", hint="     l opens") + body,
+           phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", d, opts=TDISP, hint="     l opens") + body,
            "Model  map · size", cursor="Model", trail="Model")
 
 # ── the gallery ─────────────────────────────────────────────────────────
