@@ -1,4 +1,4 @@
--- The code screen's types display, its left side on <S-Tab>: the
+-- The code screen's types display, its left side on gs: the
 -- function's line, then its values in the order made, `name  Type`, each
 -- function inside under its own line, indented; a file's declarations. A
 -- type opens in place under the line naming it. With the diff on, a line

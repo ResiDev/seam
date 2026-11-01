@@ -124,9 +124,8 @@ local function shown_again(x)
   vim.cmd 'redrawstatus'
 end
 
---- `<Tab>` `<S-Tab>`: the pane's other tab, or from a view aside back to
---- the tab; with `display`, `<C-Tab>` `<C-S-Tab>`: its next display, or the
---- one before.
+--- `<Tab>`: the pane's next tab, or from a view aside back to the tab;
+--- with `display`, `<S-Tab>`: its next display.
 ---@param d integer
 ---@param display? boolean
 ---@return fun()
@@ -193,7 +192,7 @@ end
 
 --- The keys for the pane's views where they act on `x`: `<Tab>`, `gm`
 --- where the row has the Map on the code screen (beside the tree
---- they are tabs, the keys in `?`), `<C-Tab>` with more than one display.
+--- they are tabs, the keys in `?`), `<S-Tab>` with more than one display.
 ---@param x seam.ORow|nil
 ---@return string[]
 function M.view_hints(x)
@@ -208,7 +207,7 @@ function M.view_hints(x)
   end
   local v = views.shown(x, st.view)
   if v and #views.displays(v, x) > 1 then
-    out[#out + 1] = '<C-Tab>'
+    out[#out + 1] = '<S-Tab>'
   end
   return out
 end
@@ -370,9 +369,9 @@ function M.all_keys(back)
         { '+', 'open the type under the cursor, or a function as written; on ⋯ N more, the rest' },
         { '-', 'close the one the cursor is in; on a place it showed, hide the rest again' },
         { ']c [c', 'the next and previous change, with the diff on' },
-        { '<Tab> <S-Tab>', st.screen == 'code' and 'Code or Types; from a view aside, back' or 'the next and previous tab' },
+        { '<Tab>', st.screen == 'code' and 'Code or Types; from a view aside, back' or 'the next tab' },
         { 'gm', 'the Map, and back' },
-        { '<C-Tab> <C-S-Tab>', 'next and previous display' },
+        { '<S-Tab>', 'the next display' },
         { 'D', 'the diff on or off, both sides, for the session' },
       },
     },
@@ -380,7 +379,7 @@ function M.all_keys(back)
       'The Map',
       {
         { 'l', 'open a side past its ⋯ more; on a name, show it in the tree' },
-        { 'T', 'folder: each signature, or names only; the choice stays' },
+        { 'T', 'folder: names only, or each signature; the choice stays' },
         { 'J', 'the code screen on the name under the cursor' },
       },
     },
@@ -404,12 +403,8 @@ end
 --- The keys of the pane's head and view, on both screens.
 ---@param buf integer
 function M.keys(buf)
-  for _, k in ipairs { { '<Tab>', 1 }, { '<S-Tab>', -1 } } do
-    vim.keymap.set('n', k[1], M.step(k[2]), o(buf))
-  end
-  for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
-    vim.keymap.set('n', k[1], M.step(k[2], true), o(buf))
-  end
+  vim.keymap.set('n', '<Tab>', M.step(1), o(buf))
+  vim.keymap.set('n', '<S-Tab>', M.step(1, true), o(buf))
   M.view_keys(buf)
   vim.keymap.set('n', '+', function()
     opening.plus(M.redraw)

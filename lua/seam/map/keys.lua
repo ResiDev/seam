@@ -157,8 +157,8 @@ function M.hints()
   return out
 end
 
---- What the status line adds after the view on the Map: ` · names` with
---- T off where it acts, and in the pane the name under the cursor.
+--- What the status line adds after the view on the Map: ` · types` with
+--- T on where it acts, and in the pane the name under the cursor.
 ---@param inside boolean the cursor is in the pane
 ---@return string
 function M.status(inside)
@@ -166,7 +166,7 @@ function M.status(inside)
   if not x then
     return ''
   end
-  local out = (not map_view.types_on() and typed_display(x, d)) and ' · names' or ''
+  local out = (map_view.types_on() and typed_display(x, d)) and ' · types' or ''
   local name = inside and M.under_name()
   return out .. (name and ('   › ' .. name) or '')
 end

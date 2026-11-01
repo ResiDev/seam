@@ -1,6 +1,6 @@
 -- The Map, driven through its keys, from tests/check.lua: on a function,
 -- its file, its folder and a type, reached with gm, each of its displays on
--- <C-Tab>, the head listing them, no row wider than the pane; T on the
+-- <S-Tab>, the head listing them, no row wider than the pane; T on the
 -- folder display, each signature or names only.
 local api = vim.api
 local data = require 'seam.map.data'
@@ -52,7 +52,7 @@ return function(t)
   local function tree_win()
     api.nvim_set_current_win(st.owin.tree)
   end
-  -- every display on <C-Tab> from the tree, back to the first
+  -- every display on <S-Tab> from the tree, back to the first
   local function displays(what)
     t.where('map displays ' .. what)
     tree_win()
@@ -85,13 +85,13 @@ return function(t)
       if not head:find(table.concat(map_view.DISPLAYS, ' · '), 1, true) then
         fail(('%s %s: the head does not list the displays: %s'):format(what, d, head))
       end
-      key '<C-Tab>'
+      key '<S-Tab>'
     end
     if shown() ~= first then
-      fail(what .. ': <C-Tab> did not come back to ' .. first)
+      fail(what .. ': <S-Tab> did not come back to ' .. first)
     end
   end
-  -- the function, and T on its folder display: names only, and back
+  -- the function, and T on its folder display: each signature, and back
   tree_screen.show(f.id)
   displays('function ' .. f.name)
   t.where 'map T'
@@ -100,12 +100,12 @@ return function(t)
   pane.redraw()
   local before = table.concat(lines(), '\n')
   key 'T'
-  if map_view.types_on() or table.concat(lines(), '\n') == before then
-    fail 'T did not take the signatures away'
+  if not map_view.types_on() or table.concat(lines(), '\n') == before then
+    fail 'T did not give the signatures'
   end
   key 'T'
-  if not map_view.types_on() or table.concat(lines(), '\n') ~= before then
-    fail 'T again did not give the signatures back'
+  if map_view.types_on() or table.concat(lines(), '\n') ~= before then
+    fail 'T again did not take the signatures away'
   end
 
   -- its file, and the folder above it

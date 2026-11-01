@@ -1,5 +1,6 @@
 -- The Map's foot: the name under the pane's cursor told in full, in a
--- window over the pane's last rows, a rule over it. A function: its
+-- window over the pane's last rows, at least a sixth of it, a rule over
+-- it, its lines going on under themselves, nothing cut. A function: its
 -- signature with the names of what it takes, and where it is; then the line
 -- that calls it, copied with its colours, and what that line sits in. A
 -- type: where it is declared, how many make and take it, and its
@@ -14,7 +15,9 @@ local M = {}
 
 -- the rows a foot takes at most, its rule among them; the Map leaves as
 -- many empty under it, so its last rows can scroll up out from under
-M.MAX = 10
+M.MAX = 14
+-- the share of the pane a foot takes at least
+M.SHARE = 0.15
 -- a type's declaration's lines before ⋯ N more lines
 M.DECL = 7
 
@@ -22,18 +25,6 @@ local F = {}
 
 local function known(w)
   return w:match '^%u' ~= nil
-end
-
--- the line `lnum` of `path` from its first letter, cut with … at `room`
-local function code_line(r, path, lnum, room)
-  local src = code.file(path).lines[lnum] or ''
-  local text = vim.trim(src)
-  if api.nvim_strwidth(text) > room then
-    code.add(r, path, lnum, true, math.max(1, room - 1))
-    r:add('…', 'SeamLabel')
-  else
-    code.add(r, path, lnum, true)
-  end
 end
 
 local function fn_rows(m, it, W)
@@ -56,11 +47,9 @@ local function fn_rows(m, it, W)
   r:add('   ' .. data.short(m, n.path, n.path) .. ':' .. n.line, 'SeamLabel')
   local rows = { r }
   if it.at then
-    local where = it.at.path:match '[^/]+$' .. ':' .. it.at.line
-    local c = draw.row():add(' '):add(where, 'SeamLabel'):add(string.rep(' ', math.max(2, 24 - #where)))
-    local right = 'in ' .. it.at.inside
-    code_line(c, it.at.path, it.at.line, W - c.w - api.nvim_strwidth(right) - 3)
-    c:to(W - api.nvim_strwidth(right) - 1):add('in ', 'SeamLabel'):add(it.at.inside, 'SeamMapFn')
+    local c = draw.row():add(' '):add(it.at.path:match '[^/]+$' .. ':' .. it.at.line, 'SeamLabel'):add '   '
+    code.add(c, it.at.path, it.at.line, true)
+    c:add('   in ', 'SeamLabel'):add(it.at.inside, 'SeamMapFn')
     rows[2] = c
   end
   return rows
@@ -94,7 +83,7 @@ local function type_rows(m, it, W)
   end
   for i = 1, math.min(#keep, M.DECL) do
     local r = draw.row():add ' '
-    code.add(r, e.path, keep[i], false, W - 2)
+    code.add(r, e.path, keep[i], false)
     rows[#rows + 1] = r
   end
   if #keep > M.DECL then
@@ -143,7 +132,8 @@ function M.update()
   local H = w and api.nvim_win_get_height(w.pane) or 0
   local m = index.model()
   local rows = it and m and M.rows(m, it, W)
-  if not rows or H < #rows + 4 then
+  local least = math.ceil(H * M.SHARE)
+  if not rows or H < least + 4 then
     return M.close()
   end
   local key = vim.inspect(it) .. ':' .. W .. 'x' .. H
@@ -154,15 +144,23 @@ function M.update()
     F.buf = draw.scratch 'foot'
   end
   draw.put(F.buf, rows)
-  local cfg = { relative = 'win', win = w.pane, row = H - #rows, col = 0, width = W, height = #rows }
+  local cfg = { relative = 'win', win = w.pane, row = H - least, col = 0, width = W, height = least }
   if F.win and api.nvim_win_is_valid(F.win) then
     api.nvim_win_set_config(F.win, cfg)
   else
     cfg.style, cfg.focusable, cfg.zindex, cfg.noautocmd = 'minimal', false, 40, true
     F.win = api.nvim_open_win(F.buf, false, cfg)
-    vim.wo[F.win].winhighlight = vim.wo[w.pane].winhighlight
-    vim.wo[F.win].wrap = false
+    -- the pane's own colours, not a float's
+    local pw = vim.wo[w.pane].winhighlight
+    local normal = pw:match '%f[%w]Normal:([%w_]+)' or 'Normal'
+    vim.wo[F.win].winhighlight = 'NormalFloat:' .. normal .. (pw ~= '' and (',' .. pw) or '')
+    local wo = vim.wo[F.win]
+    wo.wrap, wo.linebreak, wo.breakindent, wo.breakindentopt = true, true, true, 'shift:2'
   end
+  -- as tall as its lines wrapped, at least its share, at most MAX
+  local h = api.nvim_win_text_height(F.win, {}).all
+  h = math.max(least, math.min(h, M.MAX, H - 4))
+  api.nvim_win_set_config(F.win, { relative = 'win', win = w.pane, row = H - h, col = 0, width = W, height = h })
   F.key = key
 end
 
