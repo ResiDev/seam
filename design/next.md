@@ -18,6 +18,47 @@ Two screens do it:
 The explorer and Calls become the one tree. The contract page becomes the
 code.
 
+## Building
+
+Decided 2026-11-01, before any code. The screens below are settled; what
+looks wrong once built is corrected then, not with more mocks.
+
+- **It replaces today's screens.** The explorer, the contract page, Calls
+  and the Types screens go. The lens stays, as it is, and gains the range
+  of changes. Each old screen is deleted in the slice that replaces it, so
+  seam keeps working between slices.
+- **On branch `redesign`.** It holds `types`' code unchanged (the types
+  asked of the TypeScript server, `types.json`, `seam.types`), which the
+  Types view and opening a type need; `redesign` only added `design/`. So
+  there is nothing to merge first: build here, and `master` gets it all at
+  the end.
+- **This file becomes `SPEC.md`** when the first slice lands, and the
+  chosen mocks the locked screens in `design/`. KEYS.md is rewritten a
+  screen at a time, in the slice that lands it.
+- **Every fact from the index, the TypeScript server or git,** as now.
+  Nothing on screen asks the server per field.
+
+The slices, each usable on its own, each with its `make view` shots set
+against its mocks, its tests, and KEYS.md in step:
+
+1. **The tree and the pane.** One tree: folders, files, functions, `l` the
+   calls in run order, `s` the order, the underline for where a call lives.
+   The pane with its tabs and the Code view. `<Tab>`, `<C-Tab>`, scrolling
+   the pane from the tree, the hint line and `?`. The lens kept. Replaces
+   the explorer.
+2. **The Types view,** and `+` `-` opening a type in place wherever a type
+   is drawn so far. Replaces the Types screens.
+3. **Used by and Built from,** by file, with their other displays.
+   Replaces the contract page.
+4. **The code screen.** `J` `K` and the trail, every name answering in the
+   pane, a value's type after its name, `n` `N` the imports, `<C-Tab>`
+   code or types, later uses lit. Replaces Calls.
+5. **Changed.** The range in the lens, the git signs, `gc`, `]c` `[c`, the
+   Changed view drawn with codediff, a changed type opening with its own
+   lines.
+6. **The Map.** Its displays on each kind of row, `T`, `>` `<`, and the
+   arrows as chosen.
+
 ## The primitives
 
 What every screen is built from, and where each fact comes from.
@@ -88,9 +129,10 @@ Decided 2026-10-31, from the mocks `mocks/types-view-*.png`:
   names stay in one column.
 - **A type parameter shows as what it extends,** `(ProblemHandlers<Step>)
   → problemReporter → ReportProblem<Step>`.
-- **One key opens the line under the cursor as written:** the parts it cut,
-  its type parameters, everything. The same key closes it. Which key is
-  still open.
+- **`+` on a function's line opens it as written:** the parts the `…` cut
+  and the type parameters shown as their bound, the signature as the source
+  has it. `-` closes it. The same keys as a type, since on a type's name `+`
+  opens the type.
 - **`Readonly<…>` is left out,** since raf wraps every type in it.
 - **A function's takes and gives are written out under its line,** each
   type's declaration with its doc comment, open by default.
@@ -525,7 +567,7 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 | **tree** | what it calls, tree lines, `> <` levels, `l` opens the call under the cursor | the folders it calls into, then their files, then the functions | the files it calls into, then the functions it uses in each | types as boxes, the functions that turn one into another on the arrows; `+` on a box opens its declaration under it |
 | **both ways** | its callers left (tests dim, last), its calls right | the files outside it that call in, left; the files it calls out to, right; each with the names that cross | the same for a file | the functions that make it, left; the functions that take it, right. Not the types it is made of: the Types view has those |
 | **folders** | who calls it, by folder, on the left (tests folded to a count); the folders its calls go into on the right; a box each holding the files and names, the count on the arrow, every arrow pointing at the function | its folders as boxes, the count of calls on each arrow | as a function's, the file's functions together | the folders that make it, left; that take it, right |
-| **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | each of its functions by how much it reaches, and how many call it | two displays in its place: **by field**, each field by how often it is read, with the files that read it most; **by file**, the files that use it most |
+| **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | each of its functions by how much it reaches, and how many call it | the files that use it most |
 
 - **In folders, every arrow points at the row** (`mocks/mapz-fn-folders-in.png`,
   chosen 2026-11-01 over left to right and over no heads,
@@ -558,9 +600,10 @@ Filled 2026-11-01, drawn to be looked at (`src/map/ideas.py`, round three):
   that make it, left; that take it, right (`mapz-type-folders.png`).
 - **A file's size** is a function's, for each of its functions
   (`mapz-file-size.png`, update.ts).
-- **A type has five displays:** tree, both ways, folders, by field, by file
-  (`mapz-type-size-fields.png`, `mapz-type-size-files.png`). `<C-Tab>`
-  reaches both sizes, so no other key.
+- **A type's size** is the files that use it most
+  (`mapz-type-size-files.png`). By field (`mapz-type-size-fields.png`) was
+  liked but dropped: it needs the server's references for every field,
+  slow on a big type and not worth it.
 - **A type's tree opens its boxes with `+`** (`mapz-type-tree-open.png`).
 
 ### 7. The Code view and the code screen
