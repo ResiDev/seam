@@ -3,12 +3,12 @@
 -- Exits 0 when nothing failed. Uses your config, so other plugins' keys and
 -- treesitter queries are the ones you have.
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
-if not vim.tbl_contains(vim.opt.runtimepath:get(), root) then
-  vim.opt.runtimepath:append(root)
-end
+-- this checkout first, before a seam.nvim your config would load
+vim.opt.runtimepath:prepend(root)
 vim.o.columns, vim.o.lines = 180, 50
 local api = vim.api
 local seam = require 'seam'
+assert(debug.getinfo(seam.open, 'S').source:find(root, 1, true), 'seam is not loaded from ' .. root)
 local screen = require 'seam.screen'
 local calls = require 'seam.calls'
 local picker = require 'seam.picker'
@@ -132,7 +132,7 @@ vim.wait(120000, function()
   return st.screen ~= nil and st.tab ~= nil and api.nvim_tabpage_is_valid(st.tab)
 end, 50)
 if not st.tab then
-  io.stdout:write 'could not open the explorer\n'
+  io.stdout:write 'could not open the tree\n'
   vim.cmd 'cquit 1'
 end
 vim.wait(200)
@@ -163,128 +163,377 @@ if os.getenv 'SEAM_LENS' then
   io.stdout:write(('with a lens: %d contracts\n'):format(#st.models[st.cur].contracts))
 end
 
--- the explorer's head: its declaration in two rows, five beside one tree
--- alone, none wider than the head
-local function check_head(c)
-  local w = st.win.rhead
-  local lines = api.nvim_buf_get_lines(st.buf.rhead, 0, -1, false)
-  local most = 1 + (st.sides == 'both' and 2 or 5) + 1
-  if #lines > most then
-    fail(('%s: the head has %d rows, at most %d'):format(c.name, #lines, most))
+-- the tree: its four windows on its own buffers, its rows with the cursor on
+-- the row the outline says, none wider than the tree; each call marked where
+-- it lives; the pane naming the row, its tabs, and the row's code, each call
+-- in it marked the same way
+local tree_screen = require 'seam.screen_tree'
+local outline = require 'seam.outline'
+local odraw = require 'seam.draw.outline'
+local theme = require 'seam.theme'
+local code = require 'seam.code'
+local function lines(buf)
+  return api.nvim_buf_get_lines(buf, 0, -1, false)
+end
+-- the groups of the marks on each line of `buf`, 1-based
+local function marks(buf)
+  local by = {}
+  for _, mk in ipairs(api.nvim_buf_get_extmarks(buf, require('seam.draw').ns, 0, -1, { details = true })) do
+    local l = mk[2] + 1
+    by[l] = by[l] or {}
+    by[l][mk[4].hl_group or ''] = true
   end
-  if api.nvim_win_get_height(w) ~= #lines then
-    fail(('%s: the head is %d rows high for %d rows'):format(c.name, api.nvim_win_get_height(w), #lines))
+  return by
+end
+local function under_of(m, from, to)
+  if from == to then
+    return nil
   end
-  for i = 2, #lines do
-    if vim.fn.strdisplaywidth(lines[i]) > api.nvim_win_get_width(w) then
-      fail(('%s: head row %d is wider than the head'):format(c.name, i))
+  local pkg = require('seam.index').pkg_of(m, to)
+  return pkg ~= require('seam.index').pkg_of(m, from) and theme.hue(pkg).under or 'SeamUnder'
+end
+local function check_tree()
+  if st.screen ~= 'tree' then
+    return fail('not on the tree: ' .. tostring(st.screen))
+  end
+  local w = st.owin
+  for _, k in ipairs { 'head', 'tree', 'phead', 'pane' } do
+    if not valid(w[k]) or api.nvim_win_get_buf(w[k]) ~= st.obuf[k] then
+      return fail('the ' .. k .. ' window is not there with its buffer')
     end
   end
-end
--- built from's names: no row wider than its tree, wrapped to two rows, five
--- beside it alone
-local function check_names()
-  if not valid(st.win.mid) then
-    return
+  -- a float a plugin of yours put up (a notification) is not seam's
+  local wins = vim.tbl_filter(function(win)
+    return api.nvim_win_get_config(win).relative == ''
+  end, api.nvim_tabpage_list_wins(st.tab))
+  if #wins ~= 4 then
+    fail(('%d windows on the tree, not 4'):format(#wins))
   end
-  local most, run = st.sides == 'both' and 2 or 5, 0
-  for i, l in ipairs(api.nvim_buf_get_lines(st.buf.mid, 0, -1, false)) do
-    if vim.fn.strdisplaywidth(l) > api.nvim_win_get_width(st.win.mid) then
-      fail(('built from row %d is wider than its tree'):format(i))
+  local rows, m = st.orows, st.models[st.cur]
+  if api.nvim_buf_line_count(st.obuf.tree) ~= math.max(1, #rows) then
+    fail 'the tree is not its rows'
+  end
+  local x = tree_screen.at()
+  if #rows > 0 and not x then
+    return fail 'the cursor is off the rows'
+  end
+  if x and x.key ~= st.outline.cursor then
+    fail('the cursor is on ' .. x.key:gsub('\n', ' > ') .. ', the outline on ' .. tostring(st.outline.cursor):gsub('\n', ' > '))
+  end
+  local tl, tm = lines(st.obuf.tree), marks(st.obuf.tree)
+  for i, r in ipairs(rows) do
+    if vim.fn.strdisplaywidth(tl[i]) > odraw.LW then
+      fail(('row %d is wider than the tree: %s'):format(i, tl[i]))
+      break
     end
-    local under = vim.trim(vim.fn.strcharpart(l, 0, 30):gsub('▎', '')) == '' and vim.trim(l:gsub('▎', '')) ~= ''
-    run = under and run + 1 or 0
-    if run == most then
-      fail(("%s: a file's names take more than %d rows"):format(st.shown and st.shown.name or '?', most))
+    if r.where and r.where ~= 'here' then
+      local want = r.where == 'file' and 'SeamUnder' or theme.hue(require('seam.index').pkg_of(m, m.graph.nodes[r.id].path)).under
+      if not (tm[i] and tm[i][want]) or (r.where == 'pkg' and not tl[i]:find('▎', 1, true)) then
+        fail(('%s, from %s, is not marked %s'):format(r.key:gsub('\n', ' > '), r.where, want))
+        break
+      end
+    elseif r.where == 'here' and tm[i] and tm[i].SeamUnder then
+      fail(r.key:gsub('\n', ' > ') .. ' is in its own file, and underlined')
+      break
     end
   end
-end
-
-for _, side in ipairs { 'u', 'u', 'b', 'b' } do
-  key(side)
-  for _, c in ipairs(st.models[st.cur].contracts) do
-    where = 'explorer head sides=' .. st.sides
-    require('seam.draw.explorer').contract(c)
-    check_head(c)
-    check_names()
+  -- the pane: the row's name and where, the tabs, the view
+  local head = lines(st.obuf.phead)
+  local name = odraw.name(m, x)
+  if x and not (head[1] or ''):find(name, 1, true) then
+    fail('the pane head does not name ' .. name .. ': ' .. (head[1] or ''))
   end
-end
-
--- the explorer: every view and every side, moving in each
-where = 'explorer'
-for _, view in ipairs { 'v', 'V' } do
-  for _, side in ipairs { 'b', 'b', 'u', 'u', 'b', 'u', 'u' } do
-    where = ('explorer %s %s sides=%s'):format(view, st.view, st.sides)
-    key(side)
-    for _, k in ipairs { 'j', 'j', 'k' } do
-      key(k)
-      check_names()
-      if #api.nvim_buf_get_extmarks(st.buf.rhead, require('seam.code').ns, 0, -1, {}) == 0 then
-        fail(k .. ' left the head uncoloured on ' .. (st.shown and st.shown.name or 'nothing'))
+  local tabs, want = vim.trim(head[3] or ''), x and x.kind ~= 'dir' and 'Code' or ''
+  if tabs ~= want then
+    fail(('the tabs are %q, not %q'):format(tabs, want))
+  end
+  local body = lines(st.obuf.pane)
+  if x and x.kind == 'fn' then
+    local node = m.graph.nodes[x.id]
+    local s, e = code.doc_start(node.path, node.line), math.max(node.end_line or node.line, node.line)
+    if tonumber((body[1] or ''):match '^%s*(%d+)') ~= s or #body ~= e - s + 1 then
+      fail(('the code of %s is not lines %d to %d: %s, %d lines'):format(node.name, s, e, body[1] or '', #body))
+    end
+    local bm = marks(st.obuf.pane)
+    for _, c in ipairs(m.graph.down[node.id] or {}) do
+      local hl = c.line >= s and c.line <= e and under_of(m, node.path, m.graph.nodes[c.to].path)
+      if hl and not (bm[c.line - s + 1] and bm[c.line - s + 1][hl]) then
+        fail(('%s calls %s at %d, not marked %s in its code'):format(node.name, m.graph.nodes[c.to].name, c.line, hl))
+        break
       end
     end
+  elseif x and x.kind == 'file' then
+    if #body ~= math.max(1, #code.file(x.path).lines) then
+      fail(('the code of %s is %d lines, not the file'):format(x.path, #body))
+    end
+  elseif x and (#body > 1 or body[1] ~= '') then
+    fail 'a folder shows a view'
   end
-  key(view)
-  where = ('explorer back from %s'):format(view)
-  key(view)
+  return x
 end
-for _ = 1, #seam.st.names + 3 do
-  key '<Tab>'
+local function cursor_on(i)
+  key(i .. 'G')
+end
+local function row_of(key_)
+  return outline.find(st.orows, key_)
 end
 
--- / in the explorer: the list narrows as it is typed, to the names holding
--- it whatever their case; <CR> keeps it, <Esc> puts back the one before
 do
-  where = 'explorer /'
-  local function names()
-    local out = {}
-    for _, i in ipairs(st.crows) do
-      out[#out + 1] = st.rowc[i].id
-    end
-    table.sort(out)
-    return out
+  local m = st.models[st.cur]
+  local g = m.graph
+  where = 'tree open'
+  local x = check_tree()
+  if not x or #st.orows == 0 then
+    fail 'the tree has no rows'
   end
-  local function holding(q)
-    local out = {}
-    for _, c in ipairs(st.models[st.cur].contracts) do
-      if c.name:lower():find(q:lower(), 1, true) then
-        out[#out + 1] = c.id
+  -- l and h on a closed folder: open, closed again as it was; h again its parent
+  where = 'tree l h folder'
+  local di
+  for i, r in ipairs(st.orows) do
+    di = di or (r.kind == 'dir' and r.can_open and not r.open and r.depth > 0 and i) or nil
+  end
+  if di then
+    local n, dkey = #st.orows, st.orows[di].key
+    cursor_on(di)
+    key 'l'
+    check_tree()
+    if not (st.orows[row_of(dkey)].open and #st.orows > n) then
+      fail 'l did not open the folder'
+    end
+    key 'h'
+    check_tree()
+    if st.orows[row_of(dkey)].open or #st.orows ~= n or st.outline.cursor ~= dkey then
+      fail 'h did not close the folder back as it was'
+    end
+    key 'h'
+    local p = tree_screen.at()
+    if not (p and p.depth < st.orows[row_of(dkey)].depth and p.kind == 'dir') then
+      fail 'h on a closed folder did not go to its parent'
+    end
+  end
+  -- a function calling into another file, another package if one does
+  local f, best = nil, -1
+  local down = require('seam.calls').visible(m, 'down')
+  for id, n in pairs(g and g.nodes or {}) do
+    if n.kind ~= 'module' and not n.test and not require('seam.index').is_test(n.path) then
+      local score = 0
+      for _, k in ipairs(require('seam.calls').kids(g, id, 'down', down)) do
+        local where_ = under_of(m, n.path, g.nodes[k.id].path)
+        score = math.max(score, where_ == 'SeamUnder' and 1 or where_ and 2 or 0)
+      end
+      if score > best or (score == best and id < f.id) then
+        f, best = n, score
       end
     end
-    table.sort(out)
-    return out
   end
-  local all = names()
-  local first = st.models[st.cur].contracts[1]
-  local q = first and first.name:sub(1, 3):upper() or 'x'
-  -- a key that moves takes what was typed first
-  key('/' .. q .. '<C-n><C-p>')
-  if not picker.is_open() then
-    fail '/ opened no prompt'
-  elseif st.filter ~= q or not vim.deep_equal(names(), holding(q)) then
-    fail(('typing %s: the filter is %q, %d rows, not %d'):format(q, st.filter, #st.crows, #holding(q)))
+  if f then
+    -- found where it lives; its file's functions in the file's order; l its calls in the order first written
+    where = 'tree l h ' .. f.id
+    if not tree_screen.reveal(f.id) then
+      fail('reveal found no row for ' .. f.id)
+    end
+    local fx = check_tree()
+    if not (fx and fx.id == f.id) then
+      fail('the cursor is not on ' .. f.id)
+    end
+    local fkey = 'f:' .. f.path
+    local fi = row_of(fkey)
+    local got = {}
+    for i = fi + 1, #st.orows do
+      if st.orows[i].depth <= st.orows[fi].depth then
+        break
+      end
+      if st.orows[i].depth == st.orows[fi].depth + 1 then
+        got[#got + 1] = st.orows[i].id
+      end
+    end
+    local want = vim.tbl_map(function(n)
+      return n.id
+    end, outline.functions(m, f.path))
+    if not vim.deep_equal(got, want) then
+      fail "the file's rows are not its functions in its order"
+    end
+    key 'l'
+    check_tree()
+    local kids = require('seam.calls').kids(g, f.id, 'down', down)
+    local fk = fkey .. '\n' .. f.id
+    local i0 = row_of(fk)
+    for j, k in ipairs(kids) do
+      local r = st.orows[i0 + j]
+      if not r or r.key ~= fk .. '\n' .. k.id then
+        fail(('call %d of %s is not %s'):format(j, f.name, k.id))
+        break
+      end
+    end
+    if #kids > 0 then
+      key 'j'
+      key 'h'
+      if st.outline.cursor ~= fk then
+        fail 'h on a call did not go up to its function'
+      end
+      key 'h'
+      check_tree()
+      if st.orows[row_of(fk)].open then
+        fail 'h did not close the function'
+      end
+      key 'l'
+    end
+    -- s: most used first, most calling first, then the tree on the same row
+    where = 'tree s'
+    for _, order in ipairs { 'used', 'calls' } do
+      key 's'
+      check_tree()
+      if st.outline.order ~= order then
+        fail('s did not go to ' .. order)
+      end
+      local last
+      for _, r in ipairs(st.orows) do
+        if r.depth == 0 then
+          if last and r[order] > last then
+            fail(order .. ' is not sorted most first')
+            break
+          end
+          last = r[order]
+        end
+      end
+      if not vim.wo[st.owin.tree].winbar:find('used by', 1, true) then
+        fail 'a sorted order has no titles'
+      end
+      if st.outline.cursor ~= fk then
+        fail('s did not keep the cursor on ' .. f.name)
+      end
+    end
+    key 's'
+    check_tree()
+    if st.outline.order ~= 'tree' or st.outline.cursor ~= fk then
+      fail 's a third time did not come back to the tree on the same row'
+    end
+    -- one view and one display: the keys change nothing
+    where = 'tree <Tab>'
+    local before = lines(st.obuf.pane)
+    for _, k in ipairs { '<Tab>', '<S-Tab>', '<C-Tab>', '<C-S-Tab>' } do
+      key(k)
+      if st.view.at ~= 'Code' or not vim.deep_equal(lines(st.obuf.pane), before) then
+        fail(k .. ' changed the pane with one view')
+      end
+    end
+    -- gf on the row: its declaration; in the code beside it: that line
+    where = 'tree gf'
+    key 'gf'
+    went('gf on ' .. f.name, f.path, math.max(1, f.line), st.owin.tree)
+    local body = lines(st.obuf.pane)
+    local bl = math.min(3, #body)
+    local ln = tonumber((body[bl] or ''):match '^%s*(%d+)')
+    key '<C-w>l'
+    key '<C-w>j'
+    if api.nvim_get_current_win() ~= st.owin.pane then
+      fail 'the pane did not take the cursor'
+    else
+      api.nvim_win_set_cursor(st.owin.pane, { bl, 6 })
+      key 'gf'
+      went('gf in the code', f.path, ln, st.owin.pane)
+      key '<Esc>'
+      if api.nvim_get_current_win() ~= st.owin.tree then
+        fail '<Esc> in the pane did not go back to the tree'
+      end
+    end
+    -- the file's row: its first line
+    cursor_on(fi)
+    key 'gf'
+    went('gf on ' .. f.path, f.path, 1, st.owin.tree)
   end
-  local before = api.nvim_win_get_cursor(st.win.list)[1]
-  key '<C-n>'
-  local now = api.nvim_win_get_cursor(st.win.list)[1]
-  if #st.crows > 1 and (now == before or st.shown ~= st.rowc[now]) then
-    fail '<C-n> did not move the list and what is shown with it'
+  -- the pane scrolls from the tree, the cursor staying there
+  where = 'tree scroll'
+  local long
+  for path in pairs(outline.files(m)) do
+    if #code.file(path).lines > 200 and (not long or path < long) then
+      long = path
+    end
   end
-  key '<CR>'
-  if picker.is_open() or api.nvim_get_mode().mode ~= 'n' or api.nvim_get_current_win() ~= st.win.list then
-    fail '<CR> did not close the prompt back to the list in normal mode'
-  elseif st.filter ~= q or not vim.deep_equal(names(), holding(q)) then
-    fail('<CR> did not keep the filter ' .. q)
+  if long then
+    tree_screen.reveal(long)
+    check_tree()
+    local function top()
+      return api.nvim_win_call(st.owin.pane, function()
+        return vim.fn.line 'w0'
+      end)
+    end
+    local t0 = top()
+    for _, step_ in ipairs { { '<C-e>', 1 }, { '<C-d>', 2 }, { '<C-u>', -2 }, { '<C-y>', -1 } } do
+      local was = top()
+      key(step_[1])
+      local now = top()
+      if (step_[2] > 0 and now <= was) or (step_[2] < 0 and now >= was) or api.nvim_get_current_win() ~= st.owin.tree then
+        fail(('%s from the tree moved the pane from %d to %d'):format(step_[1], was, now))
+      end
+    end
+    if top() ~= t0 then
+      fail 'scrolling down and back up did not come back'
+    end
   end
-  key '/zzzqqq<Esc>'
-  if picker.is_open() or api.nvim_get_mode().mode ~= 'n' then
-    fail '<Esc> did not close the prompt in normal mode'
-  elseif st.filter ~= q or not vim.deep_equal(names(), holding(q)) then
-    fail(('<Esc> left the filter %q, not %q'):format(st.filter, q))
+  -- /: every function and file, typed, <CR> shows it where it lives; <Esc> changes nothing
+  where = 'tree /'
+  if f then
+    key('/' .. f.name .. '<C-n><C-p>')
+    local ps = picker.state()
+    if not (ps and ps.sel) then
+      fail '/ opened no list'
+    end
+    key '<CR>'
+    local x2 = check_tree()
+    local sel = ps and ps.sel
+    local want = sel and (sel:match '^file:(.*)$' and ('f:' .. sel:match '^file:(.*)$') or ('f:' .. g.nodes[sel].path .. '\n' .. sel))
+    if picker.is_open() or api.nvim_get_mode().mode ~= 'n' then
+      fail '<CR> did not close the picker in normal mode'
+    elseif not (x2 and x2.key == want) then
+      fail(('/%s<CR> is on %s, not %s'):format(f.name, x2 and x2.key or 'nothing', tostring(want)))
+    end
+    local was = st.outline.cursor
+    key '/zzzqqq<Esc>'
+    if picker.is_open() or api.nvim_get_mode().mode ~= 'n' or st.outline.cursor ~= was then
+      fail '<Esc> changed the tree or left the picker'
+    end
   end
-  key '/<C-u><CR>'
-  if st.filter ~= '' or not vim.deep_equal(names(), all) then
-    fail('emptied and <CR>: the filter is ' .. st.filter .. ', ' .. #st.crows .. ' rows of ' .. #all)
+  -- ?: every key, closed by ? or <Esc>
+  where = 'tree ?'
+  local hints = require 'seam.hints'
+  key '?'
+  if not hints.is_open() then
+    fail '? opened no keys'
+  end
+  key '?'
+  key '?'
+  key '<Esc>'
+  if hints.is_open() or api.nvim_get_current_win() ~= st.owin.tree then
+    fail '? or <Esc> did not close the keys back to the tree'
+  end
+  -- the lens over the tree: a folder hidden from contracts leaves it, the cursor kept
+  where = 'tree lens'
+  if f then
+    local L, saved = require 'seam.lens', st.lens
+    tree_screen.reveal(f.id)
+    local other, odir
+    for _, r in ipairs(st.orows) do
+      local d = r.kind == 'file' and r.path:match '^(.*)/[^/]+$'
+      if not other and d and f.path:sub(1, #d + 1) ~= d .. '/' then
+        other, odir = r.path, d
+      end
+    end
+    if other then
+      st.lens = L.new()
+      table.insert(st.lens.rules, { path = odir .. '/', cols = { contracts = 'hide' } })
+      seam.lens_changed()
+      check_tree()
+      if row_of('f:' .. other) then
+        fail('the lens hides ' .. other .. ' and its row stayed')
+      end
+      if st.outline.cursor ~= 'f:' .. f.path .. '\n' .. f.id or (tree_screen.at() or {}).id ~= f.id then
+        fail 'the lens moved the cursor'
+      end
+      st.lens = saved
+      seam.lens_changed()
+      check_tree()
+    end
   end
 end
 
@@ -705,19 +954,16 @@ do
   if not g then
     fail 'the index has no call graph'
   else
+    -- the tree on a contract's function, the cursor on its row
     local function on_screen(c)
-      require('seam.draw.explorer').list()
-      st.shown = nil
-      api.nvim_set_current_win(st.win.list)
-      return screen.find(c.name, c.path)
+      screen.show(c)
+      api.nvim_set_current_win(st.owin.tree)
+      local x = tree_screen.at()
+      return x and x.id == c.id
     end
-    -- gf on a contract in the explorer: its declaration in your own tab
-    local first = st.models[st.cur].contracts[1]
-    if first and on_screen(first) then
-      where = 'explorer gf'
-      local c = st.shown
-      key 'gf'
-      went('gf on ' .. c.name, c.path, c.line, st.win.list)
+    local function on(c)
+      local x = st.screen == 'tree' and tree_screen.at()
+      return x and x.id == c.id
     end
     local list = {}
     for _, c in ipairs(st.models[st.cur].contracts) do
@@ -771,27 +1017,25 @@ do
             fail 'K from the code did not come back to the tree'
           end
         end
-        if st.screen ~= 'explorer' or st.shown ~= c then
-          fail(
-            ('<BS> came back to %s, not the explorer on %s'):format(st.screen == 'explorer' and (st.shown and st.shown.name or 'nothing') or st.screen, c.name)
-          )
+        if not on(c) then
+          fail(('<BS> came back to %s, not the tree on %s'):format(st.screen == 'tree' and tostring(st.outline.cursor) or st.screen, c.name))
         end
-        -- - from deeper: straight to the explorer, on the anchor
+        -- - from deeper: straight to the tree, on the anchor
         where = 'calls ' .. c.id .. ' -'
         on_screen(c)
         key 'c'
         local x = st.calls_rows.rows[1]
-        local xc = x and x.id and st.models[st.cur].byid[x.id]
-        if xc and xc.nusers > 0 then
+        local xn = x and x.id and st.models[st.cur].graph.nodes[x.id]
+        if xn and not xn.test and xn.kind ~= 'module' then
           key '<CR>'
           key '-'
-          if st.screen ~= 'explorer' or st.shown ~= xc then
-            fail('- did not go to the explorer on ' .. x.id)
+          if not on(xn) then
+            fail('- did not go to the tree on ' .. x.id)
           end
         else
           key '-'
-          if st.screen ~= 'explorer' or st.shown ~= c then
-            fail('- did not go to the explorer on ' .. c.name)
+          if not on(c) then
+            fail('- did not go to the tree on ' .. c.name)
           end
         end
       end
@@ -828,7 +1072,7 @@ do
       key '<BS>'
     end
     where = 'calls from the top'
-    key 'C'
+    seam.open_calls(nil)
     check_calls(true)
     for _, k in ipairs { 'j', 'j', 'l', 'O', 'H' } do
       key(k)
@@ -856,8 +1100,8 @@ do
       end
     end
     key '<BS>'
-    if st.screen ~= 'explorer' then
-      fail '<BS> from the top did not come back to the explorer'
+    if st.screen ~= 'tree' then
+      fail '<BS> from the top did not come back to the tree'
     end
     -- the repository the design was drawn on: its facts, and on screen
     local start = 'packages/core/src/run/run.ts:83:startRun'
@@ -955,18 +1199,6 @@ do
       table.insert(st.lens.rules, { path = 'packages/react/', cols = { used = 'hide' } })
       seam.lens_changed()
       local create = 'packages/core/src/run/run.ts:75:createRun'
-      local explorer = require 'seam.draw.explorer'
-      local cr = st.models[st.cur].byid[create]
-      if cr and st.view == 'trees' then
-        explorer.contract(cr)
-        local title = api.nvim_buf_get_lines(st.buf.right, 0, 1, false)[1] or ''
-        if not title:match('   %+' .. cr.hidden_users .. ' hidden  L lens$') or cr.hidden_users < 1 then
-          fail("createRun's used by does not say what the lens hides: " .. title)
-        end
-        if api.nvim_buf_get_lines(st.buf.mid, 0, 1, false)[1]:find 'hidden' then
-          fail "createRun's built from says the lens hides something"
-        end
-      end
       seam.open_calls(create)
       key '~'
       check_calls(true)
@@ -1017,10 +1249,9 @@ for ci, c in ipairs(contracts) do
     io.stdout:write(('%d / %d contracts, %d keys, %d failures\n'):format(ci, #contracts, steps, #failures))
     io.stdout:flush()
   end
-  for _, sides in ipairs { 'both', 'used' } do
-    st.sides = sides
-    where = ('%s (%s) open'):format(c.id, sides)
-    local ok, err = pcall(seam.open_page, c)
+  for _, tab in ipairs { false, 'used' } do
+    where = ('%s (%s) open'):format(c.id, tab or 'first')
+    local ok, err = pcall(seam.open_page, c, tab or nil)
     if not ok then
       fail(tostring(err))
     else
@@ -1109,7 +1340,7 @@ for ci, c in ipairs(contracts) do
           key '<CR>'
         end
         key '-'
-        if st.screen ~= 'explorer' or st.page or #st.stack > 0 then
+        if st.screen ~= 'tree' or st.page or #st.stack > 0 then
           fail('- left a page open from depth ' .. (#st.stack + 1))
         end
         seam.open_page(c)
@@ -1121,8 +1352,8 @@ for ci, c in ipairs(contracts) do
         fail(up .. ' stayed on the page')
       end
       key 'K'
-      if st.screen ~= 'explorer' then
-        fail 'K in the explorer left it'
+      if st.screen ~= 'tree' then
+        fail 'K in the tree left it'
       end
     end
   end
@@ -1174,7 +1405,7 @@ do
   end
 end
 
--- the types: T in the explorer lists every type the most travelled first,
+-- the types: t on a folder in the tree lists every type the most travelled first,
 -- its declaration beside it; l its flow, made by then taken by; <CR> on a
 -- function the call tree on it and K back to the flow; t on a function its
 -- other types; / another type; t from the call tree and from a type's
@@ -1245,7 +1476,8 @@ do
   else
     where = 'types'
     screen.show()
-    key 'T'
+    key 'gg'
+    key 't'
     check_types(nil)
     key 'j'
     key 'j'
@@ -1321,25 +1553,8 @@ do
     key 'K'
     check_types(nil)
     key '<BS>'
-    if st.screen ~= 'explorer' then
-      fail('K from the types did not come back to the explorer: ' .. tostring(st.screen))
-    end
-    -- t on a type's contract in the explorer, K back to it
-    where = 'types t explorer'
-    local c
-    for _, f in ipairs(m.flowlist) do
-      for _, e in ipairs(f.decls) do
-        c = c or (vim.tbl_contains(m.contracts, e) and e or nil)
-      end
-    end
-    if c then
-      screen.show(c)
-      key 't'
-      check_types(c.name)
-      key 'K'
-      if st.screen ~= 'explorer' or st.shown ~= c then
-        fail('K from the flow did not come back to the explorer on ' .. c.name)
-      end
+    if st.screen ~= 'tree' then
+      fail('K from the types did not come back to the tree: ' .. tostring(st.screen))
     end
     -- the call tree: t on a function naming one repo type, its flow; T the counts
     where = 'types calls'
@@ -1383,14 +1598,27 @@ do
       end
       key '-'
     end
-    if st.screen ~= 'explorer' then
-      fail '- did not go to the explorer'
+    if st.screen ~= 'tree' then
+      fail '- did not go to the tree'
+    end
+    -- t on a function's row in the tree: its flow, K back to the row
+    where = 'types t tree'
+    if one and not m.graph.nodes[one].test then
+      screen.show(one)
+      if (tree_screen.at() or {}).id == one then
+        key 't'
+        check_types(require('seam.types').named(m.sigs[one], m.flows)[1])
+        key 'K'
+        if (tree_screen.at() or {}).id ~= one then
+          fail('K from the flow did not come back to the tree on ' .. one)
+        end
+      end
     end
   end
 end
 
 -- from your own code: a file of the repo in a tab of its own, the cursor on
--- a contract's name, here() puts the explorer's cursor on it, the page on its
+-- a contract's name, here() puts the tree's cursor on it, the page on its
 -- page; on a local function, calls anchors on it and called by goes up; gf
 -- comes back to the file
 do
@@ -1416,25 +1644,22 @@ do
   end
   if c then
     where = 'here overview ' .. c.id
-    st.filter = 'zzzz'
     local from = on(c.path, c.line, name_col(c.path, c.line, c.name))
     local tab = st.tab
     seam.here()
-    local r = valid(st.win.list) and api.nvim_win_get_cursor(st.win.list)[1]
+    local x = tree_screen.at()
     if st.tab ~= tab then
       fail 'here opened another tab, not the one seam had'
-    elseif api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'explorer' then
-      fail 'here did not show the explorer'
-    elseif st.shown ~= c or not r or st.rowc[r] ~= c then
-      fail(('the cursor is on %s, not %s'):format(st.shown and st.shown.id or 'nothing', c.id))
-    elseif st.filter ~= '' then
-      fail 'a filter hiding it stayed'
+    elseif api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'tree' then
+      fail 'here did not show the tree'
+    elseif not x or x.id ~= c.id then
+      fail(('the cursor is on %s, not %s'):format(x and x.key or 'nothing', c.id))
     end
     if st.from_tab ~= from then
       fail 'gf would not go back to the file here came from'
     end
     key 'gf'
-    went('gf after here', c.path, c.line, st.win.list)
+    went('gf after here', c.path, c.line, st.owin.tree)
     where = 'here page ' .. c.id
     api.nvim_set_current_tabpage(from)
     seam.here 'page'
@@ -1443,8 +1668,8 @@ do
     end
     check_page()
     key 'K'
-    if st.screen ~= 'explorer' or st.shown ~= c then
-      fail 'K from the page here opened did not come back to it in the explorer'
+    if st.screen ~= 'tree' or (tree_screen.at() or {}).id ~= c.id then
+      fail 'K from the page here opened did not come back to it in the tree'
     end
     api.nvim_set_current_tabpage(from)
     vim.cmd 'tabclose'
@@ -1491,19 +1716,19 @@ do
     api.nvim_set_current_tabpage(st.tab)
     key '-'
   end
-  -- a word naming nothing: the explorer, its search holding the word
+  -- a word naming nothing: the tree, its search holding the word
   where = 'here nothing'
   local from = on(c and c.path or f.path, 1, 0)
   api.nvim_buf_set_lines(0, 0, 0, false, { 'zzqqxx' })
   api.nvim_win_set_cursor(0, { 1, 0 })
   seam.here()
   local ps = picker.state()
-  if not (ps and ps.query == 'zzqqxx' and st.screen == 'explorer') then
+  if not (ps and ps.query == 'zzqqxx' and st.screen == 'tree') then
     fail('the search does not hold the word: ' .. vim.inspect(ps, { newline = ' ', indent = '' }) .. ' ' .. tostring(st.screen))
   end
   key '<Esc>'
-  if picker.is_open() or st.filter ~= '' then
-    fail '<Esc> left the search or its filter'
+  if picker.is_open() then
+    fail '<Esc> left the search open'
   end
   if api.nvim_tabpage_is_valid(from) then
     api.nvim_set_current_tabpage(from)

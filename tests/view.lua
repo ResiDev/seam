@@ -305,10 +305,9 @@ local function look(n, step, value)
     return vim.inspect {
       root = st.root,
       screen = st.screen,
+      order = st.outline and st.outline.order,
+      cursor = st.outline and st.outline.cursor,
       view = st.view,
-      order = st.order,
-      filter = st.filter,
-      sides = st.sides,
       panes = st.panes,
       built_as = st.built_as,
       stack = #(st.stack or {}),

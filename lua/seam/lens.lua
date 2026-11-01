@@ -1,4 +1,4 @@
--- What the explorer shows: rules, each a folder or file picked or a
+-- What seam shows: rules, each a folder or file picked or a
 -- pattern typed, that in each column show only the files they hold, hide
 -- them, or leave the column be.
 ---@alias seam.Col 'contracts'|'built'|'used'

@@ -1,8 +1,7 @@
 -- `/` on every screen: one float, a prompt `> query` with how many of how
--- many on its right. Over a page or the call tree a list under it, every
--- candidate the lens lets through, the most used first, narrowed as you type
--- with Neovim's own fuzzy match; over the explorer no list of its own, the
--- explorer's list narrowing behind it.
+-- many on its right, and a list under it of every candidate the lens lets
+-- through, the most used first, narrowed as you type with Neovim's own
+-- fuzzy match.
 local api = vim.api
 local calls_draw = require 'seam.draw.calls'
 local code = require 'seam.code'
@@ -107,14 +106,10 @@ local ABOVE, BELOW = 2, 2
 ---@field width integer inside the border
 ---@field rows? integer how many rows a list may take, its border too
 ---@field query? string typed already
----@field items? seam.Pick[] a list under the prompt: these, narrowed fuzzily
----@field node? fun(id: string): table a pick's name, kind, path and line
+---@field items seam.Pick[] the list under the prompt: these, narrowed fuzzily
+---@field node fun(id: string): table a pick's name, kind, path and line
 ---@field column? string the title over the count at a row's end
----@field total? integer no list: how many there are
----@field typed? fun(query: string): integer no list: the query changed; how many it shows
----@field move? fun(d: integer) no list: move the cursor in what it shows
 ---@field pick fun(p: seam.Pick|nil, query: string) <CR>
----@field cancel? fun() <Esc>
 ---@field closed? fun() it closed, picked or not
 
 local P -- the open picker
@@ -140,7 +135,7 @@ local function room()
   return math.max(1, (P.spec.rows or 10) - 2 - ABOVE - BELOW)
 end
 
--- a pick's row: its name as the tree and the explorer draw it, the letters
+-- a pick's row: its name as the trees draw it, the letters
 -- matched underlined, then where it is, then its count
 local function pick_row(p, W)
   local node = P.spec.node(p.id)
@@ -168,27 +163,25 @@ local function draw_rows()
   local rows = {}
   local count = count_text(P.n)
   rows[1] = draw.row():to(W - 1 - api.nvim_strwidth(count)):add(count, 'SeamLabel')
-  if P.list then
-    local list, n = P.list, room()
-    P.top = math.max(1, math.min(P.top, P.sel, #list - n + 1))
-    if P.sel >= P.top + n then
-      P.top = P.sel - n + 1
-    end
-    local col = spec.column or ''
-    rows[2] = draw.row():to(W - 1 - api.nvim_strwidth(col)):add(col, 'SeamLabel')
-    for j = P.top, math.min(#list, P.top + n - 1) do
-      local r = pick_row(list[j], W)
-      if j == P.sel then
-        r.line_hl = 'CursorLine'
-      end
-      rows[#rows + 1] = r
-    end
-    if #list == 0 then
-      rows[#rows + 1] = draw.row():add('  nothing by that name', 'SeamLabel')
-    end
-    rows[#rows + 1] = draw.row()
-    rows[#rows + 1] = draw.row():add('  ' .. spec.keys, 'SeamLabel')
+  local list, n = P.list, room()
+  P.top = math.max(1, math.min(P.top, P.sel, #list - n + 1))
+  if P.sel >= P.top + n then
+    P.top = P.sel - n + 1
   end
+  local col = spec.column or ''
+  rows[2] = draw.row():to(W - 1 - api.nvim_strwidth(col)):add(col, 'SeamLabel')
+  for j = P.top, math.min(#list, P.top + n - 1) do
+    local r = pick_row(list[j], W)
+    if j == P.sel then
+      r.line_hl = 'CursorLine'
+    end
+    rows[#rows + 1] = r
+  end
+  if #list == 0 then
+    rows[#rows + 1] = draw.row():add('  nothing by that name', 'SeamLabel')
+  end
+  rows[#rows + 1] = draw.row()
+  rows[#rows + 1] = draw.row():add('  ' .. spec.keys, 'SeamLabel')
   draw.put(P.buf, rows)
   if api.nvim_win_is_valid(P.win) then
     api.nvim_win_set_config(P.win, { height = #rows })
@@ -204,20 +197,13 @@ local function filter()
     return
   end
   P.query = q
-  if P.list then
-    P.list = M.fuzzy(P.all, q)
-    P.n, P.sel, P.top = #P.list, 1, 1
-  else
-    P.n = P.spec.typed(q)
-  end
+  P.list = M.fuzzy(P.all, q)
+  P.n, P.sel, P.top = #P.list, 1, 1
   draw_rows()
 end
 
 local function move(d)
   filter()
-  if not P.list then
-    return P.spec.move(d)
-  end
   if #P.list == 0 then
     return
   end
@@ -243,9 +229,7 @@ local function close(how)
     api.nvim_set_current_win(back)
   end
   if how == 'pick' then
-    p.spec.pick(p.list and p.list[p.sel], p.query)
-  elseif p.spec.cancel then
-    p.spec.cancel()
+    p.spec.pick(p.list[p.sel], p.query)
   end
   if p.spec.closed then
     p.spec.closed()
@@ -279,10 +263,10 @@ function M.state()
   return {
     query = P.query,
     n = P.n,
-    ids = P.list and vim.tbl_map(function(p)
+    ids = vim.tbl_map(function(p)
       return p.id
     end, P.list),
-    sel = P.list and P.list[P.sel] and P.list[P.sel].id,
+    sel = P.list[P.sel] and P.list[P.sel].id,
   }
 end
 
@@ -292,14 +276,9 @@ function M.open(spec)
     return
   end
   local q = spec.query or ''
-  P = { spec = spec, query = q, sel = 1, top = 1 }
-  if spec.items then
-    P.all, P.total = spec.items, #spec.items
-    P.list = M.fuzzy(P.all, q)
-    P.n = #P.list
-  else
-    P.total, P.n = spec.total, spec.typed(q)
-  end
+  P = { spec = spec, query = q, sel = 1, top = 1, all = spec.items, total = #spec.items }
+  P.list = M.fuzzy(P.all, q)
+  P.n = #P.list
   local W = spec.width
   P.buf = draw.scratch 'picker'
   vim.bo[P.buf].bufhidden = 'wipe'
