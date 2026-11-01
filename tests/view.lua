@@ -176,7 +176,7 @@ end
 ---@return string
 local function html(ansi)
   local out = {}
-  local st = {} ---@type { fg: string|nil, bg: string|nil, bold: boolean|nil, italic: boolean|nil, under: boolean|nil, rev: boolean|nil }
+  local st = {} ---@type { fg: string|nil, bg: string|nil, bold: boolean|nil, italic: boolean|nil, under: boolean|nil, rev: boolean|nil, strike: boolean|nil }
   local function span(t)
     if t == '' then
       return
@@ -190,7 +190,8 @@ local function html(ansi)
     css[#css + 1] = bg and ('background:' .. bg) or nil
     css[#css + 1] = st.bold and 'font-weight:bold' or nil
     css[#css + 1] = st.italic and 'font-style:italic' or nil
-    css[#css + 1] = st.under and 'text-decoration:underline' or nil
+    local deco = (st.under and 'underline ' or '') .. (st.strike and 'line-through' or '')
+    css[#css + 1] = deco ~= '' and ('text-decoration:' .. deco) or nil
     out[#out + 1] = #css > 0 and ('<span style="' .. table.concat(css, ';') .. '">' .. esc(t) .. '</span>') or esc(t)
   end
   local i = 1
@@ -214,6 +215,8 @@ local function html(ansi)
         st.under = true
       elseif n == 7 then
         st.rev = true
+      elseif n == 9 then
+        st.strike = true
       elseif n == 22 then
         st.bold = nil
       elseif n == 23 then
@@ -222,6 +225,8 @@ local function html(ansi)
         st.under = nil
       elseif n == 27 then
         st.rev = nil
+      elseif n == 29 then
+        st.strike = nil
       elseif n == 39 then
         st.fg = nil
       elseif n == 49 then

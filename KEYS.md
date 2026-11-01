@@ -30,9 +30,9 @@ The keys are not mapped by seam; the suggested ones are in the author's config.
 
 ## The tree
 
-Folders, files, each file's functions in the file's order, and what each function calls, opened a level at a time in the order first written. On the left; the pane beside it shows the row under the cursor. A name from another file is underlined; from another package, underlined in that package's hue, its row with the package's bar. A call already open above it (recursion) is dim and does not open.
+Folders, files, each file's functions in the file's order, and what each function calls, opened a level at a time in the order first written. On the left; the pane beside it shows the row under the cursor. Its left column carries the range's git signs (HEAD to the working tree until the lens picks another, named in the head when it is not): `+` new, `~` changed, `_` gone, a folder or file `~` when anything under it changed and `+` when it is new; a function or file gone keeps its row, struck through, where it was. A name from another file is underlined; from another package, underlined in that package's hue, its row with the package's bar. A call already open above it (recursion) is dim and does not open.
 
-The status line says where you are on the left, and on the right only the keys that act there, each key lit with its word, in three groups: the row │ the pane │ seam. A narrow window drops seam's group first, then the pane's.
+The status line says where you are on the left, and on the right only the keys that act there, each key lit with its word, in three groups: the row │ the pane │ seam. A narrow window drops seam's group first, then the pane's. When the range has changes, `]c [c` and `gc` lead the row's group and take the room of `h`, `s` and `/`, which stay in `?`.
 
 | Key | Does |
 |---|---|
@@ -40,14 +40,16 @@ The status line says where you are on the left, and on the right only the keys t
 | `l` | open the row: a folder, a file's functions, a function's calls; on an open row, its first row |
 | `h` | close an open row; on a closed one, the row it hangs from |
 | `s` | the order: by folder, most used first, most calling first. The sorted orders are every function in a flat list, each with its package's bar and two counts, used by and calls, the one it sorts by lit; tests and a file's top don't count. Back in the tree, the function the cursor was on is shown where it lives |
-| `<Tab>` `<S-Tab>` | the pane's next and previous view: Code, Types, Built from, Used by; the one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the next it has |
-| `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view, named after its tabs: Used by by file, by name, by user; Built from by file, by name, as signatures; Code and Types have one. The display chosen stays for its view. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
+| `<Tab>` `<S-Tab>` | the pane's next and previous view: Code, Types, Built from, Used by, Changed (on a row that changed in the range); the one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the next it has |
+| `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view, named after its tabs: Used by by file, by name, by user; Built from by file, by name, as signatures; Changed changes only, whole file; Code and Types have one. The display chosen stays for its view. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
 | `n` `N` | in Used by and Built from: into the pane, on its next or previous place, round the ends; a count skips |
 | `<C-d>` `<C-u>` | scroll the pane half a screen, the cursor staying in the tree |
 | `<C-e>` `<C-y>` | scroll the pane a line |
+| `gc` | only what changed in the range, the folders down to it, and back; the status line says so |
+| `]c` `[c` | the next and previous row that changed, round the ends |
 | `/` | search the names: a float over the tree of every function, file and repo type it holds, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` shows the one picked where it lives, its folders and file opened; a type, its Types view in the pane, the tree's cursor where it was, until it moves; `<Esc>` `<C-c>` close it, nothing changed |
 | `J` | the code screen on the row's function or file; `K` there comes back to this row |
-| `L` | the lens: what the tree shows. Files it hides from contracts leave the tree; a function's calls follow built from |
+| `L` | the lens: what the tree shows, and the range of changes. Files it hides from contracts leave the tree; a function's calls follow built from |
 | `S` | the next source, when there are several |
 | `R` | read the index again |
 | `gf` `gd` | in your own code: on a function's row, its declaration; on a file's, its first line; on a folder, nothing; on the head or the pane's head, the row's |
@@ -61,6 +63,7 @@ Beside the tree: what the row is and where, the tabs of the views that have some
 - **Code**: a function from its doc comment to its end, a file whole, a type's declaration, with line numbers, each call in it underlined where it lives, as in the tree. A folder has no Code.
 - **Built from**: what the row draws on, from the index. By file: each file it draws on (its own first, `this file`), then each name once with its first use, the line of code in its colours, the name lit on it; for a file or folder, what each place sits in at the right. By name: each name in the order first used, its signature (or what it is) and its file, then that line. As signatures: what it calls, a line each in the Types view's shape, in the order called, then the types it names (and the values). A type: the types its fields are made of.
 - **Used by**: who uses the row, from the index. By file: each file with how many places and the names it uses, the files with most places first, then each place's line of code in its colours, the names marked where they live, `in` the function or type it sits in at the right; four a file, then `⋯ N more`. A function: each place that calls or names it, its own file's too; a file: the other files naming its exports; a folder: the places outside it; a type (from `/`): where it is named. By name: each thing it hands out, the functions first with their signatures, then everyone who uses it. By user: each function that uses it as a line in the Types view's shape with its file, or each type, then what it uses.
+- **Changed**: on a row that changed in the range. A function or type: its line first, then its own lines, removed ones where they were, unnumbered on red, added ones numbered on green, the words changed on each lit stronger, from codediff (else Vim's own diff); a file, the file; a folder, its changed files one after another. Changes only folds each unchanged run to `⋯ N lines unchanged` three lines from each change; whole file shows it all. A type opened with `+` on its line carries its own `+` and `-` lines. The pane's head says new, signature or body changed, and the types it names that changed. On a function whose signature or body changed, **Used by** is who uses it now, then who used it at the range's start, each file saying how many of its declarations changed or that it is gone; its line as it was and as it is above them when its signature changed.
 - Tests sort after the rest in every display of both.
 - **Types**: a line a function, what it takes → its name → what it gives, the names in one column, a long one cut with `…`, a type parameter as what it extends, `Readonly<…>` left out, a blank line between. A function: its line, then each type it takes and gives written out under it, its declaration with its doc comment. A file: its exported functions, then those it keeps, then the types it declares. A folder: its functions used outside it, then its types used outside it with how many files use each. A type (from `/`): the functions that give it, then those that take it, the type lit, then its declaration. Each fact from the written signature (treesitter), else the TypeScript server's hover; until the server has answered, one dim line says why there are none.
 
@@ -73,6 +76,7 @@ Seam maps no key to go into the pane: Vim's own window keys do.
 | `+` | in the Types view, on a type's name (and on the pane's head when it names one, and in the signature lines of Used by and Built from): its declaration as written, under the line it is named on, a bar down its left and its file and line at its top; on a name inside that, the next one nested under it, one level a press. On a function's line, off a name: the function as written, a part a line, the type parameters as written. On `⋯ N more` in Used by: the rest of that group's places. Hinted only where it acts |
 | `-` | close the type the cursor is in, and what was opened inside it, the cursor back on the line naming it; on a function opened as written, close it; on a place `+` showed, hide them again, the cursor on `⋯ N more`. What is open stays for the row as long as seam is open |
 | `n` `N` | in Used by and Built from: the next or previous place, round the ends; a count skips. The line under the cursor is lit |
+| `]c` `[c` | in Changed: the next or previous change, round the ends |
 | `<Tab>` `<S-Tab>` `<C-Tab>` `<C-S-Tab>` | as in the tree |
 | `gf` `gd` | in your own code: on a line of code or a place, that line; on a name's line in Used by and Built from, its declaration; on a file's line, the file (in Used by, at its first place); on a function's line, its declaration; on the head, the row's |
 | `?` | every key here |
@@ -88,6 +92,7 @@ The name under the cursor answers in the pane: a call its function (`called at l
 |---|---|
 | `j` `k` and Vim's motions | move; the pane follows the name under the cursor |
 | `n` `N` | the next or previous import: a name from another file, round the ends |
+| `]c` `[c` | the next or previous change in the range, its lines numbered in the signs' colours; when the range ends at the working tree |
 | `J` | on a call or an imported name, the code screen on its function or file, on top of the trail |
 | `K` | back: the previous on the trail, the cursor on the very name you left from; a count goes back more (`3K`); from the first, the tree on its row |
 | `<C-Tab>` `<C-S-Tab>` | the code, or its types: the function's line, then its values in the order made, `name  Type`, each function inside under its own line, indented; a file, its declarations |
@@ -102,7 +107,7 @@ The code's head gives the cursor back to the code. In the pane, the pane's keys;
 
 ## The lens
 
-A float over the tree. One row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
+A float over the tree. Its first row is the range of changes, `changes  from HEAD  to working tree`, what the signs, `gc`, `]c` `[c` and Changed follow; it is kept while seam is open. Then one row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
 
 | Key | Does |
 |---|---|
@@ -114,6 +119,8 @@ A float over the tree. One row a rule: a folder or file picked, or a pattern typ
 | `a` | the picker: folders, or type a pattern and it lists what it matches as you type; `<CR>` on the pattern takes all it matches, on a folder or file just that; `<Tab>` picks several. A new rule does nothing until a column is turned |
 | `e` | edit this row's pattern; the panel lists what it matches as you type |
 | `d` | delete this row |
+| `f` `t` | the range's from or to: a picker of the default, the branches, the tags and the recent commits; what is typed narrows it, or is taken as the ref when git knows it (`HEAD~3`, a hash) |
+| `x` | the range back to HEAD and the working tree |
 | `q` `<Esc>` `L` | close |
 
 A pattern is a file name (`*.test.*`), a folder anywhere (`tests/`), a path (`packages/*/scripts/**`, or `**checklist**` for that text anywhere in it), a regex on the path between slashes (`/\.(test|spec)\./`), or any other text found in the path. All but a regex ignore case unless they have a capital.

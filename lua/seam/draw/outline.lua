@@ -90,7 +90,7 @@ end
 function M.range(r)
   local g = changes.range()
   if not changes.is_default(g) then
-    r:add('   changes ', 'SeamLabel'):add(g.from, 'SeamRange'):add(' → ', 'SeamLabel'):add(changes.name(g.to), 'SeamRange')
+    r:add('   changes ', 'SeamLabel'):add(g.from, 'SeamRange'):add(' → ', 'SeamLabel'):add(g.to or 'now', 'SeamRange')
   end
   return r
 end
