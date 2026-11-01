@@ -116,29 +116,6 @@ local function cat(...)
   return out
 end
 
--- the files across an edge, the most names first: `{ path, names }`
-local function files_across(m, list, side)
-  local out, at = {}, {}
-  for _, e in ipairs(list) do
-    local p = m.graph.nodes[e[side == 'left' and 'from' or 'to']].path
-    local name = data.label(m.graph.nodes[e.to])
-    local f = at[p]
-    if not f then
-      f = { path = p, names = {}, seen = {}, i = #out + 1 }
-      at[p] = f
-      out[#out + 1] = f
-    end
-    if not f.seen[name] then
-      f.seen[name] = true
-      f.names[#f.names + 1] = name
-    end
-  end
-  table.sort(out, function(a, b)
-    return #a.names > #b.names or (#a.names == #b.names and a.i < b.i)
-  end)
-  return out
-end
-
 ---------------------------------------------------------------- the displays
 
 local function tree_display(x, m, ctx, C)
@@ -177,67 +154,88 @@ local function both_display(x, m, ctx, C)
   local both = require 'seam.map.both'
   local s = M.state(x)
   local T = M.types_on() and m.sigs
+  local home = x.kind == 'dir' and (dir_of(x) .. '/x') or x.kind == 'fn' and m.graph.nodes[x.id].path or x.path
   local left, right, centre = {}, {}, nil
+  local function item(list, path, segs)
+    list[#list + 1] = { folder = data.where(m, path, home), dir = path:match '^(.*)/[^/]*$', path = path, segs = segs }
+  end
   -- a function as a side writes it: with T on, what goes in left of its
-  -- name and what comes out right of it; a caller with where it is
-  local function fn_seg(id, side, dim, where)
+  -- name and what comes out right of it
+  local function fn_item(list, id, side, dim)
     local n = m.graph.nodes[id]
     local name = { data.label(n), dim and 'SeamLabel' or 'SeamMapFn', { kind = 'fn', id = id } }
     local takes, gives
     if T then
       takes, gives = sig_text(C, id)
     end
-    if side == 'left' then
-      if takes then
-        return cat({ { '(', 'SeamPunct' } }, tsegs(tv.cut(takes, 30)), { { ') → ', 'SeamLabel' }, name })
-      end
-    elseif gives then
-      return cat({ name, { ' → ', 'SeamLabel' } }, tsegs(tv.cut(gives, 24)))
+    local segs = { name }
+    if side == 'left' and takes then
+      segs = cat({ { '(', 'SeamPunct' } }, tsegs(tv.cut(takes, 30)), { { ') → ', 'SeamLabel' }, name })
+    elseif side == 'right' and gives then
+      segs = cat({ name, { ' → ', 'SeamLabel' } }, tsegs(tv.cut(gives, 24)))
     end
-    if where then
-      return { { data.short(m, n.path, x.path or n.path) .. '  ', 'SeamDim' }, name }
-    end
-    return { name }
+    item(list, n.path, segs)
   end
   if x.kind == 'fn' then
     local callers, tests = data.callers(m, x.id)
     for _, id in ipairs(data.calls(m, x.id)) do
-      left[#left + 1] = fn_seg(id, 'left')
+      fn_item(left, id, 'left')
     end
     for _, id in ipairs(callers) do
-      right[#right + 1] = fn_seg(id, 'right', false, true)
+      fn_item(right, id, 'right')
     end
     for _, id in ipairs(tests) do
-      right[#right + 1] = fn_seg(id, 'right', true, true)
+      fn_item(right, id, 'right', true)
     end
     centre = { { data.label(m.graph.nodes[x.id]), 'SeamMapFnBold' } }
   elseif x.kind == 'type' then
     local makers, takers = data.flow(m, x.name)
     for _, id in ipairs(makers) do
-      left[#left + 1] = fn_seg(id, 'left')
+      fn_item(left, id, 'left')
     end
     for _, id in ipairs(takers) do
-      right[#right + 1] = fn_seg(id, 'right')
+      fn_item(right, id, 'right')
     end
     centre = { { x.name, 'SeamTypeBold' } }
   else
-    local home = x.kind == 'dir' and dir_of(x) or x.path
-    local into, outs = data.crossing(m, data.within(home))
-    local hp = x.kind == 'dir' and (home .. '/x') or home
-    for _, f in ipairs(files_across(m, outs, 'right')) do
-      left[#left + 1] =
-        { { draw.trunc(table.concat(f.names, ', '), 26) .. '  ', 'SeamLabel' }, { data.short(m, f.path, hp), 'SeamName', { kind = 'file', path = f.path } } }
+    -- the files across its edge, each with the names that cross: those it
+    -- calls out to, then the files calling in with what of it they call
+    local into, outs = data.crossing(m, data.within(x.kind == 'dir' and dir_of(x) or x.path))
+    local function across(list, edges, file_end)
+      local seen = {}
+      for _, e in ipairs(edges) do
+        local p = m.graph.nodes[e[file_end]].path
+        if not seen[p .. '\n' .. e.to] then
+          seen[p .. '\n' .. e.to] = true
+          item(list, p, { { data.label(m.graph.nodes[e.to]), 'SeamMapFn', { kind = 'fn', id = e.to } } })
+        end
+      end
     end
-    for _, f in ipairs(files_across(m, into, 'left')) do
-      right[#right + 1] =
-        { { data.short(m, f.path, hp), 'SeamName', { kind = 'file', path = f.path } }, { '  ' .. draw.trunc(table.concat(f.names, ', '), 40), 'SeamLabel' } }
-    end
+    across(left, outs, 'to')
+    across(right, into, 'from')
     centre = { { x.kind == 'dir' and dir_label(x) or data.short(m, x.path, x.path), 'SeamBold' } }
   end
   if #left == 0 and #right == 0 then
     return { row():add(' nothing calls it and it calls nothing', 'SeamLabel') }
   end
-  return both.draw(both.cut(left, 'left', s.more.left), both.cut(right, 'right', s.more.right), centre, ctx.width - 2)
+  local function need(list)
+    local probe = both.side(list, math.huge, { each = T, all = true, side = 'left' })
+    local n = 0
+    for _, l in ipairs(probe) do
+      local w = 0
+      for _, sg in ipairs(l.segs) do
+        w = w + api.nvim_strwidth(sg[1])
+      end
+      n = math.max(n, w + (l.indent or 0))
+    end
+    return n
+  end
+  local w = ctx.width - 2
+  local cw = api.nvim_strwidth(centre[1][1])
+  local rl, rr = both.rooms(need(left), need(right), w, cw)
+  local L = both.side(left, rl, { each = T, all = s.more.left, side = 'left' })
+  local R = both.side(right, rr, { each = T, all = s.more.right, side = 'right' })
+  return both.draw(L, R, centre, w)
 end
 
 -- a folder's folders: its folders as boxes, else its files

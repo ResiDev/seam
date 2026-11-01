@@ -619,8 +619,8 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
 | **tree** | what it calls, tree lines, `> <` levels, `l` opens the call under the cursor | the folders it calls into, then their files, then the functions | the files it calls into, then the functions it uses in each | types as boxes, the functions that turn one into another on the arrows; `+` on a box opens its declaration under it |
-| **both ways** | its calls left, its callers right (tests dim, last) | the files it calls out to, left; the files outside it that call in, right; each with the names that cross | the same for a file | the functions that make it, left; the functions that take it, right. Not the types it is made of: the Types view has those |
-| **folders** | top to bottom: the folders its calls go into above, who calls it below (tests folded to a count); a box each holding the files and names, the count in its border, as many across as fit, the names wrapped to the pane, never cut; the arrows point up, at what is used | its folders as boxes, the count of calls on each arrow | as a function's, the file's functions together | the folders that make it above, that take it below, the arrows down |
+| **both ways** | its calls left, its callers right (tests dim, last); each side a folder, its files under it, each file's names after it, a line a file into the row | the files it calls out to, left; the files outside it that call in, right; each with the names that cross | the same for a file | the functions that make it, left; the functions that take it, right. Not the types it is made of: the Types view has those |
+| **folders** | top to bottom: the folders its calls go into above, who calls it below (tests folded to a count); a box each holding the files and names, the count in its border, as many across as fit, the names wrapped to the pane, never cut; the arrows point up, at what is used | its folders (else its files) as boxes in bands, each band after everything its boxes call, so what is used stands above what uses it; each box lists what it calls in the folder and how often; the arrows between bands point up | as a function's, the file's functions together | the folders that make it above, that take it below, the arrows down |
 | **size** | each call by how much it goes on to reach | each file by how much it reaches outside itself, and how many outside call into it | each of its functions by how much it reaches, and how many call it | the files that use it most |
 
 - **What it is built from comes first, who uses it after,** the order of
@@ -636,6 +636,17 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   file the arrows point up, at what is used, which is both lines' direction.
   It was side by side, every arrow at the row
   (`mapz-fn-folders-in.png`, `mapy-fn-folders-both.png`).
+- **Both ways groups each side by folder and file** (chosen 2026-11-01,
+  `design/mocks/mapw-fn-both-grouped.png`): a list of names in the order
+  they are called says little; under their folders and files it says where
+  a function reaches. The names wrap to the room, never cut.
+- **A folder's folders lists, it does not route** (chosen 2026-11-01,
+  `design/mocks/mapw-folder-own.png`, `mapw-folder-own-dirs.png`): the
+  graph of boxes with a line for every call became a tangle on any folder
+  with more than a few files, its labels cut at the edge. Now the boxes
+  stand in bands, each after everything it calls, what calls nothing here
+  first; each box names what it calls in the folder and how often. A call
+  back round a cycle is listed in its box and not counted for the band.
 - **`T` shows and hides inputs and outputs,** in every display that has
   functions in it, and the choice stays. In the
   tree display it adds the takes and gives columns (`mapx-type-columns.png`); in
@@ -1060,7 +1071,7 @@ lua/seam/
   map/tree.lua      the tree display: levels, branches opened and closed, ⋯ N more, a name seen higher; a folder's and a file's a rank down a level
   map/both.lua      both ways: callers left, calls right, cut to ⋯ N more
   map/folders.lua   the folders display: boxes of folders with their files and names, the counts on the arrows
-  map/fgraph.lua    a folder's own folders as boxes in ranks, arrows over, under and back into a box
+  map/fgraph.lua    a folder's own folders as boxes in bands, what is used above what uses it, each listing what it calls
   map/size.lua      the size display: a bar each, the number after it, a second column
   map/typegraph.lua a type's tree: types as boxes, functions on the arrows, makers on the left, what gives it back above
   map/keys.lua      the Map's keys in the pane, l h > < T J, where each acts, and the name under the cursor for the status line
@@ -1075,7 +1086,7 @@ tests/
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
   seams.lua         Used by and Built from grouped, on a model written by hand
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
-  map.lua           the Map's layouts on graphs written by hand: the facts, the tree, the ranks, both ways, folders, size, a type's boxes
+  map.lua           the Map's layouts on graphs written by hand: the facts, the tree, the bands, both ways, folders, size, a type's boxes
   check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, > <, l h, T, + - on a box
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, Used by at from, the lens's range
   check.lua         every screen through its keys on a real repo
