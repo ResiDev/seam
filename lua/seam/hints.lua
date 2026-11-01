@@ -24,6 +24,8 @@ M.WORD = {
   ['n N'] = 'place',
   [']c [c'] = 'change',
   gc = 'only changed',
+  ['> <'] = 'levels',
+  T = 'types',
 }
 
 -- a key and its word: the key's own, or the one given with it
