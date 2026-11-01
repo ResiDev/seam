@@ -54,7 +54,6 @@ function M.draw(out, x, m, ctx)
       types_view.typed(r, gives or 'unknown', C.known, placed)
     end
     out[#out + 1] = r
-    out[#out + 1] = row()
   end
   if (n.kind == 'method' or n.kind == 'field') and mem and mem.decl then
     add(mem.decl.name, 'in')

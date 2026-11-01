@@ -29,6 +29,7 @@ local text, field, annotation, file, resolve, refs = scope.text, scope.field, sc
 ---@field at { line: integer, col: integer }|nil a value or parameter: where it is bound
 ---@field fn string|nil a parameter: the function it is one of
 ---@field uses { line: integer, col: integer, e: integer }[]|nil its later uses, a value's or the value a call made
+---@field declares boolean|nil a function's own name where it is declared, not a call
 
 ---------------------------------------------------------------- the index
 
@@ -487,7 +488,7 @@ function M.at(m, path, line, col)
   if node then
     local call = n:parent()
     local v = call and call:type() == 'call_expression' and field(call, 'function'):id() == n:id() and made(call)
-    local x = with { kind = 'call', id = node.id }
+    local x = with { kind = 'call', id = node.id, declares = b ~= nil and b.node:id() == n:id() or nil }
     if v then
       local vb = resolve(C, v)
       if vb then
