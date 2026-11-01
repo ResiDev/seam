@@ -66,8 +66,7 @@ the cursor moves.
   and line at the top. `+` on a name inside that opens the next one, nested
   under it: one level a press. `-` closes the one the cursor is in. `l`
   stays the calls; `+` and `-` are only types. It works on a type's name
-  wherever one is drawn: the tree's rows when they show what they take and
-  give, the pane's head line, the Types view, the Code view's types
+  wherever one is drawn: the pane's head line, the Types view, the Code view's types
   display, Built from and Used by as signature lines, the Map with `T` on,
   and Changed, where an opened type carries its own `+`/`-` lines, so a
   signature that reads the same but takes a changed type shows what changed
@@ -304,9 +303,12 @@ createQueue()`.
   signatures.
 
 Open:
-- `n`/`N`: every name, or only the imports as today?
-- The key for code or types. `v` already turns code into the list, so it
-  could cycle code, types, list.
+- ~~`n`/`N`: every name, or only the imports as today?~~ Only the imports,
+  as today.
+- ~~The key for code or types.~~ `<C-Tab>` and `<C-S-Tab>`, as everywhere:
+  the code on the left is the Code view brought over, and its displays are
+  the code and its types. `<C-Tab>` steps the display of what the cursor is
+  in; the tree has none, so there it steps the pane's. `v` is not used.
 - ~~The keys that open and close a type.~~ `+` and `-`, decided with the
   mocks `mocks/open-type-*.png` (see "Types open in place" above).
 
@@ -531,8 +533,8 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   wrong way; with the callers on the left too, the direction reads itself
   and Used by is in the same picture (`mapy-fn-folders-both.png`).
 - **`T` shows and hides inputs and outputs,** in every display that has
-  functions in it, and the choice stays, as `T` does in the tree. In the
-  tree it adds the takes and gives columns (`mapx-type-columns.png`); in
+  functions in it, and the choice stays. In the
+  tree display it adds the takes and gives columns (`mapx-type-columns.png`); in
   both ways the makers show what they take and the takers what they give.
 - Mocks: `mocks/mapy-fn-tree.png` (`T` off), `mapy-fn-tree-types.png` (`T`
   on), `mapy-fn-folders-both.png` (`mapy-fn-folders.png` was the right side
@@ -618,3 +620,37 @@ goes.
 
 One picture of the status line hints on each screen, and KEYS.md drafted
 from the chosen mocks.
+
+**Draft, 2026-11-01.** One meaning a key, on every screen. A key that has
+nothing to do where the cursor is does nothing, and its hint isn't shown.
+
+| Key | Does, everywhere |
+|---|---|
+| `j` `k` | move |
+| `l` `h` | open and close a function's calls: in the tree, and in the Map's tree |
+| `J` `K` | the code screen on it, and back to the very row or name; `3K` three back |
+| `<Tab>` `<S-Tab>` | the next and previous view |
+| `<C-Tab>` `<C-S-Tab>` | the next and previous display of what the cursor is in; from the tree, the pane's |
+| `+` `-` | open and close the type under the cursor, one level a press |
+| `>` `<` | a level more or less, in the Map |
+| `T` | inputs and outputs in the Map |
+| `n` `N` | the next and previous stop in what's shown: an import in the code, a use in Used by |
+| `]c` `[c` | the next and previous change |
+| `gc` | only what changed in the tree, and back |
+| `s` | the tree's order: by folder, most used, most calling |
+| `/` | search the names |
+| `L` | the lens: the range of changes and the rules |
+| `<C-d>` `<C-u>` `<C-e>` `<C-y>` | scroll the pane from the tree |
+| `gf` `gd` | that place in your own code |
+| `R` | ask again |
+| `q` | close |
+
+Gone from today's keys: `b` `u` (Built from and Used by are views), `c` `C`
+`t` (the tree and the Types view hold them), `d` `D` (the lens filters),
+`v` (`<C-Tab>`), `~` (Used by is a view), `O` `H` (`>` `<` in the Map).
+
+Open:
+- Into the pane and back: Vim's own `<C-w>l` `<C-w>h`, with `<Esc>` back to
+  the tree as today.
+- Straight back to the tree from deep on the code screen, today's `-`, now
+  that `-` closes a type.
