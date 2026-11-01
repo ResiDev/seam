@@ -53,7 +53,7 @@ against its mocks, its tests, and KEYS.md in step:
 4. **The code screen** (landed 2026-11-01). `J` `K` and the trail, every name answering in the
    pane, a value's type after its name, `n` `N` the imports, `<C-Tab>`
    code or types, later uses lit. Replaces Calls.
-5. **Changed.** The range in the lens, the git signs, `gc`, `]c` `[c`, the
+5. **Changed** (landed 2026-11-01). The range in the lens, the git signs, `gc`, `]c` `[c`, the
    Changed view drawn with codediff, a changed type opening with its own
    lines.
 6. **The Map.** Its displays on each kind of row, `T`, `>` `<`, and the
@@ -981,6 +981,11 @@ lua/seam/
   lens_panel.lua    the lens float and its keys
   picker.lua        the / float on every screen: a prompt, a list of picks, fuzzy matching
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
+  changes.lua       what changed in the range, from git: the files, each end's lines, each declaration new, gone, signature or body changed, where a name was used at from
+  diff.lua          two versions of some lines compared: the hunks, the words changed, laid out with removed lines where they were and unchanged runs folded
+  signs.lua         the range's signs on the tree's rows, the rows gone kept struck through, gc and ]c [c
+  refs.lua          the refs a range can be from or to and the picker over them, f t x in the lens
+  views/changed.lua the Changed view: a function's, a type's, a file's or a folder's changes; Used by now and at from; the code's changed lines and ]c [c
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
   types.lua         types.json: the TypeScript server's hover of each callable, in a headless nvim of its own
@@ -991,6 +996,8 @@ tests/
   types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
   seams.lua         Used by and Built from grouped, on a model written by hand
+  changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
+  check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, the Changed view, Used by at from, the lens's range
   check.lua         every screen through its keys on a real repo
 ```
 

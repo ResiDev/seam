@@ -349,9 +349,9 @@ function M.status()
   local left = odraw.order_word(st.outline)
   if not left or st.ptype then
     left = odraw.name(m, px)
-    local v = views.shown(px, st.view)
+    local v, d = views.shown(px, st.view)
     if v then
-      left = left .. '  ' .. v.name:lower()
+      left = left .. '  ' .. v.name:lower() .. (#v.displays > 1 and ' · ' .. d or '')
     end
   end
   if st.outline.only_changed then
@@ -383,10 +383,18 @@ function M.status()
       row[#row + 1] = 'n N'
     end
   end
+  local seam = { 's', '/', 'L', 'q' }
+  -- the change keys take the room of the ones every tree has, still in ?
   if changes.any() then
-    row = vim.list_extend({ ']c [c', 'gc' }, row)
+    row = vim.list_extend(
+      { ']c [c', 'gc' },
+      vim.tbl_filter(function(k)
+        return k ~= 'h'
+      end, row)
+    )
+    seam = { 'L', 'q' }
   end
-  return hints.status(left, { row, pgroup, { 's', '/', 'L', 'q' } }, rules)
+  return hints.status(left, { row, pgroup, seam }, rules)
 end
 
 local function o(buf)
