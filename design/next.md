@@ -542,11 +542,17 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   `mapy-type-both.png` (Model, `T` on), `mapy-folder-size.png` (run/), with
   `mapx-folders.png` (core/src/) and `mapx-type-graph.png` (Model's tree).
 
-Open:
-- A file's and a folder's tree: its imports by file, as `map-file.png`, or
-  its functions and what each calls.
-- A file's folders and a type's folders: where it is used, by folder.
-- Whether four displays on every row is too many to keep in mind.
+Filled 2026-11-01, drawn to be looked at (`src/map/ideas.py`, round three):
+- **A folder's and a file's tree** go one rank down a level, as the tree on
+  the left does: a folder, the folders it calls into, their files, then the
+  functions; a file, the files it calls into, then the functions it uses in
+  each (`mocks/mapz-folder-tree.png`, `mapz-file-tree.png`).
+- **A file's both ways** is a folder's, for one file (`mapz-file-both.png`).
+- **A file's folders** is a function's, the file's functions together
+  (`mapz-file-folders.png`).
+- **A type's folders** is its both ways gathered into folders: the folders
+  that make it, left; that take it, right (`mapz-type-folders.png`).
+- **A file has no size,** as a type has none: three displays.
 
 ### 7. The Code view and the code screen
 
@@ -628,7 +634,7 @@ nothing to do where the cursor is does nothing, and its hint isn't shown.
 |---|---|
 | `j` `k` | move |
 | `l` `h` | open and close a function's calls: in the tree, and in the Map's tree |
-| `J` `K` | the code screen on it, and back to the very row or name; `3K` three back |
+| `J` `K` | the code screen on it, and back to the very row or name; `3K` three back; back to the tree is `K` until there |
 | `<Tab>` `<S-Tab>` | the next and previous view |
 | `<C-Tab>` `<C-S-Tab>` | the next and previous display of what the cursor is in; from the tree, the pane's |
 | `+` `-` | open and close the type under the cursor, one level a press |
@@ -649,8 +655,8 @@ Gone from today's keys: `b` `u` (Built from and Used by are views), `c` `C`
 `t` (the tree and the Types view hold them), `d` `D` (the lens filters),
 `v` (`<C-Tab>`), `~` (Used by is a view), `O` `H` (`>` `<` in the Map).
 
-Open:
-- Into the pane and back: Vim's own `<C-w>l` `<C-w>h`, with `<Esc>` back to
-  the tree as today.
-- Straight back to the tree from deep on the code screen, today's `-`, now
-  that `-` closes a type.
+- **Into the pane and back** are Vim's own window keys; seam maps none, so
+  the user's own (`gl` `gh`) work. `<Esc>` in the pane goes back to the tree
+  as today.
+- **Back is `K`,** a press a step, a count for more. No key straight to the
+  tree: `-` closes a type.
