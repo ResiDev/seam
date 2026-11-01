@@ -23,6 +23,9 @@ local api_width = vim.api.nvim_strwidth
 M.DISPLAYS = { 'changes only', 'whole file' }
 -- a folder's files shown before the rest is left to its rows
 local FILES_MAX = 30
+-- a folder's changed files drawn, a page of rows at a time: the next page on `+`, so moving
+-- over a folder does not draw, and clear again, thousands of lines
+local PAGE = 400
 
 -- the file and the declaration a row stands for: nil for a file's own name
 local function subject(m, x)
@@ -513,10 +516,24 @@ function M.draw(out, x, m, display, ctx)
   local fold = display ~= 'whole file'
   if x.kind == 'dir' then
     local list = files_under(m, C, outline.full(x.item))
+    local pages = 1
+    while ctx and ctx.open and ctx.open['more:changed:' .. pages] do
+      pages = pages + 1
+    end
+    local first, page = #out, 1
     for i, p in ipairs(list) do
       if i > FILES_MAX then
         out[#out + 1] = row():add(' ⋯ ' .. plural(#list - FILES_MAX, 'more file') .. ', each on its row', 'SeamLabel')
         break
+      end
+      -- a page full: the next one when it was opened, else what is left on `+`
+      if #out - first >= PAGE then
+        if page == pages then
+          out[#out + 1] = row()
+          out[#out + 1] = row({ more = 'more:changed:' .. pages }):add(' ⋯ ' .. plural(#list - i + 1, 'more file'), 'SeamLabel')
+          break
+        end
+        first, page = #out, page + 1
       end
       if #out > 0 then
         out[#out + 1] = row()

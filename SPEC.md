@@ -198,7 +198,8 @@ Decided 2026-10-31, from the mocks `design/mocks/types-view-*.png`:
   (`design/mocks/code-cursor-field.png`).
 - **A folder has the views a file has where they make sense:** Types, Built
   from, Used by and the Map. It has no Code, but with the diff on its Code
-  is its changed files one after another.
+  is its changed files one after another, about 400 lines at a time, then
+  `⋯ N more files` that `+` opens, so moving over a folder stays quick.
 
 
 The Types view is the high-level picture at every level of the tree, with
@@ -424,7 +425,7 @@ seam in its worktree, and pick its start with `f`. Then:
   (`design/mocks/changed-whole.png`). codediff has no folding (its roadmap lists
   it), so the folds are seam's.
 - **On a function or type,** Code with the diff is its lines alone; on a
-  file, the file; on a folder, its changed files one after another; on a
+  file, the file; on a folder, its changed files one after another, a page at a time; on a
   row gone, its lines as they were, all removed, diff or not (a row gone
   has only Code).
 - **Types with the diff** (`design/mocks/diff-types.png`) is what changed
