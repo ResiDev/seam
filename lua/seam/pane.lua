@@ -1,7 +1,7 @@
 -- The pane on the right of every screen: its head with the tabs over the
 -- view shown, for what the screen says it is about; the keys in it, and
--- those that reach it from the left: the next view or display, scrolling
--- it, n and N from place to place, + and -.
+-- those that reach it from the left: the other tab, a view aside, the next
+-- display, the diff, scrolling it, n and N from place to place, + and -.
 local api = vim.api
 local draw = require 'seam.draw'
 local index = require 'seam.index'
@@ -72,8 +72,15 @@ function M.redraw()
   vim.cmd 'redrawstatus'
 end
 
---- `<Tab>` `<S-Tab>`, or with `display` `<C-Tab>` `<C-S-Tab>`: the pane's
---- next view or display, or the one before.
+local function shown_again(x)
+  M.show(x)
+  require('seam.screen').paint()
+  vim.cmd 'redrawstatus'
+end
+
+--- `<Tab>` `<S-Tab>`: the pane's other tab, or from a view aside back to
+--- the tab; with `display`, `<C-Tab>` `<C-S-Tab>`: its next display, or the
+--- one before.
 ---@param d integer
 ---@param display? boolean
 ---@return fun()
@@ -84,14 +91,72 @@ function M.step(d, display)
     if display then
       ok = views.step_display(x, st.view, d)
     else
-      ok = views.step(x, st.view, d)
+      ok = views.step(x, st.view)
     end
     if ok then
-      M.show(x)
-      require('seam.screen').paint()
-      vim.cmd 'redrawstatus'
+      shown_again(x)
     end
   end
+end
+
+-- the views aside and their keys
+M.ASIDE = { gu = 'Used by', gb = 'Built from', gm = 'Map' }
+M.ASIDE_KEYS = { 'gu', 'gb', 'gm' }
+
+--- `gu` `gb` `gm`: the view aside on the key in the pane, or back.
+---@param k string
+---@return fun()
+function M.aside(k)
+  return function()
+    local x = M.subject()
+    if views.aside(x, st.view, M.ASIDE[k]) then
+      shown_again(x)
+    end
+  end
+end
+
+--- `D`: the diff on or off, for the session, both sides drawn again.
+function M.toggle_diff()
+  require('seam.views.changed').toggle()
+  if st.screen == 'code' then
+    require('seam.screen_code').redraw()
+  else
+    shown_again(M.subject())
+  end
+end
+
+--- Does `D` act: has the range changes, or is the diff on to turn off?
+---@return boolean
+function M.can_diff()
+  return st.diff == true or require('seam.changes').any()
+end
+
+--- The keys for the pane's views where they act on `x`: `<Tab>`, `gu` `gb`
+--- `gm` each where the row has its view, `<C-Tab>` with more than one display.
+---@param x seam.ORow|nil
+---@return string[]
+function M.view_hints(x)
+  local out = {}
+  if views.can_step(x, st.view) then
+    out[#out + 1] = '<Tab>'
+  end
+  for _, k in ipairs(M.ASIDE_KEYS) do
+    if views.has(x, M.ASIDE[k]) then
+      out[#out + 1] = k
+    end
+  end
+  local v = views.shown(x, st.view)
+  if v and #views.displays(v, x) > 1 then
+    out[#out + 1] = '<C-Tab>'
+  end
+  return out
+end
+
+--- The status line's left begun: `diff on` while it is.
+---@param left string
+---@return string
+function M.said(left)
+  return st.diff and ('diff on   ' .. left) or left
 end
 
 --- Scroll the pane from the left, as the key scrolls a window.
@@ -112,7 +177,7 @@ function M.scroll(k)
 end
 
 --- The pane's stops for n and N: the places Used by and Built from show;
---- with `what` 'change', the changes the Changed view shows, for ]c [c.
+--- with `what` 'change', the changes the diff shows, for ]c [c.
 ---@param what? 'place'|'change'
 ---@return integer[]
 function M.stops(what)
@@ -183,7 +248,7 @@ end
 ---@return table row, table pane, table seam
 function M.hints(back)
   local x = M.subject()
-  local row, pane = require('seam.map.keys').hints(), {}
+  local row = require('seam.map.keys').hints()
   local o, c = opening.keys()
   if o then
     row[#row + 1] = opening.is_more(o) and { '+', 'more' } or '+'
@@ -197,12 +262,9 @@ function M.hints(back)
   if #M.stops 'change' > 0 then
     row[#row + 1] = ']c [c'
   end
-  local v = views.shown(x, st.view)
-  if #views.of(x) > 1 then
-    pane[#pane + 1] = '<Tab>'
-  end
-  if v and #v.displays > 1 then
-    pane[#pane + 1] = '<C-Tab>'
+  local pane = M.view_hints(x)
+  if M.can_diff() then
+    pane[#pane + 1] = 'D'
   end
   local seam = { { '<Esc>', back } }
   if st.screen == 'code' then
@@ -228,9 +290,11 @@ function M.all_keys(back)
         { '+', 'open the type under the cursor, or a function as written; on ⋯ N more, the rest' },
         { '-', 'close the one the cursor is in; on a place it showed, hide the rest again' },
         { 'n N', 'the next and previous place, in Used by and Built from' },
-        { ']c [c', 'the next and previous change, in Changed' },
-        { '<Tab> <S-Tab>', 'next and previous view' },
+        { ']c [c', 'the next and previous change, with the diff on' },
+        { '<Tab> <S-Tab>', 'Code or Types; from a view aside, back' },
+        { 'gu gb gm', 'Used by, Built from, the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
+        { 'D', 'the diff on or off, both sides, for the session' },
       },
     },
     {
@@ -251,6 +315,15 @@ local function o(buf)
   return { buffer = buf, nowait = true, silent = true }
 end
 
+--- `gu` `gb` `gm` and `D` in `buf`, the same on every screen.
+---@param buf integer
+function M.view_keys(buf)
+  for _, k in ipairs(M.ASIDE_KEYS) do
+    vim.keymap.set('n', k, M.aside(k), o(buf))
+  end
+  vim.keymap.set('n', 'D', M.toggle_diff, o(buf))
+end
+
 --- The keys of the pane's head and view, on both screens.
 ---@param buf integer
 function M.keys(buf)
@@ -260,6 +333,7 @@ function M.keys(buf)
   for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
     vim.keymap.set('n', k[1], M.step(k[2], true), o(buf))
   end
+  M.view_keys(buf)
   vim.keymap.set('n', '+', function()
     opening.plus(M.redraw)
   end, o(buf))

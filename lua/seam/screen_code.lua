@@ -5,7 +5,6 @@
 local api = vim.api
 local code = require 'seam.code'
 local code_view = require 'seam.views.code'
-local codetypes = require 'seam.codetypes'
 local draw = require 'seam.draw'
 local hints = require 'seam.hints'
 local index = require 'seam.index'
@@ -13,8 +12,6 @@ local names = require 'seam.names'
 local opening = require 'seam.opening'
 local pane = require 'seam.pane'
 local st = require 'seam.state'
-local types_view = require 'seam.views.types'
-local views = require 'seam.views'
 local M = {}
 
 local row = draw.row
@@ -104,73 +101,15 @@ end
 
 ---------------------------------------------------------------- drawing
 
--- the types display: the function's line, its values, the functions inside
-local function types_rows(out, m, e, width)
-  local node = e.kind == 'fn' and m.graph.nodes[e.id]
-  local list = node and codetypes.fn(m, e.path, node.line, node.name) or codetypes.file(m, e.path)
-  st.copens = st.copens or {}
-  st.copens[e.path .. (e.id or '')] = st.copens[e.path .. (e.id or '')] or {}
-  st.cctx = { open = st.copens[e.path .. (e.id or '')], width = width }
-  local C = types_view.context(m, st.cctx, e.path)
-  local col = 18
-  for _, r in ipairs(list) do
-    if r.kind == 'value' then
-      col = math.max(col, 3 + 2 * r.depth + api.nvim_strwidth(r.name) + 2)
-    end
-  end
-  local lines = code.file(e.path).lines
-  for _, r in ipairs(list) do
-    if r.kind == 'blank' then
-      out[#out + 1] = row()
-    else
-      local x = row { at = { path = e.path, line = r.line, name = r.name } }
-      local placed = {}
-      if r.kind == 'fn' then
-        x:add(string.rep(' ', 1 + 2 * r.depth))
-        types_view.typed(x, r.params, C.known, placed)
-        x:add(' → ', 'SeamLabel'):add(r.name, r.depth == 0 and 'SeamTitle' or '@function')
-        if r.ret then
-          x:add(' → ', 'SeamLabel')
-          types_view.typed(x, r.ret, C.known, placed)
-        end
-        if r.depth > 0 then
-          local at = (lines[r.line] or ''):find('%f[%w_$]' .. vim.pesc(r.name) .. '%f[^%w_$]')
-          x.meta.name = at and { line = r.line, col = at - 1 } or nil
-        end
-      elseif r.kind == 'value' then
-        x:add(string.rep(' ', 3 + 2 * r.depth)):add(r.name, 'SeamName'):to(col)
-        types_view.typed(x, r.type or '', C.known, placed)
-        x.meta.name = { line = r.line, col = r.col }
-      else
-        x:add(' '):add(r.name, 'SeamType'):to(col):add(r.type, 'SeamLabel')
-      end
-      x:to(width - 7):add((' %4d'):format(r.line), 'SeamGutter')
-      local key = 'ct:' .. r.line .. ':' .. r.name
-      x.meta.tv = { key = key, id = 'l', names = placed, chain = {} }
-      out[#out + 1] = x
-      local seen, line = {}, { id = 'l', names = {}, path = e.path }
-      for _, p in ipairs(placed) do
-        if not seen[p.name] then
-          seen[p.name] = true
-          line.names[#line.names + 1] = p.name
-        end
-      end
-      local items = types_view.lay(C, { line }, key, {}, {})
-      table.remove(items, 1)
-      types_view.render(out, C, items)
-    end
-  end
-end
-
 -- the code's rows for the display shown
 local function rows_of(m, e, display, width)
   local path, s, l, nodes = code_view.span(entry_row(e), m)
   st.code.s = s
   local out = {}
   if display == 'types' then
-    types_rows(out, m, e, width)
+    require('seam.views.codetypes').draw(out, m, e, width)
   else
-    code_view.lines(out, m, path, s, l, nodes)
+    code_view.lines(out, m, path, s, l, nodes, true)
   end
   return out
 end
@@ -231,6 +170,22 @@ local function answer()
   return names.near(m, e.path, meta.lnum, math.max(cur[2] - meta.start, -1))
 end
 
+--- The code's row of source line `l`, removed lines drawn between them
+--- with the diff on; nil when it is not drawn.
+---@param l integer
+---@return integer|nil
+function M.row_of(l)
+  local i = l - st.code.s + 1
+  if draw.meta(st.cbuf.code, i).lnum == l then
+    return i
+  end
+  for k = 1, api.nvim_buf_line_count(st.cbuf.code) do
+    if draw.meta(st.cbuf.code, k).lnum == l then
+      return k
+    end
+  end
+end
+
 -- the later uses of the value under the cursor lit, their lines and the names on them
 local function light(n)
   local buf = st.cbuf.code
@@ -239,12 +194,13 @@ local function light(n)
     return
   end
   local function mark(l, c, e)
-    local meta = draw.meta(buf, l - st.code.s + 1)
-    if meta.lnum ~= l then
+    local i = M.row_of(l)
+    if not i then
       return nil
     end
-    pcall(api.nvim_buf_set_extmark, buf, ns, l - st.code.s, meta.start + c, { end_col = meta.start + e, hl_group = 'SeamUseName', priority = 330 })
-    return l - st.code.s
+    local meta = draw.meta(buf, i)
+    pcall(api.nvim_buf_set_extmark, buf, ns, i - 1, meta.start + c, { end_col = meta.start + e, hl_group = 'SeamUseName', priority = 330 })
+    return i - 1
   end
   mark(n.line, n.col, n.e)
   for _, u in ipairs(n.uses) do
@@ -328,7 +284,7 @@ local function show()
   local c = e.cursor
   if not c then
     local node = e.kind == 'fn' and m.graph.nodes[e.id]
-    local l = node and math.max(1, node.line) - st.code.s + 1 or 1
+    local l = node and M.row_of(math.max(1, node.line)) or 1
     local meta = draw.meta(st.cbuf.code, l)
     local src = node and code.file(e.path).lines[node.line] or ''
     local at = node and src:find('%f[%w_$]' .. vim.pesc(node.name) .. '%f[^%w_$]')
@@ -507,12 +463,14 @@ function M.all_keys()
         { 'K', 'back to the very name you left from; 3K three back; from the first, the tree' },
         { '+ -', 'in its types, open and close the type under the cursor' },
         { '<S-Tab>', 'the code, or its types' },
+        { 'D', 'the diff on or off, here and in the pane, for the session' },
       },
     },
     {
       'The pane',
       {
-        { '<Tab>', 'next view of the name under the cursor' },
+        { '<Tab>', 'Code or Types of the name under the cursor; from a view aside, back' },
+        { 'gu gb gm', 'Used by, Built from, the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display of its view' },
         { '<M-j> <M-k>', 'scroll it half a screen, the cursor staying in the code' },
       },
@@ -536,7 +494,7 @@ function M.status()
   if not e then
     return ''
   end
-  local left = label(m, e) .. '  ' .. st.code.display
+  local left = pane.said(label(m, e) .. '  ' .. st.code.display)
   local n = st.code.n
   if n then
     left = left .. '   ' .. (n.object and (n.object .. '.') or '') .. n.name .. (n.kind == 'call' and '()' or '') .. (n.type and (': ' .. n.type) or '')
@@ -556,19 +514,18 @@ function M.status()
   if c then
     rg[#rg + 1] = '-'
   end
-  if #require('seam.views.changed').line_stops(st.cwin.code, e.path) > 0 then
+  if #require('seam.codediff').line_stops(st.cwin.code, e.path) > 0 then
     rg[#rg + 1] = ']c [c'
+  end
+  if pane.can_diff() then
+    rg[#rg + 1] = 'D'
   end
   if j_target() then
     rg[#rg + 1] = 'J'
   end
   rg[#rg + 1] = 'K'
-  local pg = {}
   rg[#rg + 1] = '<S-Tab>'
-  if #views.of(M.subject()) > 1 then
-    pg[#pg + 1] = '<Tab>'
-  end
-  pg[#pg + 1] = '<C-Tab>'
+  local pg = pane.view_hints(M.subject())
   pg[#pg + 1] = '<M-j> <M-k>'
   return hints.status(left, { rg, pg, { '/', 'q' } }, rules)
 end
@@ -595,7 +552,7 @@ local function code_keys(buf)
   end, o(buf))
   for _, k in ipairs { { ']c', 1 }, { '[c', -1 } } do
     vim.keymap.set('n', k[1], function()
-      require('seam.views.changed').next_line(st.cwin.code, top().path, k[2])
+      require('seam.codediff').next_line(st.cwin.code, top().path, k[2])
     end, o(buf))
   end
   -- <S-Tab> the left side, the code or its types; <Tab> and <C-Tab> the pane's
@@ -603,6 +560,7 @@ local function code_keys(buf)
     M.step_display(1)
   end, o(buf))
   vim.keymap.set('n', '<Tab>', pane.step(1), o(buf))
+  pane.view_keys(buf)
   for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
     vim.keymap.set('n', k[1], pane.step(k[2], true), o(buf))
   end

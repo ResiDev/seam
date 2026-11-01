@@ -256,7 +256,7 @@ end
 ---------------------------------------------------------------- changes
 
 --- Ask git what changed in the range, the screen shown drawn again once it
---- has said: the signs, the Changed view.
+--- has said: the signs, the diff.
 function M.ask_changes()
   local root = st.root
   require('seam.changes').ask(root, function()

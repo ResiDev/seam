@@ -28,6 +28,10 @@ M.WORD = {
   gc = 'only changed',
   ['> <'] = 'levels',
   T = 'types',
+  gu = 'used by',
+  gb = 'built from',
+  gm = 'map',
+  D = 'diff',
 }
 
 -- a key and its word: the key's own, or the one given with it

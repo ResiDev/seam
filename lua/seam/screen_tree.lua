@@ -191,7 +191,11 @@ function M.show_type(name, view)
     row = { kind = 'type', key = 'type:' .. name, name = name, path = e.path, line = e.line, end_line = e.end_line, decl_kind = e.kind },
     at = api.nvim_win_get_cursor(st.owin.tree)[1],
   }
-  st.view.at = view or 'Types'
+  if view and require('seam.views').has(st.ptype.row, view) then
+    st.view.aside = view
+  else
+    st.view.at, st.view.aside = view or 'Types', nil
+  end
   moved()
   return true
 end
@@ -311,8 +315,10 @@ function M.all_keys()
     {
       'The pane',
       {
-        { '<Tab> <S-Tab>', 'next and previous view' },
+        { '<Tab> <S-Tab>', 'Code or Types; from a view aside, back' },
+        { 'gu gb gm', 'Used by, Built from, the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
+        { 'D', 'the diff on or off, here and on the code screen, for the session' },
         { 'n N', 'into it, on the next and previous place, in Used by and Built from' },
         { '> <', 'a level more or less, in the Map' },
         { 'T', 'inputs and outputs, in the Map' },
@@ -353,24 +359,18 @@ function M.status()
     left = odraw.name(m, px)
     local v, d = views.shown(px, st.view)
     if v then
-      left = left .. '  ' .. v.name:lower() .. (#v.displays > 1 and ' · ' .. d or '') .. require('seam.map.keys').status(pane.inside())
+      left = left .. '  ' .. v.name:lower() .. (#views.displays(v, px) > 1 and ' · ' .. d or '') .. require('seam.map.keys').status(pane.inside())
     end
   end
   if st.outline.only_changed then
     left = 'only what changed   ' .. left
   end
+  left = pane.said(left)
   local rules = st.lens and #st.lens.rules or 0
   if pane.inside() then
     return hints.status(left, { pane.hints 'tree' }, rules)
   end
-  local row, pgroup = {}, {}
-  local v = views.shown(px, st.view)
-  if #views.of(px) > 1 then
-    pgroup[#pgroup + 1] = '<Tab>'
-  end
-  if v and #v.displays > 1 then
-    pgroup[#pgroup + 1] = '<C-Tab>'
-  end
+  local row, pgroup = {}, pane.view_hints(px)
   -- the Map's levels and types, from the tree too
   local ma = require('seam.map.keys').acts()
   if ma.levels then
@@ -378,6 +378,9 @@ function M.status()
   end
   if ma.T then
     pgroup[#pgroup + 1] = 'T'
+  end
+  if pane.can_diff() then
+    pgroup[#pgroup + 1] = 'D'
   end
   if x then
     if x.can_open and not x.open then
@@ -418,6 +421,7 @@ local function tree_keys(buf)
   for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
     vim.keymap.set('n', k[1], pane.step(k[2], true), o(buf))
   end
+  pane.view_keys(buf)
   vim.keymap.set('n', '?', function()
     hints.open(M.all_keys())
   end, o(buf))

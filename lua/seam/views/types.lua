@@ -89,7 +89,7 @@ local function block(C, d, doc)
     lines[#lines + 1] = { id = 'more', names = {}, kind = 'more', n = e - s - DECL_MAX + 1 }
   end
   local b = { decl = d, lines = lines }
-  -- in the Changed view, its own lines as the range changed them
+  -- with the diff on, its own lines as the range changed them
   if C.diff then
     b.lines, b.changed = C.diff(d, lines)
   end
@@ -170,6 +170,8 @@ end
 -- `label` saying what the function does with it
 local function render(out, C, items)
   local cols, bars = {}, {}
+  -- with the diff on, was the row before marked: where a change starts, for ]c
+  local was_signed = false
   for _, x in ipairs(items) do
     local d = x.depth
     if x.head then
@@ -203,6 +205,10 @@ local function render(out, C, items)
         local sign = l.kind == 'del' and '-' or l.mark
         r:add(sign or ' ', sign == '-' and 'SeamSignDelete' or sign and 'SeamSignAdd' or nil)
         r.bg = sign == '-' and 'SeamDiffDelete' or sign and 'SeamDiffAdd' or nil
+        r.meta.change = (sign and not was_signed) or nil
+        was_signed = sign ~= nil
+      else
+        was_signed = false
       end
       if l.kind == 'del' then
         r:add('      '):add(l.text, 'SeamDiffDeleteFg')
@@ -292,17 +298,28 @@ local function fn_rows(out, C, f, cols, kept, top)
   local wkey = key .. '|w'
   local is_written = tv.is_open(C.open, nil, wkey)
   local open, parts, close = tv.opened(f.sig)
+  -- with the diff on, a sign column: its line as it was over it when its signature changed, + new or changed
+  local d = C.diff and require('seam.views.changed').fn_state(node)
+  if d and d.state == 'signature' then
+    out[#out + 1] = require('seam.views.changed').was_row(node, d, f.gives, cols)
+  end
   local r = row { at = { path = node.path, line = math.max(1, node.line), name = node.name } }
   local names = {}
+  local o = C.diff and 1 or 0
+  if C.diff then
+    r:add(d and '+' or ' ', d and 'SeamSignAdd' or nil)
+    r.bg = d and 'SeamDiffAdd' or nil
+    r.meta.change = (d and d.state == 'new') or nil
+  end
   r:add ' '
   typed(r, is_written and open or tv.cut(f.takes, cols.pw), C.known, names, C.lit)
-  r:to(1 + cols.pw):add(' → ', 'SeamLabel')
+  r:to(o + 1 + cols.pw):add(' → ', 'SeamLabel')
   if kept then
     r:add(node.name, 'SeamText')
   else
     code.add_name(r, node.path, node.line, node.name, 'SeamName', cols.nw)
   end
-  r:to(1 + cols.pw + 3 + cols.nw):add(' → ', 'SeamLabel')
+  r:to(o + 1 + cols.pw + 3 + cols.nw):add(' → ', 'SeamLabel')
   typed(r, cols.gw and tv.cut(f.gives, cols.gw) or f.gives, C.known, names, C.lit)
   local line = { id = 'l', names = {}, path = node.path }
   local seen = {}
@@ -374,6 +391,10 @@ local function type_rows(out, C, list, key)
   local lines = {}
   for i, t in ipairs(list) do
     lines[i] = { id = 't' .. i, names = { t.name }, name = t.name, note = t.note, col = tw + 4, kind = 'type', path = t.path }
+    -- with the diff on, a type the range changed written out with its own lines
+    if C.diff and require('seam.views.changed').type_changed(t.path, t.name) then
+      C.defaults[tv.child(key, 't' .. i, t.name)] = true
+    end
   end
   render(out, C, lay(C, lines, key, {}, {}))
 end
@@ -511,6 +532,8 @@ function M.context(m, ctx, path)
     width = ctx.width,
     path = path,
     known = is_type(m, path),
+    -- with the diff on, in the Types view: each type opened with its own lines
+    diff = ctx.diff and require('seam.views.changed').block_diff or nil,
   }
   ctx.defaults = C.defaults
   return C
