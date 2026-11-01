@@ -455,7 +455,7 @@ do
       end)
     end
     local t0 = top()
-    for _, step_ in ipairs { { '<C-e>', 1 }, { '<C-d>', 2 }, { '<C-u>', -2 }, { '<C-y>', -1 } } do
+    for _, step_ in ipairs { { '<C-e>', 1 }, { '<C-d>', 2 }, { '<C-u>', -2 }, { '<C-y>', -1 }, { '<M-j>', 2 }, { '<M-k>', -2 } } do
       local was = top()
       key(step_[1])
       local now = top()
