@@ -3,7 +3,7 @@
 What seam is, how each screen behaves, where each fact comes from and how it
 is built. The screens are the mocks named here, in `design/mocks/`; the keys
 are in `KEYS.md`. Built a slice at a time (Building): what a slice has not
-replaced yet still runs as `design/contract.md` and `calls.md` lock it.
+replaced yet still runs as `design/calls.md` locks it.
 
 The idea behind all of it: seam stays beside the code. It never replaces
 reading the code. It makes three things one key away while you read: what a
@@ -49,8 +49,8 @@ against its mocks, its tests, and KEYS.md in step:
    the explorer.
 2. **The Types view,** and `+` `-` opening a type in place wherever a type
    is drawn so far (landed 2026-11-01). Replaces the Types screens.
-3. **Used by and Built from,** by file, with their other displays.
-   Replaces the contract page.
+3. **Used by and Built from,** by file, with their other displays
+   (landed 2026-11-01). Replaces the contract page.
 4. **The code screen.** `J` `K` and the trail, every name answering in the
    pane, a value's type after its name, `n` `N` the imports, `<C-Tab>`
    code or types, later uses lit. Replaces Calls.
@@ -780,9 +780,9 @@ The parts below carry over from v1's spec and still hold.
 ---@field target seam.Contract|{ path: string, range: seam.Range }
 ```
 
-The tree's counts need `used_by` for every contract. Everything else is
-asked for one contract at a time, when its page opens or the cursor reaches
-it.
+The tree's counts need `used_by` for every contract. Used by and Built from
+draw from the index's uses and names as they are; nothing on screen asks
+the server per field.
 
 ## Where each fact comes from
 
@@ -796,8 +796,7 @@ it.
 | Built-from targets | `textDocument/definition` on each name | per name, on demand |
 | Uses | `textDocument/references`, minus the declaration file's own and import specifiers | **one request per export: the cost** |
 | Role of a use | treesitter: the node the reference sits in | per use |
-| Fields a use reads | `textDocument/references` on each member, matched to the use's enclosing function | per member, on demand |
-| The function a use sits in | treesitter: nearest function, method or arrow assigned to a name; else the statement | per use |
+| What a use sits in | the call graph's function, component or class holding its line, else the type declared at the top of its file holding it (treesitter) | per use, as drawn |
 | Signature | `textDocument/hover` | per contract, on demand |
 | Code colours | treesitter captures of the source file | per pane |
 | The call graph | treesitter: each function, component and class at the top of a file, and each file's top-level code, with the callables it names outside type positions, resolved as built-from names are | per file, in the same pass |
@@ -848,8 +847,6 @@ and every source needs the same answers from it.
 ---@field uses fun(self, list: seam.Contract[], each: fun(c: seam.Contract, uses: seam.Use[]), done: fun())
 --- Where a name in a file resolves to.
 ---@field definition fun(self, path: string, at: seam.Pos, done: fun(target: { path: string, range: seam.Range }|nil))
---- Uses of one member.
----@field member_uses fun(self, c: seam.Contract, m: seam.Member, done: fun(uses: seam.Use[]))
 ---@field signature fun(self, c: seam.Contract, done: fun(text: string|nil))
 ```
 
@@ -900,8 +897,7 @@ background (guess). The spike measures it.
 The screens are locked in the design docs. The code must keep these rules:
 
 - **Layout.** The tree is 46 wide, the pane the rest, under a head line
-  across the top. The page is three columns: the list 40, the contract 46,
-  the seam the rest. Calls is two: the tree 86, its code the rest. All need
+  across the top. Calls is two: the tree 86, its code the rest. All need
   150 columns. Narrower than that is not
   designed. v1 says so and opens anyway.
 - **Trees.** Every tree is built by one module, `tree.lua`, from paths. Two
@@ -925,22 +921,19 @@ The screens are locked in the design docs. The code must keep these rules:
   - A code pane is a scratch buffer of copied lines. It keeps the source
     file's highlighting by copying that file's treesitter captures as marks,
     because a fragment of a function does not parse on its own.
-  - Lines outside the seam are dimmed by a mark at a priority above
-    treesitter's.
-  - A line that names the contract has a background.
-  - A member it reads is underlined, and so is the same member in the
-    contract pane.
   - A gap is a `⋯` row.
-- **One seam at a time.** Built from and Used by show only the seam under
-  the cursor. Built from read as code shows the declaration of the name the
-  cursor is on.
-- **Snippets.** A use is shown in the function it sits in, 20 rows at most,
-  keeping the lines with uses in view, as thread's caller code does.
+- **Every place on one line.** Used by and Built from show each place as
+  its line of code, copied with its colours from its first letter and cut
+  with `…` at the pane's edge, the names it is about marked where they live
+  (Built from lights the name the row is about), and what it sits in,
+  `in createRun`, right-aligned at the pane's edge. A file shows four places,
+  then `⋯ N more`, which `+` opens and `-` closes again.
 
 ## From your code
 
 `require('seam').here(how)`, `:SeamHere [overview|page|calls|called_by|types]`,
-opens seam (`overview` is the tree, on the row) on what the word under the cursor names in a buffer of the repo.
+opens seam (`overview` is the tree, on the row; `page` the same with the
+pane on Used by, a type's in the pane) on what the word under the cursor names in a buffer of the repo.
 `seam.here.resolve` is pure: the word, the file relative to the root and the
 cursor line, against the model. A contract (an export with a use, the lens's
 `all_uses` counted) declared in this file, the one holding the cursor if
@@ -974,8 +967,9 @@ lua/seam/
   draw/outline.lua  the tree's rows and head, the pane's head and tabs
   hints.lua         the keys that act where the cursor is: the status line's three groups and the ? float
   screen_tree.lua   the tree's tab layout, its keys and the pane beside it
-  opening.lua       + and - in the pane: the type or function line under the cursor opened or closed in place
-  draw/page.lua     the Built from and Used by tabs, the contract, the seam
+  opening.lua       + and - in the pane: the type or function line under the cursor opened or closed in place, a group's places past four shown or hidden
+  seams.lua         Used by and Built from as data, from the index: the places, what each sits in, by file, by name, by user, by first use
+  views/seams.lua   the Used by and Built from views: by file, by name, by user, as signatures
   calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does, what / lists
   draw/calls.lua    the Calls screen: its head, the column titles, the tree, the call and the body, what each function takes and gives
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
@@ -991,6 +985,7 @@ tests/
   here.lua          here's resolution specs, on a model written by hand
   types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
+  seams.lua         Used by and Built from grouped, on a model written by hand
   check.lua         every screen through its keys on a real repo
 ```
 
@@ -1028,9 +1023,6 @@ tests/
   services (`Context.Tag` classes) and schemas are contracts whose shape
   lives in types, not syntax. Treesitter will call them `class` or `const`
   with no members. They are later work.
-- **Member uses are many requests.** A class with 30 members is 30
-  references requests when its page opens. They are asked for on demand,
-  cached, and drawn as they arrive.
 
 ## Not in v1
 

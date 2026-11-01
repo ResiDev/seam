@@ -1,6 +1,6 @@
--- The tab page seam lives in: the tree's windows (seam.screen_tree), a
--- page's and the call tree's, the keys in each, the status
--- line, and moving between them, the cursor redrawing what it lands on.
+-- The tab page seam lives in: the tree's windows (seam.screen_tree) and the
+-- call tree's, the keys in each, the status line, and moving between them,
+-- the cursor redrawing what it lands on.
 local api = vim.api
 local calls = require 'seam.calls'
 local calls_draw = require 'seam.draw.calls'
@@ -9,7 +9,6 @@ local draw = require 'seam.draw'
 local index = require 'seam.index'
 local lens = require 'seam.lens'
 local lens_panel = require 'seam.lens_panel'
-local page = require 'seam.draw.page'
 local picker = require 'seam.picker'
 local st = require 'seam.state'
 local tree_screen = require 'seam.screen_tree'
@@ -18,8 +17,6 @@ local M = {}
 
 local aug = api.nvim_create_augroup('seam', { clear = true })
 M.aug = aug
-local ns_at = api.nvim_create_namespace 'seam.at'
-local TABS = { built = 'built from', used = 'used by' }
 local shape = draw.shape
 local goto_keys
 
@@ -87,33 +84,6 @@ local function paint()
   end
 end
 
--- the cursor in `win` to the next `n`th of the rows in `list`, or back
-local function step(win, list, n)
-  if not list or #list == 0 then
-    return
-  end
-  local cur = api.nvim_win_get_cursor(win)[1]
-  local idx
-  if n > 0 then
-    idx = #list
-    for i, r in ipairs(list) do
-      if r > cur then
-        idx = math.min(#list, i + n - 1)
-        break
-      end
-    end
-  else
-    idx = 1
-    for i = #list, 1, -1 do
-      if list[i] < cur then
-        idx = math.max(1, i + n + 1)
-        break
-      end
-    end
-  end
-  api.nvim_win_set_cursor(win, { list[idx], 0 })
-end
-
 -- what seam.screen_tree shares
 M.winopts, M.reset_tab, M.wrap, M.split, M.paint = winopts, reset_tab, wrap, split, paint
 
@@ -123,54 +93,13 @@ M.winopts, M.reset_tab, M.wrap, M.split, M.paint = winopts, reset_tab, wrap, spl
 ---@return string
 function M.status()
   local left, right = '', ''
-  local srcs = #st.names > 1 and ('S ' .. st.names[(vim.fn.index(st.names, st.cur) + 1) % #st.names + 1]) or ''
   if st.screen == 'tree' and not picker.is_open() then
     return tree_screen.status()
   end
   if picker.is_open() then
     left, right = picker.status()
-  elseif st.screen == 'page' and st.page then
-    local p = st.page
-    local pos = ''
-    if p.count and p.count > 0 then
-      pos = string.format('  %d of %d', p.index or 1, p.count)
-    end
-    left = shape(p.c) .. '  ' .. TABS[p.tab] .. pos
-    local hints = {}
-    local seam = p.tab == 'built' and 'dependency' or 'file'
-    local panes = st.panes[p.tab]
-    if M.reading(p) then
-      hints[#hints + 1] = 'n/N next name'
-      if p.enter then
-        hints[#hints + 1] = 'J enter ' .. p.enter
-      end
-      hints[#hints + 1] = 'v list'
-    elseif p.tab == 'built' then
-      hints[#hints + 1] = 'j/k next'
-      if p.enter then
-        hints[#hints + 1] = 'J enter ' .. p.enter
-      end
-      hints[#hints + 1] = 'v code'
-    else
-      hints[#hints + 1] = 'j/k next file'
-      hints[#hints + 1] = ']] next use'
-      hints[#hints + 1] = '<CR> open'
-    end
-    if not M.reading(p) then
-      hints[#hints + 1] = panes == 'contract' and 'c both' or 'c contract'
-      hints[#hints + 1] = panes == 'seam' and 's both' or ('s ' .. seam)
-    end
-    hints[#hints + 1] = '<Tab> ' .. (p.tab == 'built' and 'used by' or 'built from')
-    if #st.stack > 0 then
-      hints[#hints + 1] = 'K ' .. draw.trail(st.stack[#st.stack])
-    end
-    hints[#hints + 1] = (#st.stack > 0 and '- ' or 'K ') .. 'overview'
-    right = table.concat(hints, '   ')
   elseif st.screen == 'calls' and st.calls then
     left, right = M.calls_status()
-  end
-  if srcs ~= '' and st.screen ~= 'calls' and not picker.is_open() then
-    right = right .. '   ' .. srcs
   end
   -- a lens on is said in the same place on every screen, the far right, in its red
   local n = st.lens and #st.lens.rules or 0
@@ -190,456 +119,12 @@ function M.status()
   return '%#SeamMode# NORMAL %#SeamStatus# ' .. left:gsub('%%', '%%%%') .. '%=' .. right .. ' '
 end
 
----------------------------------------------------------------- page
-
-local function selected(p)
-  if not (p.win.list and api.nvim_win_is_valid(p.win.list)) then
-    return
-  end
-  local cur = api.nvim_win_get_cursor(p.win.list)[1]
-  local r = p.rows and p.rows[cur]
-  if not r or not r.meta.select then
-    return
-  end
-  for i, sr in ipairs(p.sel_rows) do
-    if sr == cur then
-      p.index = i
-    end
-  end
-  page.seam(p, r.meta)
-  p.sel[p.tab] = cur
-  if r.meta.dep then
-    p.focus = r.meta.dep.name .. ':' .. tostring(r.meta.dep.target)
-  end
-  paint()
-  vim.cmd 'redrawstatus'
-end
-
-local show_page, show_calls
-
---- Is the page showing Built from as code, the contract read top to bottom?
----@param p table
----@return boolean
-function M.reading(p)
-  return p.tab == 'built' and st.built_as == 'code'
-end
-
--- the cursor moved in the code: the name it is on, or the nearest on its
--- line, becomes the one shown; on a line naming none, the last one stays
-local function code_moved(p)
-  local win = p.win.mid
-  if not (win and api.nvim_win_is_valid(win)) then
-    return
-  end
-  local cur = api.nvim_win_get_cursor(win)
-  p.at = cur
-  draw.cursor_line(win)
-  local best, dist
-  for i, r in ipairs(p.refs) do
-    if r.row == cur[1] then
-      local d = cur[2] < r.s and r.s - cur[2] or cur[2] >= r.e and cur[2] - r.e + 1 or 0
-      if not dist or d < dist then
-        best, dist = i, d
-      end
-    end
-  end
-  if not best or best == p.index then
-    return
-  end
-  p.index = best
-  local r = p.refs[best]
-  p.focus = r.dep.name .. ':' .. tostring(r.dep.target)
-  api.nvim_buf_clear_namespace(p.buf.mid, ns_at, 0, -1)
-  api.nvim_buf_set_extmark(p.buf.mid, ns_at, r.row - 1, r.s, { end_col = r.e, hl_group = 'SeamRefAt', priority = 320 })
-  page.declaration(p, r.dep)
-  paint()
-  vim.cmd 'redrawstatus'
-end
-
--- the cursor to the `n`th name after it in the code, or before; round the ends
-local function next_ref(p, n)
-  local refs = p.refs
-  if #refs == 0 then
-    return
-  end
-  local cur = api.nvim_win_get_cursor(p.win.mid)
-  local i
-  if n > 0 then
-    i = #refs + 1
-    for k, r in ipairs(refs) do
-      if r.row > cur[1] or (r.row == cur[1] and r.s > cur[2]) then
-        i = k
-        break
-      end
-    end
-    i = i + n - 1
-  else
-    i = 0
-    for k = #refs, 1, -1 do
-      local r = refs[k]
-      if r.row < cur[1] or (r.row == cur[1] and r.s < cur[2]) then
-        i = k
-        break
-      end
-    end
-    i = i + n + 1
-  end
-  i = (i - 1) % #refs + 1
-  api.nvim_win_set_cursor(p.win.mid, { refs[i].row, refs[i].s })
-  code_moved(p)
-end
-
-local function page_keys(buf)
-  local o = { buffer = buf, nowait = true, silent = true }
-  local function other()
-    st.page.tab = st.page.tab == 'built' and 'used' or 'built'
-    show_page()
-  end
-  vim.keymap.set('n', '<Tab>', other, o)
-  vim.keymap.set('n', '<S-Tab>', other, o)
-  for key, only in pairs { c = 'contract', s = 'seam' } do
-    vim.keymap.set('n', key, function()
-      local t = st.page.tab
-      st.panes[t] = st.panes[t] == only and 'both' or only
-      show_page()
-    end, o)
-  end
-  -- Built from as code or as a list
-  vim.keymap.set('n', 'v', function()
-    if st.page.tab == 'built' then
-      st.built_as = st.built_as == 'code' and 'list' or 'code'
-      show_page()
-    end
-  end, o)
-  vim.keymap.set('n', '<BS>', M.back, o)
-  vim.keymap.set('n', 'K', M.back, o)
-  -- down a level: into a dependency's page; a user file is another tab, which K could not leave
-  vim.keymap.set('n', 'J', function()
-    if st.page.tab == 'built' then
-      M.page_enter()
-    end
-  end, o)
-  vim.keymap.set('n', '-', M.overview, o)
-  vim.keymap.set('n', 'L', M.open_lens, o)
-  vim.keymap.set('n', '/', M.page_pick, o)
-  vim.keymap.set('n', 'q', M.close, o)
-  vim.keymap.set('n', 'S', M.switch, o)
-  goto_keys(buf)
-  vim.keymap.set('n', 'R', function()
-    index.load()
-    show_page()
-  end, o)
-end
-
--- Built from as code: the contract on the left, the cursor moving through it
--- as through any code, and the declaration of the name it is on beside it
-local function show_code(p, head)
-  local left = split(p.buf.mid, head, 'below', true)
-  api.nvim_win_set_height(head, 3)
-  local right = split(p.buf.right, left, 'right')
-  winopts(left)
-  winopts(right)
-  wrap(left)
-  wrap(right)
-  vim.wo[left].scrolloff = 4
-  p.win.mid, p.win.right = left, right
-  for _, b in ipairs { p.buf.mid, p.buf.right } do
-    page_keys(b)
-    local o = { buffer = b, nowait = true, silent = true }
-    vim.keymap.set('n', 'c', '<Nop>', o)
-    vim.keymap.set('n', 's', '<Nop>', o)
-  end
-  local o = { buffer = p.buf.mid, nowait = true, silent = true }
-  for _, k in ipairs { 'n', ']]' } do
-    vim.keymap.set('n', k, function()
-      next_ref(p, vim.v.count1)
-    end, o)
-  end
-  for _, k in ipairs { 'N', '[[' } do
-    vim.keymap.set('n', k, function()
-      next_ref(p, -vim.v.count1)
-    end, o)
-  end
-  vim.keymap.set('n', '<CR>', M.page_enter, o)
-  local width = page.code(p)
-  api.nvim_win_set_width(left, math.max(50, math.min(width + 2, math.floor(vim.o.columns * 0.6))))
-  p.count, p.index = #p.refs, nil
-  api.nvim_create_autocmd('CursorMoved', {
-    group = aug,
-    buffer = p.buf.mid,
-    callback = function(ev)
-      if st.page == p and p.buf.mid == ev.buf then
-        code_moved(p)
-      end
-    end,
-  })
-  -- back where it was, or on the name the list was on, or the first
-  local at
-  for _, r in ipairs(p.refs) do
-    if p.focus == r.dep.name .. ':' .. tostring(r.dep.target) then
-      at = at or { r.row, r.s }
-      if p.at and p.at[1] == r.row then
-        at = p.at
-        break
-      end
-    end
-  end
-  at = at or (p.refs[1] and { p.refs[1].row, p.refs[1].s }) or { 4, 0 }
-  api.nvim_win_set_cursor(left, { math.min(at[1], api.nvim_buf_line_count(p.buf.mid)), at[2] })
-  if #p.refs > 0 then
-    code_moved(p)
-  else
-    p.enter = nil
-    page.empty(p)
-    draw.cursor_line(left)
-  end
-  paint()
-  vim.cmd 'redrawstatus'
-end
-
--- the page in `st.page`, laid out again in fresh buffers
-show_page = function()
-  local p = st.page
-  st.screen = 'page'
-  local keep = reset_tab()
-  local old = p.buf or {}
-  p.buf = { head = draw.scratch 'head' }
-  api.nvim_win_set_buf(keep, p.buf.head)
-  for _, b in pairs(old) do
-    if api.nvim_buf_is_valid(b) then
-      pcall(api.nvim_buf_delete, b, { force = true })
-    end
-  end
-  page.head(p)
-  goto_keys(p.buf.head)
-  winopts(keep)
-  vim.wo[keep].winfixheight = true
-  p.win = { head = keep }
-  p.buf.mid, p.buf.right = draw.scratch 'contract', draw.scratch 'seam'
-  p.refs = nil
-  if M.reading(p) then
-    return show_code(p, keep)
-  end
-  p.buf.list = draw.scratch 'list'
-  local list = split(p.buf.list, keep, 'below', true)
-  api.nvim_win_set_height(keep, 3)
-  -- the contract sits where the flow puts it: below what it is built
-  -- from, above what uses it
-  local panes = st.panes[p.tab]
-  local right, mid
-  if panes == 'contract' then
-    mid = split(p.buf.mid, list, 'right')
-  else
-    right = split(p.buf.right, list, 'right')
-    if panes == 'both' then
-      mid = split(p.buf.mid, right, p.tab == 'built' and 'below' or 'above')
-      local s, e = page.decl_range(p.c)
-      local h = api.nvim_win_get_height(right) + api.nvim_win_get_height(mid)
-      api.nvim_win_set_height(mid, math.min(e - s + 1 + 4, math.floor(h * 0.45)))
-    end
-  end
-  api.nvim_win_set_width(list, 40)
-  winopts(list, true)
-  for _, w in pairs { right = right, mid = mid } do
-    winopts(w)
-    wrap(w)
-  end
-  if right and mid then
-    local upper = p.tab == 'built' and right or mid
-    vim.wo[upper].fillchars = vim.wo[upper].fillchars:gsub('horiz: ', 'horiz:─'):gsub('vertright:│', 'vertright:├')
-  end
-  p.win.list, p.win.mid, p.win.right = list, mid, right
-  for _, b in ipairs { p.buf.list, p.buf.mid, p.buf.right } do
-    page_keys(b)
-  end
-  local o = { buffer = p.buf.list, nowait = true, silent = true }
-  vim.keymap.set('n', 'j', function()
-    step(list, p.sel_rows, vim.v.count1)
-  end, o)
-  vim.keymap.set('n', 'k', function()
-    step(list, p.sel_rows, -vim.v.count1)
-  end, o)
-  vim.keymap.set('n', '<Down>', function()
-    step(list, p.sel_rows, 1)
-  end, o)
-  vim.keymap.set('n', '<Up>', function()
-    step(list, p.sel_rows, -1)
-  end, o)
-  vim.keymap.set('n', ']]', function()
-    M.next_use(1)
-  end, o)
-  vim.keymap.set('n', '[[', function()
-    M.next_use(-1)
-  end, o)
-  vim.keymap.set('n', '<CR>', M.page_enter, o)
-  api.nvim_create_autocmd('CursorMoved', {
-    group = aug,
-    buffer = p.buf.list,
-    callback = function(ev)
-      if st.page and st.page.buf.list == ev.buf then
-        selected(st.page)
-      end
-    end,
-  })
-  page.list(p)
-  local want = p.sel[p.tab] or p.sel_rows[1]
-  for _, i in ipairs(p.tab == 'built' and p.sel_rows or {}) do
-    local d = p.rows[i].meta.dep
-    if p.focus == d.name .. ':' .. tostring(d.target) then
-      want = i
-      break
-    end
-  end
-  if want then
-    api.nvim_win_set_cursor(list, { want, 0 })
-    selected(p)
-  else
-    page.empty(p)
-  end
-  paint()
-  vim.cmd 'redrawstatus'
-end
-
---- Used by: the cursor to the `n`th next use in the file shown.
----@param n integer
-function M.next_use(n)
-  local p = st.page
-  if not p or p.tab ~= 'used' or not p.win.right or not p.lit_rows or #p.lit_rows == 0 then
-    return
-  end
-  local w = p.win.right
-  draw.cursor_line(w)
-  p.use_i = ((p.use_i or 0) + n - 1) % #p.lit_rows + 1
-  local r = p.lit_rows[p.use_i]
-  api.nvim_win_set_cursor(w, { r, 0 })
-  api.nvim_win_call(w, function()
-    vim.cmd 'normal! zz'
-  end)
-  code.paint_win(w)
-end
-
---- Built from: enter the dependency's page. Used by: open the file at the use.
-function M.page_enter()
-  local p = st.page
-  if M.reading(p) then
-    local r = p.index and p.refs[p.index]
-    local t = r and r.dep.target and index.model().byid[r.dep.target]
-    if t and t.nusers > 0 then
-      M.open_page(t)
-    end
-    return
-  end
-  local cur = api.nvim_win_get_cursor(p.win.list)[1]
-  local r = p.rows[cur]
-  if not r then
-    return
-  end
-  if p.tab == 'built' and r.meta.dep and r.meta.dep.target then
-    local t = index.model().byid[r.meta.dep.target]
-    if t and t.nusers > 0 then
-      M.open_page(t)
-    end
-  elseif r.meta.path then
-    local us = index.uses_by_file(p.c)[r.meta.path]
-    local u = us and us[p.use_i or 1] or (us and us[1])
-    M.jump { path = r.meta.path, line = u and u.line or 1, col = u and u.col and u.col - 1 }
-  end
-end
-
--- What K comes back to from a page, kept in `st.stack` under it: another
--- page, or the Calls screen as it was, each tagged with its kind.
-local function calls_entry()
-  local v = st.calls
-  local g = index.model().graph
-  local a = v.anchor and g.nodes[v.anchor]
-  local w = st.cwin and st.cwin.list
-  return {
-    kind = 'calls',
-    calls = v,
-    top = w and api.nvim_win_is_valid(w) and api.nvim_win_call(w, function()
-      return vim.fn.line 'w0'
-    end) or nil,
-    label = a and ('calls of ' .. (a.kind == 'module' and vim.fn.fnamemodify(a.path, ':t') or shape(a))) or 'where the code starts',
-  }
-end
-
---- Open contract `c`'s page, over the page or Calls screen shown if there is
---- one, on `tab` when given.
----@param c table
----@param tab? 'built'|'used'
-function M.open_page(c, tab)
-  if st.page then
-    st.stack[#st.stack + 1] = st.page
-  elseif st.screen == 'calls' and st.calls then
-    st.stack[#st.stack + 1] = calls_entry()
-    st.calls, st.calls_rows = nil, nil
-  end
-  tab = tab or #c.deps == 0 and c.nusers > 0 and 'used' or 'built'
-  st.page = { kind = 'page', c = c, tab = tab, sel = {} }
-  show_page()
-end
-
---- `/` on a page: a float over its left to switch to any contract the lens
---- lets through, on the tab shown, K back. On the tree, over it, to open
---- one's page. `query` is typed already.
----@param query? string
-function M.page_pick(query)
-  local p = st.page
-  local over = p and (p.win.list or p.win.mid) or (not p and st.screen == 'tree' and tree_screen.valid() and st.owin.tree)
-  if not (over and api.nvim_win_is_valid(over)) then
-    return
-  end
-  local m = index.model()
-  picker.open {
-    title = 'open',
-    noun = 'contracts',
-    keys = '<CR> open   <C-n>/<C-p> next   <Esc> back',
-    over = over,
-    focus = api.nvim_get_current_win(),
-    col = 1,
-    width = picker.W,
-    rows = api.nvim_win_get_height(over) + 1,
-    items = picker.contracts(m),
-    query = type(query) == 'string' and query or nil,
-    node = function(id)
-      return m.byid[id]
-    end,
-    column = 'used by',
-    pick = function(x)
-      local c = x and index.model().byid[x.id]
-      if c and st.page == p and (not p or c ~= p.c) then
-        M.open_page(c, p and p.tab)
-      end
-    end,
-  }
-end
-
---- Back: the previous page or Calls screen, or the tree.
-function M.back()
-  local e = table.remove(st.stack)
-  st.page = nil
-  if e and e.kind == 'calls' then
-    st.calls, st.calls_top = e.calls, e.top
-    show_calls()
-  elseif e then
-    st.page = e
-    show_page()
-  else
-    tree_screen.show()
-  end
-end
+local show_calls
 
 -- where a contract is in the tree: its function, else its file
 local function target_of(c)
   local g = index.model().graph
   return c and (g and g.nodes[c.id] and c.id or c.path) or nil
-end
-
---- Straight to the tree from any depth, on the contract you were reading.
-function M.overview()
-  local c = st.page and st.page.c
-  st.stack, st.page, st.calls, st.calls_rows = {}, nil, nil, nil
-  tree_screen.show(target_of(c))
 end
 
 -- the tab page to show code in: the one seam was opened from, else the
@@ -708,7 +193,7 @@ function M.jump(t)
   vim.cmd 'normal! zvzz'
 end
 
--- what the screen shown is about: the contract, the page's, the anchor
+-- what the screen shown is about: the row, the anchor
 local function subject()
   if st.screen == 'calls' and st.calls then
     local node = st.calls.anchor and index.model().graph.nodes[st.calls.anchor]
@@ -722,20 +207,15 @@ local function subject()
     end
     return x and x.kind == 'file' and { path = x.path, line = 1 } or nil
   end
-  local c = st.screen == 'page' and st.page and st.page.c
-  return c and { path = c.path, line = c.line, name = c.name }
 end
 
 -- the heads: what is not a row of its own goes to what the screen is about
 local function about_subject(buf)
-  return buf == (st.obuf and st.obuf.head)
-    or buf == (st.obuf and st.obuf.phead)
-    or buf == (st.page and st.page.buf and st.page.buf.head)
-    or buf == (st.cbuf and st.cbuf.head)
+  return buf == (st.obuf and st.obuf.head) or buf == (st.obuf and st.obuf.phead) or buf == (st.cbuf and st.cbuf.head)
 end
 
 --- gf: that place in your own code, from the line under the cursor. A row
---- naming a function, contract or file, its declaration or the file; a line
+--- naming a function or file, its declaration or the file; a line
 --- of code, that line; a head, what the screen is about.
 function M.gf()
   local buf = api.nvim_get_current_buf()
@@ -755,7 +235,7 @@ goto_keys = function(buf)
 end
 M.goto_keys = goto_keys
 
---- The next source, on the same contract.
+--- The next source, on the same row.
 function M.switch()
   index.load()
   if #st.names < 2 then
@@ -765,26 +245,7 @@ function M.switch()
   local i = vim.fn.index(st.names, st.cur)
   st.cur = st.names[(i + 1) % #st.names + 1]
   local m = index.model()
-  if st.screen == 'page' and st.page then
-    local function find(c)
-      return m.byid[c.id] or m.bykey[c.path .. ':' .. c.name]
-    end
-    local nc = find(st.page.c)
-    if not nc then
-      vim.notify('seam: ' .. st.page.c.name .. ' is not an export in ' .. st.cur, vim.log.levels.WARN)
-      st.stack, st.page = {}, nil
-      tree_screen.show()
-      return
-    end
-    for _, sp in ipairs(st.stack) do
-      if sp.kind == 'page' then
-        sp.c = find(sp.c) or sp.c
-      end
-    end
-    st.page.c = nc
-    st.page.sel = {}
-    show_page()
-  elseif st.screen == 'tree' then
+  if st.screen == 'tree' then
     tree_screen.redraw(true)
   end
 end
@@ -868,7 +329,7 @@ function M.calls_status()
   if index.model().sigs then
     hints[#hints + 1] = calls_draw.typed(index.model()) and 'T counts' or 'T types'
   end
-  vim.list_extend(hints, { 'h fold', 'l open', 'J page', 'K back' })
+  vim.list_extend(hints, { 'h fold', 'l open', 'K back' })
   if v.anchor then
     hints[#hints + 1] = v.dir == 'up' and '~ calls' or '~ called by'
   end
@@ -965,37 +426,14 @@ end
 
 local function calls_leave()
   st.calls, st.calls_rows = nil, nil
-  -- the screen the tree was opened from, a page say
-  if #st.stack > 0 then
-    return M.back()
-  end
   tree_screen.show()
-end
-
--- a contract a page shows: an export used from another file
-local function contract_of(id)
-  local c = id and index.model().byid[id]
-  return c and (c.nusers or 0) > 0 and c or nil
 end
 
 -- straight to the tree, on the anchor
 local function calls_overview()
   local a = st.calls and st.calls.anchor
-  st.stack, st.calls, st.calls_rows = {}, nil, nil
+  st.calls, st.calls_rows = nil, nil
   tree_screen.show(a)
-end
-
--- the contract page of the row's function; one line saying why when it has none
-local function calls_page()
-  local x = st.calls_rows and st.calls_rows.rows[calls_at()]
-  local id = x and x.id
-  local c = contract_of(id)
-  if c then
-    return M.open_page(c)
-  end
-  local node = id and index.model().graph.nodes[id]
-  local what = node and calls_label(node) or 'this row'
-  api.nvim_echo({ { what .. ' has no page: only exported functions used from another file do', 'SeamLabel' } }, false, {})
 end
 
 -- the code beside the tree again, the row the same: another view or place
@@ -1081,8 +519,9 @@ local function calls_keys(buf)
   vim.keymap.set('n', 'N', press('[[', true), o)
   vim.keymap.set('n', '<Down>', press 'j', o)
   vim.keymap.set('n', '<Up>', press 'k', o)
-  vim.keymap.set('n', 'J', calls_page, o)
   vim.keymap.set('n', '-', calls_overview, o)
+  -- J waits for the code screen
+  vim.keymap.set('n', 'J', '<Nop>', o)
   vim.keymap.set('n', 'T', function()
     local m = M.typed_model()
     if m then
@@ -1188,7 +627,7 @@ end
 --- else its file), a node id or a path; nothing under it for K.
 ---@param c? table|string
 function M.show(c)
-  st.stack, st.page, st.calls, st.calls_rows = {}, nil, nil, nil
+  st.calls, st.calls_rows = nil, nil
   tree_screen.show(type(c) == 'table' and target_of(c) or c)
 end
 
@@ -1233,32 +672,21 @@ end
 
 ---------------------------------------------------------------- lens
 
---- The lens changed: save it, filter every source, redraw what is shown. A
---- page redraws when the panel closes: drawing it closes every window.
+--- The lens changed: save it, filter every source, redraw what is shown.
 function M.lens_changed()
   lens.save(st.lens, st.root)
   for _, m in pairs(st.models) do
     lens.apply(st.lens, m)
   end
   -- what the budget opened in a call tree was for the lens before: shown,
-  -- under a page, or an anchor back
-  local trees = { st.calls }
-  for _, e in ipairs(st.stack or {}) do
-    trees[#trees + 1] = e.kind == 'calls' and e.calls or nil
-  end
-  for _, v in ipairs(trees) do
-    for _, s in ipairs { v, unpack(v.back) } do
+  -- or an anchor back
+  if st.calls then
+    for _, s in ipairs { st.calls, unpack(st.calls.back) } do
       s.auto = nil
     end
   end
   if st.screen == 'calls' and st.calls then
     show_calls()
-  elseif st.screen == 'page' and st.page then
-    if lens_panel.is_open() then
-      st.page_stale = true
-    else
-      show_page()
-    end
   elseif st.screen == 'tree' then
     tree_screen.redraw(true)
   end
@@ -1274,12 +702,6 @@ function M.open_lens()
       return st.root
     end,
     changed = M.lens_changed,
-    closed = function()
-      if st.page_stale and st.screen == 'page' and st.page then
-        st.page_stale = false
-        show_page()
-      end
-    end,
   }
 end
 
@@ -1339,7 +761,6 @@ function M.open(root)
   end
   st.cur = st.cur and st.models[st.cur] and st.cur or (vim.tbl_contains(st.names, 'treesitter') and 'treesitter' or st.names[1])
   theme.assign(index.model(), dir .. '/hues.json')
-  st.stack, st.page = {}, nil
   -- the tab page gf goes back to, to show the code
   if from ~= st.tab then
     st.from_tab = from

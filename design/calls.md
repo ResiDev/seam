@@ -49,8 +49,8 @@ row show where they are.
 
 `<CR>` anchors on any row, in any of the three. `K` or `<BS>` goes back to
 the previous anchor, and from the first one back to the explorer; `-` goes
-straight there. `J` opens the page of the row's function, and `K` on it
-comes back to the tree as it was.
+straight there. (`J` opened the contract page, which Used by and Built
+from in the tree's pane replaced.)
 
 ![Opened one level](mocks/calls-down-opened.png)
 
@@ -147,7 +147,6 @@ way.
 | `<CR>` | anchor on the row |
 | `/` | anchor on any function: a float, typed to narrow, `<CR>` anchors, `<Esc>` back |
 | `~` | flip: calls, called by |
-| `J` | the page of the row's function, when it is a contract |
 | `K` `<BS>` | the previous anchor; from the first, the explorer |
 | `-` | straight to the explorer, on the anchor |
 | `C` | from the top |

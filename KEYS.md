@@ -10,7 +10,7 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 | `:Seam debug` | write what it knows to `stdpath('state')/seam-debug.txt` |
 | `q` | close seam |
 | `R` | ask the source again for everything shown |
-| `gf` `gd` | that place in your own code: the tab you opened seam from (if it is gone, another that is not seam's, else a new one), the file in its window, the cursor on the line, centred, the jump in the jumplist. Seam's tab stays as it was. On a row naming a function or contract, its declaration; a file, its first line, or its first use in used by; a folder, nothing; on a line of code, that line; on a head, what the screen is about |
+| `gf` `gd` | that place in your own code: the tab you opened seam from (if it is gone, another that is not seam's, else a new one), the file in its window, the cursor on the line, centred, the jump in the jumplist. Seam's tab stays as it was. On a row naming a function or contract, its declaration; a file, its first line; a folder, nothing; on a line of code or a place in Used by and Built from, that line; on a head, what the screen is about |
 
 ## From your code
 
@@ -19,7 +19,7 @@ In any buffer of the repo, on a name. Seam opens on its repo (indexing it first 
 | Command | Suggested key | Does |
 |---|---|---|
 | `:SeamHere` `:SeamHere overview` | `<leader>kk` | the tree, its cursor on that function or contract where it lives (a contract that is no function, its file), the folders and file down to it opened. Several of that name and none here, or nothing: the tree's `/` holding the word. One the lens hides says so, and searches |
-| `:SeamHere page` | `<leader>kp` | that contract's page; `K` the tree on it. A function that is no contract: its calls. Otherwise as above, the page's `/` holding the word for several |
+| `:SeamHere page` | `<leader>kp` | as `overview`, the pane on its Used by; a repo type, its Used by in the pane, the tree's cursor on its file. Several or nothing: the tree's `/` holding the word |
 | `:SeamHere calls` | `<leader>kc` | the call tree anchored on that function, down; several, the tree's `/` holding the word |
 | `:SeamHere called_by` | `<leader>kC` | the same, up |
 | `:SeamHere types` | | the tree, its pane on the Types view of the repo type that word names, the tree's cursor on the file you asked from; otherwise the tree's `/` holding the word |
@@ -41,12 +41,12 @@ The status line says where you are on the left, and on the right only the keys t
 | `l` | open the row: a folder, a file's functions, a function's calls; on an open row, its first row |
 | `h` | close an open row; on a closed one, the row it hangs from |
 | `s` | the order: by folder, most used first, most calling first. The sorted orders are every function in a flat list, each with its package's bar and two counts, used by and calls, the one it sorts by lit; tests and a file's top don't count. Back in the tree, the function the cursor was on is shown where it lives |
-| `<Tab>` `<S-Tab>` | the pane's next and previous view, Code and Types; the one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the next it has |
-| `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view; Code and Types have one so far. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
+| `<Tab>` `<S-Tab>` | the pane's next and previous view: Code, Types, Built from, Used by; the one chosen stays as the cursor moves, and a row without it (a folder has no Code) shows the next it has |
+| `<C-Tab>` `<C-S-Tab>` | the next and previous display of the pane's view, named after its tabs: Used by by file, by name, by user; Built from by file, by name, as signatures; Code and Types have one. The display chosen stays for its view. Ghostty takes these for its own tabs until unbound (`keybind = ctrl+tab=unbind`) |
+| `n` `N` | in Used by and Built from: into the pane, on its next or previous place, round the ends; a count skips |
 | `<C-d>` `<C-u>` | scroll the pane half a screen, the cursor staying in the tree |
 | `<C-e>` `<C-y>` | scroll the pane a line |
 | `/` | search the names: a float over the tree of every function, file and repo type it holds, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` shows the one picked where it lives, its folders and file opened; a type, its Types view in the pane, the tree's cursor where it was, until it moves; `<Esc>` `<C-c>` close it, nothing changed |
-| `<CR>` | the page of the row's function, when it is a contract; `K` on it comes back to the tree. Until the views hold Built from and Used by |
 | `c` | the Calls screen on the row's function; `K` back to the tree. Until the code screen |
 | `L` | the lens: what the tree shows. Files it hides from contracts leave the tree; calls follow built from |
 | `S` | the next source, when there are several |
@@ -60,6 +60,9 @@ The status line says where you are on the left, and on the right only the keys t
 Beside the tree: what the row is and where, the tabs of the views that have something for it (the one shown lit), and the view.
 
 - **Code**: a function from its doc comment to its end, a file whole, a type's declaration, with line numbers, each call in it underlined where it lives, as in the tree. A folder has no Code.
+- **Built from**: what the row draws on, from the index. By file: each file it draws on (its own first, `this file`), then each name once with its first use, the line of code in its colours, the name lit on it; for a file or folder, what each place sits in at the right. By name: each name in the order first used, its signature (or what it is) and its file, then that line. As signatures: what it calls, a line each in the Types view's shape, in the order called, then the types it names (and the values). A type: the types its fields are made of.
+- **Used by**: who uses the row, from the index. By file: each file with how many places and the names it uses, the files with most places first, then each place's line of code in its colours, the names marked where they live, `in` the function or type it sits in at the right; four a file, then `⋯ N more`. A function: each place that calls or names it, its own file's too; a file: the other files naming its exports; a folder: the places outside it; a type (from `/`): where it is named. By name: each thing it hands out, the functions first with their signatures, then everyone who uses it. By user: each function that uses it as a line in the Types view's shape with its file, or each type, then what it uses.
+- Tests sort after the rest in every display of both.
 - **Types**: a line a function, what it takes → its name → what it gives, the names in one column, a long one cut with `…`, a type parameter as what it extends, `Readonly<…>` left out, a blank line between. A function: its line, then each type it takes and gives written out under it, its declaration with its doc comment. A file: its exported functions, then those it keeps, then the types it declares. A folder: its functions used outside it, then its types used outside it with how many files use each. A type (from `/`): the functions that give it, then those that take it, the type lit, then its declaration. Each fact from the written signature (treesitter), else the TypeScript server's hover; until the server has answered, one dim line says why there are none.
 
 Seam maps no key to go into the pane: Vim's own window keys do.
@@ -67,31 +70,13 @@ Seam maps no key to go into the pane: Vim's own window keys do.
 | Key | Does |
 |---|---|
 | `<Esc>` | back to the tree |
-| `+` | in the Types view, on a type's name (and on the pane's head when it names one): its declaration as written, under the line it is named on, a bar down its left and its file and line at its top; on a name inside that, the next one nested under it, one level a press. On a function's line, off a name: the function as written, a part a line, the type parameters as written. Hinted only where it acts |
-| `-` | close the type the cursor is in, and what was opened inside it, the cursor back on the line naming it; on a function opened as written, close it. What is open stays for the row as long as seam is open |
+| `+` | in the Types view, on a type's name (and on the pane's head when it names one, and in the signature lines of Used by and Built from): its declaration as written, under the line it is named on, a bar down its left and its file and line at its top; on a name inside that, the next one nested under it, one level a press. On a function's line, off a name: the function as written, a part a line, the type parameters as written. On `⋯ N more` in Used by: the rest of that group's places. Hinted only where it acts |
+| `-` | close the type the cursor is in, and what was opened inside it, the cursor back on the line naming it; on a function opened as written, close it; on a place `+` showed, hide them again, the cursor on `⋯ N more`. What is open stays for the row as long as seam is open |
+| `n` `N` | in Used by and Built from: the next or previous place, round the ends; a count skips. The line under the cursor is lit |
 | `<Tab>` `<S-Tab>` `<C-Tab>` `<C-S-Tab>` | as in the tree |
-| `gf` `gd` | in your own code: on a line of code, that line; on the head, the row's |
+| `gf` `gd` | in your own code: on a line of code or a place, that line; on a name's line in Used by and Built from, its declaration; on a file's line, the file (in Used by, at its first place); on a function's line, its declaration; on the head, the row's |
 | `?` | every key here |
 | `q` | close seam |
-
-## A contract's page
-
-| Key | Does |
-|---|---|
-| `<Tab>` `<S-Tab>` | the other tab: Built from, Used by |
-| `v` | Built from: as code, or as a list |
-| `j` `k` | as a list: the next or previous seam. As code: the next or previous line, as in any code |
-| `n` `N` `]]` `[[` | Built from as code: the next or previous name it is built from, round the ends; a count skips |
-| `c` | as a list: only the contract; again, the contract and the seam |
-| `s` | as a list: only the seam; again, the contract and the seam |
-| `]]` `[[` | Used by: the next or previous use in this file |
-| `J` | down a level: Built from, enter the page of the dependency shown. Nothing on Used by |
-| `<CR>` | Built from: enter the page of the dependency shown. Used by: the file at the use, in your own code, as `gf` does |
-| `gf` `gd` | in your own code: on the list, the dependency's declaration or the user file at its first use; in the code, the line under the cursor; on the head, the contract's declaration |
-| `K` `<BS>` | up a level: the previous page, the Calls screen it was opened from, or the tree |
-| `-` | straight to the tree from any depth, on this contract |
-| `/` | another contract: a float over the left lists every one the lens lets through, types and constants too, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` opens its page on the tab shown, and `K` comes back; `<Esc>` `<C-c>` close it, nothing changed. In Built from as code too: `n` `N` are the names there, so Vim's search had no next |
-| `L` | the lens |
 
 ## Calls
 
@@ -108,9 +93,8 @@ The call tree of a function, component or class: what it calls all the way down,
 | `<CR>` | anchor on the row |
 | `/` | anchor on any function: a float lists every one the lens lets through in contracts, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` anchors on it, the direction kept (from the top, calls), and `K` comes back; `<Esc>` `<C-c>` close it, nothing changed |
 | `~` | flip: calls, called by |
-| `J` | the page of the row's function, when it is a contract; `K` on it comes back to the tree as it was |
 | `T` | the tree's columns: what each function takes and gives (`takes → gives`), or below, used by, file and line. Types once the repo has them; the choice stays |
-| `K` `<BS>` | back: the previous anchor; from the first, the screen the tree was opened from (a page), else seam's tree |
+| `K` `<BS>` | back: the previous anchor; from the first, seam's tree |
 | `-` | straight to seam's tree, on the anchor |
 | `C` | from the top |
 | `L` | the lens: calls follow its built from column, callers its used by, the starts its contracts; what it hides has no row, the head counts it after the tabs (from the top, on its first line), `+12 hidden  L lens` |
@@ -125,7 +109,7 @@ The head gives the cursor back to the tree. The code beside it keeps it, to scro
 
 ## The lens
 
-A float over the tree, a page or the call tree. One row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
+A float over the tree or the call tree. One row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
 
 | Key | Does |
 |---|---|

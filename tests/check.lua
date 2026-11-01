@@ -63,69 +63,6 @@ local function went(what, path, line, win)
   end
 end
 
--- the windows on screen are the ones the pane choice says
-local function check_page()
-  local p = st.page
-  if st.screen ~= 'page' or not p then
-    return fail 'not on a page'
-  end
-  local mid, right = valid(p.win.mid), valid(p.win.right)
-  if screen.reading(p) then
-    if not (mid and right) or #api.nvim_tabpage_list_wins(st.tab) ~= 3 then
-      fail 'Built from as code: not the head, the code and the declaration'
-    end
-    local r = p.index and p.refs[p.index]
-    if r then
-      local cur = api.nvim_win_get_cursor(p.win.mid)
-      local named = table.concat(api.nvim_buf_get_lines(p.buf.right, 0, 3, false), '\n')
-      if not named:find(r.dep.name, 1, true) then
-        fail(('the declaration shown is not %s, the name at the cursor'):format(r.dep.name))
-      end
-      if
-        cur[1] == r.row
-        and #vim.tbl_filter(function(x)
-          return x.row == r.row and x.s <= cur[2] and cur[2] < x.e
-        end, p.refs) > 0
-        and not (r.s <= cur[2] and cur[2] < r.e)
-      then
-        fail 'the cursor is on one name, the declaration on another'
-      end
-    elseif #p.refs > 0 then
-      fail 'names in the code, but none shown'
-    end
-    -- each piece of code is painted one way: two highlights of one priority
-    -- on one range are drawn in no promised order
-    local seen = {}
-    for _, m in ipairs(api.nvim_buf_get_extmarks(p.buf.mid, require('seam.code').ns, 0, -1, { details = true })) do
-      local k = m[2] .. ':' .. m[3] .. ':' .. m[4].end_col .. ':' .. m[4].priority
-      if seen[k] then
-        fail(('%s and %s both paint row %d at %d'):format(seen[k], m[4].hl_group, m[2] + 1, m[3]))
-        break
-      end
-      seen[k] = m[4].hl_group
-    end
-    return
-  end
-  local want = st.panes[p.tab]
-  local ok = (want == 'both' and mid and right) or (want == 'contract' and mid and not p.win.right) or (want == 'seam' and right and not p.win.mid)
-  if not ok then
-    fail(('panes %s on %s, but contract window %s, seam window %s'):format(want, p.tab, tostring(mid), tostring(right)))
-  end
-  if not valid(p.win.list) then
-    fail 'no list window'
-  end
-  local n = #api.nvim_tabpage_list_wins(st.tab)
-  local expect = 2 + (want == 'both' and 2 or 1)
-  if n ~= expect then
-    fail(('%d windows, expected %d'):format(n, expect))
-  end
-  for _, w in ipairs(api.nvim_tabpage_list_wins(st.tab)) do
-    if api.nvim_win_get_height(w) < 1 then
-      fail 'a window with no height'
-    end
-  end
-end
-
 -- open
 seam.start(repo)
 vim.wait(120000, function()
@@ -243,13 +180,19 @@ local function check_tree()
   if x and not (head[1] or ''):find(name, 1, true) then
     fail('the pane head does not name ' .. name .. ': ' .. (head[1] or ''))
   end
-  local tabs, want = vim.trim(head[3] or ''), x and (x.kind ~= 'dir' and 'Code     Types' or 'Types') or ''
+  local shown, display = require('seam.views').shown(x, st.view)
+  local want = x and ((x.kind ~= 'dir' and 'Code     ' or '') .. 'Types     Built from     Used by') or ''
+  if shown and #shown.displays > 1 then
+    want = want .. '    ' .. display
+  end
+  local tabs = vim.trim(head[3] or '')
   if tabs ~= want then
     fail(('the tabs are %q, not %q'):format(tabs, want))
   end
   local body = lines(st.obuf.pane)
-  local shown = require('seam.views').shown(x, st.view)
-  if shown and shown.name == 'Types' then
+  if not shown or shown.name ~= 'Types' and shown.name ~= 'Code' then
+    return
+  elseif shown.name == 'Types' then
     -- a title, a function's line, or why there are no types
     local first = body[1] or ''
     if x and not (first:match '^ %S' or first:find(' → ', 1, true)) then
@@ -878,53 +821,15 @@ local function find_row(k)
   end
 end
 
--- J on a row that is a contract: its page over the tree, and K back to the
--- tree as it was; on a row that is not, still the tree
-local function page_and_back()
-  local m = st.models[st.cur]
-  local pi, none
-  for i, x in ipairs(st.calls_rows.rows) do
-    local c = x.id and m.byid[x.id]
-    if c and c.nusers > 0 then
-      pi = pi or i
-    else
-      none = none or i
-    end
-  end
-  if none then
-    key(none .. 'G')
-    key 'J'
-    if st.screen ~= 'calls' then
-      fail 'J on a row with no page left the tree'
-    end
-  end
-  if not pi then
-    return
-  end
-  key(pi .. 'G')
+-- J on any row does nothing until the code screen lands: still the tree,
+-- as it was
+local function j_stays()
   local v = st.calls
   local was = { v.anchor, v.dir, vim.deepcopy(v.open), v.cursor, #v.back }
-  local top = api.nvim_win_call(st.cwin.list, function()
-    return vim.fn.line 'w0'
-  end)
-  local want = m.byid[st.calls_rows.rows[pi].id]
   key 'J'
-  local under = st.stack[#st.stack]
-  if st.screen ~= 'page' or st.page.c ~= want or not (under and under.kind == 'calls') then
-    return fail "J did not open the row's page over the tree"
-  end
-  check_page()
-  key 'K'
   check_calls(false)
-  local now = st.calls
-  if not vim.deep_equal({ now.anchor, now.dir, now.open, now.cursor, #now.back }, was) then
-    fail 'K from the page did not come back to the tree as it was'
-  end
-  local top2 = api.nvim_win_call(st.cwin.list, function()
-    return vim.fn.line 'w0'
-  end)
-  if top2 ~= top then
-    fail(('K came back scrolled to %d, not %d'):format(top2, top))
+  if not vim.deep_equal({ v.anchor, v.dir, v.open, v.cursor, #v.back }, was) then
+    fail 'J changed the call tree'
   end
 end
 
@@ -1014,7 +919,7 @@ do
         where = 'calls ' .. c.id .. ' L'
         lens_and_back()
         where = 'calls ' .. c.id .. ' J'
-        page_and_back()
+        j_stays()
         where = 'calls ' .. c.id .. ' windows'
         windows()
         where = 'calls ' .. c.id .. ' back'
@@ -1237,7 +1142,13 @@ do
   end
 end
 
--- every contract's page, or a spread of them
+-- Used by and Built from in the pane, on every contract's row or a spread
+-- of them: <Tab> to each, every display through <C-Tab> and back with
+-- <C-S-Tab>, each checked against the index; n and N from the tree into
+-- the pane from place to place, + on ⋯ N more and - back, gf on a place
+local seams = require 'seam.seams'
+local seams_view = require 'seam.views.seams'
+local views = require 'seam.views'
 local contracts = {}
 for _, c in pairs(st.models[st.cur].byid) do
   if c.nusers and c.nusers > 0 then
@@ -1255,167 +1166,166 @@ if max > 0 and #contracts > max then
   contracts = pick
 end
 
-local SEQ = { 'j', 'j', 'k', ']]', '[[', 'c', 'j', ']]', 'k', 'c', 's', 'j', ']]', 's', 'c', 's', 's', 'G', 'j', 'gg', 'v', 'j', 'v' }
--- Built from as code: the cursor moves as in any code, n and N go by names
-local READ = { 'n', 'n', 'N', '3n', 'j', 'j', 'w', 'w', 'k', 'G', 'n', 'gg', 'N', '$', 'b', ']]', '[[', 'c', 's' }
+-- the pane's rows that are places, n and N's stops
+local function stops()
+  local out = {}
+  for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
+    if require('seam.draw').meta(st.obuf.pane, i).place then
+      out[#out + 1] = i
+    end
+  end
+  return out
+end
+
+-- the view `name` shown in the pane, as the head's tabs say, its display
+-- named after them; every place a real line, every row inside the pane
+local function check_seams(name)
+  local x = tree_screen.subject()
+  local v, display = views.shown(x, st.view)
+  if not v or v.name ~= name then
+    return fail(('the pane shows %s, not %s'):format(v and v.name or 'nothing', name))
+  end
+  local m = st.models[st.cur]
+  local tabs = api.nvim_buf_get_lines(st.obuf.phead, 2, 3, false)[1] or ''
+  if not tabs:find(name, 1, true) or not tabs:find(display, 1, true) then
+    fail(('the tabs %q do not name %s %s'):format(tabs, name, display))
+  end
+  local head = api.nvim_buf_get_lines(st.obuf.phead, 0, 1, false)[1] or ''
+  local want = name == 'Used by' and seams_view.used_count(m, x) or seams_view.built_count(m, x)
+  if not head:find(want, 1, true) then
+    fail(('the head says %q, not %s'):format(head, want))
+  end
+  local places = seams_view.places(m, x, name == 'Used by' and 'used' or 'built')
+  local pw = api.nvim_win_get_width(st.owin.pane)
+  local rows = lines(st.obuf.pane)
+  for i, l in ipairs(rows) do
+    if api.nvim_strwidth(l) >= pw then
+      fail(('row %d is %d wide, the pane %d: %s'):format(i, api.nvim_strwidth(l), pw, l))
+      break
+    end
+  end
+  local list = stops()
+  if #places > 0 and #list == 0 then
+    fail(name .. ' ' .. display .. ': places but no stop for n')
+  end
+  for _, i in ipairs(list) do
+    local at = require('seam.draw').at(st.obuf.pane, i, 0)
+    local n = at and #code.file(at.path).lines or 0
+    if not at or not at.line or at.line < 1 or at.line > n then
+      fail(('row %d stands for %s, no line of the repo'):format(i, vim.inspect(at, { newline = ' ', indent = '' })))
+      break
+    end
+    -- a place's line of code is the line it stands for
+    if display ~= 'by user' and display ~= 'as signatures' then
+      local src = vim.trim(code.file(at.path).lines[at.line] or '')
+      local shown = rows[i]
+      if not shown:find(src:sub(1, 12), 1, true) then
+        fail(('row %d does not show %s:%d, %q'):format(i, at.path, at.line, src:sub(1, 30)))
+        break
+      end
+    end
+  end
+  return list, places
+end
+
 for ci, c in ipairs(contracts) do
   if ci % 20 == 0 then
     io.stdout:write(('%d / %d contracts, %d keys, %d failures\n'):format(ci, #contracts, steps, #failures))
     io.stdout:flush()
   end
-  for _, tab in ipairs { false, 'used' } do
-    where = ('%s (%s) open'):format(c.id, tab or 'first')
-    local ok, err = pcall(seam.open_page, c, tab or nil)
-    if not ok then
-      fail(tostring(err))
-    else
-      for _ = 1, 2 do
-        for _, k in ipairs(screen.reading(st.page) and READ or SEQ) do
-          where = ('%s %s panes=%s %s'):format(c.id, st.page.tab, st.panes[st.page.tab], screen.reading(st.page) and 'code' or 'list')
-          key(k)
-          check_page()
+  where = c.id .. ' show'
+  screen.show(c)
+  api.nvim_set_current_win(st.owin.tree)
+  for _, name in ipairs { 'Built from', 'Used by' } do
+    where = ('%s %s'):format(c.id, name)
+    for _ = 1, 6 do
+      if (views.shown(tree_screen.subject(), st.view) or {}).name == name then
+        break
+      end
+      key '<Tab>'
+    end
+    local v = views.shown(tree_screen.subject(), st.view)
+    for di = 1, #v.displays do
+      where = ('%s %s %s'):format(c.id, name, select(2, views.shown(tree_screen.subject(), st.view)))
+      local list = check_seams(name)
+      if list and #list > 0 then
+        key 'n'
+        local cur = api.nvim_get_current_win() == st.owin.pane and api.nvim_win_get_cursor(st.owin.pane)[1]
+        if cur ~= list[1] then
+          fail(('n from the tree went to %s, not the first place, row %d'):format(tostring(cur), list[1]))
         end
-        if screen.reading(st.page) then
-          -- n lands on a name, and the list then shows the same one
-          local p = st.page
-          if #p.refs > 0 then
-            key 'n'
-            local cur = api.nvim_win_get_cursor(p.win.mid)
-            local r = p.refs[p.index]
-            if not (r and cur[1] == r.row and cur[2] == r.s) then
-              fail 'n did not land on a name'
-            end
-            where = c.id .. ' code to list'
-            key 'v'
-            check_page()
-            local d = st.page.rows[api.nvim_win_get_cursor(st.page.win.list)[1]].meta.dep
-            if not d or d.name ~= r.dep.name then
-              fail(('v went to the list on %s, not %s'):format(d and d.name or 'nothing', r.dep.name))
-            end
-            for _, k in ipairs(SEQ) do
-              key(k)
-              check_page()
-            end
-            key 'v'
-            check_page()
+        key 'n'
+        cur = api.nvim_win_get_cursor(st.owin.pane)[1]
+        if cur ~= (list[2] or list[1]) then
+          fail(('n went to row %d, not %d'):format(cur, list[2] or list[1]))
+        end
+        key 'N'
+        if api.nvim_win_get_cursor(st.owin.pane)[1] ~= list[1] then
+          fail 'N did not come back to the first place'
+        end
+        -- + on ⋯ N more shows the rest, - on one of them hides them again
+        local more
+        for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
+          more = more or (require('seam.draw').meta(st.obuf.pane, i).more and i)
+        end
+        if more then
+          local before = #list
+          api.nvim_win_set_cursor(st.owin.pane, { more, 0 })
+          key '+'
+          local now = stops()
+          if #now <= before then
+            fail(('+ on ⋯ more left %d places, as before'):format(#now))
+          end
+          key '-'
+          if #stops() ~= before then
+            fail(('- after + left %d places, not %d'):format(#stops(), before))
           end
         end
-        -- the same keys from inside the stacked panes
-        for _, w in ipairs { st.page.win.mid, st.page.win.right } do
-          if valid(w) then
-            api.nvim_set_current_win(w)
-            where = ('%s %s from a pane'):format(c.id, st.page.tab)
-            key 'c'
-            check_page()
-            key 'c'
-            check_page()
-            break
-          end
+        if ci % 3 == di % 3 then
+          api.nvim_win_set_cursor(st.owin.pane, { list[1], 0 })
+          local at = require('seam.draw').at(st.obuf.pane, list[1], 0)
+          key 'gf'
+          went(('gf on a place of %s'):format(name), at.path, at.line, st.owin.pane)
         end
-        if ci % 7 == 0 and st.page.tab == 'built' then
-          where = c.id .. ' enter a dependency'
-          local depth = #st.stack
-          key(ci % 2 == 0 and 'J' or '<CR>')
-          if #st.stack > depth then
-            check_page()
-            key(ci % 2 == 0 and 'K' or '<BS>')
-            if #st.stack ~= depth then
-              fail 'K or <BS> did not come back up from a dependency'
-            end
-          end
-        end
-        where = c.id .. ' tab'
-        key '<Tab>'
-        check_page()
-      end
-      if st.page.tab == 'used' then
-        where = c.id .. ' J on used by'
-        local depth = #st.stack
-        key 'J'
-        if api.nvim_get_current_tabpage() ~= st.tab or #st.stack ~= depth or st.screen ~= 'page' then
-          fail 'J on used by left the page'
+        key '<Esc>'
+        if api.nvim_get_current_win() ~= st.owin.tree then
+          fail '<Esc> in the pane did not give the cursor back to the tree'
         end
       end
-      if ci % 11 == 0 and st.page.tab == 'used' then
-        where = c.id .. ' open a user file'
-        local path = st.page.rows[api.nvim_win_get_cursor(st.page.win.list)[1]].meta.path
-        key '<CR>'
-        if api.nvim_get_current_tabpage() == st.tab or not api.nvim_buf_get_name(0):find(path, 1, true) then
-          fail '<CR> on a user file did not show it in your own tab'
+      key '<C-Tab>'
+      if di == #v.displays then
+        local function now()
+          return select(2, views.shown(tree_screen.subject(), st.view))
         end
-        api.nvim_set_current_tabpage(st.tab)
-        if st.page and valid(st.page.win.list) then
-          api.nvim_set_current_win(st.page.win.list)
+        if now() ~= v.displays[1] then
+          fail '<C-Tab> on the last display did not come round to the first'
         end
-      end
-      if ci % 5 == 0 then
-        where = c.id .. ' straight to the overview'
-        if st.page.tab == 'built' then
-          key '<CR>'
+        key '<C-S-Tab>'
+        if now() ~= v.displays[#v.displays] then
+          fail '<C-S-Tab> on the first display did not go round to the last'
         end
-        key '-'
-        if st.screen ~= 'tree' or st.page or #st.stack > 0 then
-          fail('- left a page open from depth ' .. (#st.stack + 1))
-        end
-        seam.open_page(c)
-      end
-      where = c.id .. ' back'
-      local up = ci % 2 == 0 and 'K' or '<BS>'
-      key(up)
-      if st.screen == 'page' then
-        fail(up .. ' stayed on the page')
-      end
-      key 'K'
-      if st.screen ~= 'tree' then
-        fail 'K in the tree left it'
+        key '<C-Tab>'
       end
     end
   end
-end
-
--- / on a page: a contract by name, <CR> on its page on the same tab, K back
-do
-  local cs = st.models[st.cur].contracts
-  local from, to
-  for _, c in ipairs(cs) do
-    if c.nusers > 0 and not from then
-      from = c
-    elseif from and c.nusers > 0 and c.name ~= from.name then
-      to = to or c
+  -- a folder: who uses it from outside, by file
+  where = c.id .. ' its folder'
+  local x = tree_screen.at()
+  for _ = 1, 4 do
+    if not x or x.kind == 'dir' then
+      break
     end
+    key 'h'
+    x = tree_screen.at()
   end
-  if from and to then
-    for _, tab in ipairs { 'built', 'used' } do
-      where = 'page / ' .. tab
-      st.stack, st.page = {}, nil
-      seam.open_page(from)
-      if st.page.tab ~= tab then
-        key '<Tab>'
+  if x and x.kind == 'dir' then
+    for _ = 1, 4 do
+      if (views.shown(x, st.view) or {}).name == 'Used by' then
+        break
       end
-      local want = picker.fuzzy(picker.contracts(st.models[st.cur]), to.name)[1]
-      key('/' .. to.name .. '<C-n><C-p>')
-      local ps = picker.state()
-      if not ps or ps.sel ~= want.id then
-        fail(('/%s: the first listed is %s, not %s'):format(to.name, ps and tostring(ps.sel) or 'no picker', want.id))
-      end
-      key '<CR>'
-      local landed = st.page and st.page.c
-      if picker.is_open() or api.nvim_get_mode().mode ~= 'n' then
-        fail '<CR> did not close the picker in normal mode'
-      elseif not landed or landed.id ~= want.id or st.page.tab ~= tab or #st.stack ~= 1 then
-        fail(('<CR> landed on %s %s, depth %d, not %s %s'):format(landed and landed.id or 'nothing', st.page and st.page.tab or '', #st.stack, want.id, tab))
-      end
-      check_page()
-      key '/zzz<Esc>'
-      if picker.is_open() or api.nvim_get_mode().mode ~= 'n' or st.page.c ~= landed then
-        fail '<Esc> changed the page or left the picker'
-      end
-      key 'K'
-      if not st.page or st.page.c ~= from or st.page.tab ~= tab then
-        fail('K after / did not come back to ' .. from.name)
-      end
+      key '<Tab>'
     end
-    key '-'
+    check_seams 'Used by'
   end
 end
 
@@ -1483,7 +1393,12 @@ do
       if (tree_screen.at() or {}).id ~= fx then
         fail('the tree is not on ' .. fx)
       end
-      key '<Tab>'
+      for _ = 1, 4 do
+        if st.view.at == 'Types' then
+          break
+        end
+        key '<Tab>'
+      end
       check_tree()
       local node = m.graph.nodes[fx]
       local body = lines(st.obuf.pane)
@@ -1634,8 +1549,8 @@ do
 end
 
 -- from your own code: a file of the repo in a tab of its own, the cursor on
--- a contract's name, here() puts the tree's cursor on it, the page on its
--- page; on a local function, calls anchors on it and called by goes up; gf
+-- a contract's name, here() puts the tree's cursor on it, the page on it
+-- with its Used by; on a local function, calls anchors on it and called by goes up; gf
 -- comes back to the file
 do
   local m = st.models[st.cur]
@@ -1679,14 +1594,10 @@ do
     where = 'here page ' .. c.id
     api.nvim_set_current_tabpage(from)
     seam.here 'page'
-    if not (st.page and st.page.c == c and api.nvim_get_current_tabpage() == st.tab) then
-      fail 'here page did not open its page'
+    if api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'tree' or (tree_screen.at() or {}).id ~= c.id then
+      fail 'here page did not show its row in the tree'
     end
-    check_page()
-    key 'K'
-    if st.screen ~= 'tree' or (tree_screen.at() or {}).id ~= c.id then
-      fail 'K from the page here opened did not come back to it in the tree'
-    end
+    check_seams 'Used by'
     api.nvim_set_current_tabpage(from)
     vim.cmd 'tabclose'
     api.nvim_set_current_tabpage(st.tab)

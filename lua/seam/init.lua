@@ -8,9 +8,7 @@ local M = {}
 
 M.st = st
 M.index = index.index
-M.open_page = screen.open_page
 M.open_calls = screen.open_calls
-M.overview = screen.overview
 M.lens_changed = screen.lens_changed
 M.open_lens = screen.open_lens
 M.close = screen.close
@@ -74,11 +72,10 @@ M.ways = { 'overview', 'page', 'calls', 'called_by', 'types' }
 
 --- From your own code: seam on what the word under the cursor names. `how`:
 --- 'overview' (the tree on that function or contract, where it lives),
---- 'page' (its page), 'calls' or 'called_by' (the call tree anchored on that
---- function, down or up), or 'types' (the Types view of the type it names,
---- in the tree's pane). For a page, a function that is no contract opens its
---- calls; several by that name, or nothing, the `/` picker holding the word:
---- the tree's, the page's or the call tree's.
+--- 'page' (the same, its Used by in the pane), 'calls' or 'called_by' (the
+--- call tree anchored on that function, down or up), or 'types' (the Types
+--- view of the type it names, in the tree's pane). Several by that name, or
+--- nothing, the `/` picker holding the word: the tree's or the call tree's.
 ---@param how? 'overview'|'page'|'calls'|'called_by'|'types'
 function M.here(how)
   how = how or 'overview'
@@ -112,20 +109,24 @@ function M.here(how)
         vim.notify('seam: ' .. msg, vim.log.levels.INFO)
       end
       -- several, or nothing: the / picker holding the word
-      local function pick(nodes)
+      local function pick()
         screen.show()
         if calls and m.graph then
           screen.open_calls(nil)
           screen.calls_pick(word, dir)
-        elseif how == 'page' and not nodes then
-          screen.page_pick(word)
         else
           require('seam.screen_tree').search(word)
         end
       end
       local function anchor(node)
-        st.stack, st.page = {}, nil
         screen.open_calls(node.id, dir)
+      end
+      -- a page is the row's Used by now
+      local function used_by()
+        if how == 'page' then
+          st.view = st.view or require('seam.views').new()
+          st.view.at = 'Used by'
+        end
       end
       local c = r.contract
       if c then
@@ -137,14 +138,17 @@ function M.here(how)
         end
         if not vim.tbl_contains(m.contracts, c) then
           say('the lens hides ' .. c.name .. ' (' .. c.path .. '); L to see it')
-          return pick(false)
+          return pick()
         end
+        used_by()
         screen.show(c)
-        if how == 'page' then
-          screen.open_page(c)
+        -- a type has no row: it shows in the pane, its file's row under it
+        if how == 'page' and not node and m.flows and m.flows[c.name] then
+          require('seam.screen_tree').show_type(c.name, 'Used by')
         end
       elseif r.node then
-        if how == 'overview' and not r.node.test then
+        if (how == 'overview' or how == 'page') and not r.node.test then
+          used_by()
           return screen.show(r.node.id)
         end
         if not calls then
@@ -152,12 +156,12 @@ function M.here(how)
         end
         anchor(r.node)
       elseif r.candidates then
-        pick(r.nodes)
+        pick()
       else
         if word ~= '' and calls then
           say('no function named ' .. word)
         end
-        pick(false)
+        pick()
       end
     end,
   })
@@ -167,7 +171,6 @@ end
 function M.from_top()
   M.start(nil, {
     after = function()
-      st.stack, st.page = {}, nil
       screen.open_calls(nil)
     end,
   })

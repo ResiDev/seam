@@ -44,18 +44,6 @@ function M.sort(picks, nodes)
   return picks
 end
 
---- What `/` on a page lists: every contract the lens lets through in its
---- contracts column, types and constants too, the most used first.
----@param m table the model
----@return seam.Pick[]
-function M.contracts(m)
-  local out = {}
-  for _, c in ipairs(m.contracts) do
-    out[#out + 1] = { id = c.id, name = c.name, used_by = c.nusers or 0 }
-  end
-  return M.sort(out, m.byid)
-end
-
 --- The picks whose name `query` fuzzily matches, the best match first and
 --- the order they came in between equal ones, each with the characters it
 --- matched. An empty query keeps them all, as they came.
