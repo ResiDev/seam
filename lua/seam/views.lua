@@ -2,6 +2,7 @@
 -- displays it can be shown in, and how it draws. A later view is one more
 -- entry in the list. `st.view` holds the one chosen and each view's display.
 local code_view = require 'seam.views.code'
+local names_view = require 'seam.views.names'
 local seams_view = require 'seam.views.seams'
 local types_view = require 'seam.views.types'
 local M = {}
@@ -26,16 +27,30 @@ function M.new()
   return { at = 'Code', display = {} }
 end
 
+-- a name in the code is seen through its type: its Code, Built from and
+-- Used by are the type's; one with no repo type has only Types
+local function as_type(row)
+  return row.kind == 'name' and row.as_type or row
+end
+local function typed(row)
+  return row.kind ~= 'name' or row.as_type ~= nil
+end
+local function through(f)
+  return function(out, row, ...)
+    return f(out, as_type(row), ...)
+  end
+end
+
 ---@type seam.View[]
 M.list = {
   {
     name = 'Code',
     displays = { 'code' },
     has = function(row)
-      return row.kind ~= 'dir'
+      return row.kind ~= 'dir' and typed(row)
     end,
     draw = function(out, row, m)
-      code_view.draw(out, row, m)
+      code_view.draw(out, as_type(row), m)
     end,
   },
   {
@@ -45,26 +60,30 @@ M.list = {
       return true
     end,
     draw = function(out, row, m, _, ctx)
-      types_view.draw(out, row, m, ctx)
+      if row.kind == 'name' then
+        names_view.draw(out, row, m, ctx)
+      else
+        types_view.draw(out, row, m, ctx)
+      end
     end,
   },
   {
     name = 'Built from',
     displays = seams_view.BUILT,
-    has = function()
-      return true
+    has = typed,
+    draw = through(seams_view.built_from),
+    count = function(m, row)
+      return seams_view.built_count(m, as_type(row))
     end,
-    draw = seams_view.built_from,
-    count = seams_view.built_count,
   },
   {
     name = 'Used by',
     displays = seams_view.USED,
-    has = function()
-      return true
+    has = typed,
+    draw = through(seams_view.used_by),
+    count = function(m, row)
+      return seams_view.used_count(m, as_type(row))
     end,
-    draw = seams_view.used_by,
-    count = seams_view.used_count,
   },
 }
 

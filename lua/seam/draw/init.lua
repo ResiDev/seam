@@ -124,6 +124,11 @@ function M.put(buf, rows)
         api.nvim_buf_set_extmark(buf, M.ns, row0, h[1], { end_col = e, hl_group = h[3], priority = h[4] or 150 })
       end
     end
+    for _, v in ipairs(r.virt or {}) do
+      if v[1] <= #lines[i] then
+        api.nvim_buf_set_extmark(buf, M.ns, row0, v[1], { virt_text = { { v[2], v[3] or 'SeamVirt' } }, virt_text_pos = 'inline' })
+      end
+    end
     if r.line_hl then
       api.nvim_buf_set_extmark(buf, M.ns, row0, 0, { line_hl_group = r.line_hl, priority = 90 })
     end

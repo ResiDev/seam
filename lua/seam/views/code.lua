@@ -1,5 +1,6 @@
 -- The Code view: a function from its doc comment to its end, a file whole,
--- a type's declaration; each call in it underlined where its function lives.
+-- a type's declaration; each name from another file underlined where it
+-- lives, each value's type after its name where none is written.
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
@@ -58,48 +59,103 @@ function M.rows(out, path, set, lit, mark)
   return first
 end
 
----@param out table[]
+--- What a row's code is: its file and its lines, a function from its doc
+--- comment, a type's declaration, a file whole; and the nodes it holds.
 ---@param row seam.ORow
 ---@param m table
-function M.draw(out, row, m)
+---@return string path, integer s, integer e, table[] nodes
+function M.span(row, m)
   local g = m.graph
-  local path, s, e, nodes
   if row.kind == 'fn' then
     local node = g.nodes[row.id]
-    path, nodes = node.path, { node }
-    s, e = code.doc_start(path, node.line), math.max(node.end_line or node.line, node.line)
+    return node.path, code.doc_start(node.path, node.line), math.max(node.end_line or node.line, node.line), { node }
   elseif row.kind == 'type' then
-    path, nodes = row.path, {}
-    s, e = code.doc_start(path, row.line), math.max(row.end_line or row.line, row.line)
-  else
-    path = row.path
-    s, e = 1, #code.file(path).lines
-    nodes = g and outline.by_file(g)[path] or {}
+    return row.path, code.doc_start(row.path, row.line), math.max(row.end_line or row.line, row.line), {}
   end
-  if e < s then
-    out[#out + 1] = draw.row():add(' nothing to read here', 'SeamLabel')
-    return
+  return row.path, 1, #code.file(row.path).lines, g and outline.by_file(g)[row.path] or {}
+end
+
+-- the names in lines s..e that live in another file, by line: each call,
+-- each use of another file's export
+local function elsewhere(m, path, s, e, nodes)
+  local g, out, seen = m.graph, {}, {}
+  local function add(l, name, col, to)
+    local hl = l >= s and l <= e and M.under(m, path, to)
+    if hl and not seen[l .. ':' .. col] then
+      seen[l .. ':' .. col] = true
+      out[l] = out[l] or {}
+      table.insert(out[l], { name, col, hl })
+    end
   end
-  local refs = {}
   for _, n in ipairs(nodes) do
     for _, c in ipairs(g.down[n.id] or {}) do
-      local to = g.nodes[c.to]
-      local hl = c.line >= s and c.line <= e and M.under(m, path, to.path)
-      if hl then
-        refs[c.line] = refs[c.line] or {}
-        table.insert(refs[c.line], { to.name, c.col, hl })
+      add(c.line, g.nodes[c.to].name, c.col, g.nodes[c.to].path)
+    end
+  end
+  if not m.uses_in then
+    m.uses_in = {}
+    for _, x in ipairs(m.exports or {}) do
+      for _, u in ipairs(x.uses or {}) do
+        m.uses_in[u.path] = m.uses_in[u.path] or {}
+        table.insert(m.uses_in[u.path], { u.line, x.name, u.col, x.path })
       end
     end
+  end
+  for _, u in ipairs(m.uses_in[path] or {}) do
+    add(u[1], u[2], u[3], u[4])
+  end
+  return out
+end
+
+--- Lines s..e of `path` as code rows, with line numbers: each name from
+--- another file underlined where it lives (its place on the row kept in
+--- the row's `stops`), each value's type after its name where none is
+--- written, a function's return after its parameters.
+---@param out table[]
+---@param m table
+---@param path string
+---@param s integer
+---@param e integer
+---@param nodes table[] the functions whose calls are underlined
+function M.lines(out, m, path, s, e, nodes)
+  local refs = elsewhere(m, path, s, e, nodes)
+  local hints = {}
+  for _, h in ipairs(require('seam.codetypes').hints(m, path, s, e)) do
+    hints[h.line] = hints[h.line] or {}
+    table.insert(hints[h.line], h)
   end
   local set = {}
   for l = s, e do
     set[l] = true
   end
   M.rows(out, path, set, {}, function(cr, start, src, l)
+    cr.meta.stops = {}
     for _, r in ipairs(refs[l] or {}) do
+      local before = #cr.h
       code.underline(cr, start, src, r[1], r[2], r[3])
+      if #cr.h > before then
+        table.insert(cr.meta.stops, cr.h[#cr.h][1])
+      end
+    end
+    table.sort(cr.meta.stops)
+    cr.meta.start = start
+    for _, h in ipairs(hints[l] or {}) do
+      cr.virt = cr.virt or {}
+      cr.virt[#cr.virt + 1] = { start + h.col, h.text }
     end
   end)
+end
+
+---@param out table[]
+---@param row seam.ORow
+---@param m table
+function M.draw(out, row, m)
+  local path, s, e, nodes = M.span(row, m)
+  if e < s then
+    out[#out + 1] = draw.row():add(' nothing to read here', 'SeamLabel')
+    return
+  end
+  M.lines(out, m, path, s, e, nodes)
 end
 
 return M
