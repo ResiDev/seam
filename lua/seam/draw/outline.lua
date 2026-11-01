@@ -204,8 +204,12 @@ function M.name_head(h, n)
     h:add('   parameter' .. (n.fn and (' of ' .. n.fn) or '') .. ', line ' .. n.at.line, 'SeamLabel')
     used()
   elseif n.member and n.member.decl then
+    -- the path inside its package, the head being narrow
+    local p = n.member.decl.path
+    local pkg = index.pkg_of(index.model(), p)
+    p = (pkg ~= '.' and p:sub(#pkg + 2) or p):gsub('^src/', '')
     h:add('   ' .. (n.kind == 'method' and 'member' or 'field') .. ' of ' .. n.member.decl.name .. ', ', 'SeamLabel')
-    draw.path(h, n.member.decl.path, n.member.line)
+    h:add(p .. ':' .. n.member.line, 'SeamPath')
   end
 end
 
