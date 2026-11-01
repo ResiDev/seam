@@ -1,8 +1,10 @@
 -- The Map's foot: the name under the pane's cursor told in full, in a
--- window over the pane's last rows, at least a sixth of it, a rule over
--- it, its lines going on under themselves, nothing cut. A function: its
--- signature with the names of what it takes, and where it is; then the line
--- that calls it, copied with its colours, and what that line sits in. A
+-- window over the pane's last rows, at least 15% of it, at most half, a
+-- rule and an empty row over it, an empty row under it, its lines going on
+-- under themselves, nothing cut, code in its colours. A function: its
+-- signature as written in its file, where it is, and when the file does
+-- not write what it gives, what the server says it gives, an object a
+-- field a line; then the line that calls it, and what that line sits in. A
 -- type: where it is declared, how many make and take it, and its
 -- declaration as written, comments left out.
 local api = vim.api
@@ -11,13 +13,14 @@ local data = require 'seam.map.data'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
 local tv = require 'seam.typesview'
+local written = require 'seam.written'
 local M = {}
 
--- the rows a foot takes at most, its rule among them; the Map leaves as
--- many empty under it, so its last rows can scroll up out from under
-M.MAX = 14
--- the share of the pane a foot takes at least
-M.SHARE = 0.15
+-- the rows a foot takes at most; the Map leaves as many empty under it,
+-- so its last rows can scroll up out from under
+M.MAX = 30
+-- the share of the pane a foot takes at least, and at most
+M.SHARE, M.MOST = 0.15, 0.5
 -- a type's declaration's lines before ⋯ N more lines
 M.DECL = 7
 
@@ -27,30 +30,119 @@ local function known(w)
   return w:match '^%u' ~= nil
 end
 
+-- an object inside what a function gives, past this long, as its fields' names
+local LONG = 50
+
+-- what a function gives as lines of TypeScript: an object a field a line,
+-- an object inside it as the names of its fields when long
+local function gives_lines(g)
+  g = tv.simple(g)
+  if g:sub(1, 1) ~= '{' or #g <= LONG then
+    return { g }
+  end
+  local out = { '{' }
+  for _, part in ipairs(tv.parts(g)) do
+    local name, t = part:match '^([^:]-%??)%s*:%s*(.*)$'
+    if name and t:sub(1, 1) == '{' and #t > LONG then
+      local ns = {}
+      for _, q in ipairs(tv.parts(t)) do
+        q = q:gsub('^readonly%s+', '')
+        ns[#ns + 1] = q:match '^([%w_$]+%??)%s*[:(<]' or q
+      end
+      part = name .. ': { ' .. table.concat(ns, ', ') .. ' }'
+    end
+    out[#out + 1] = '  ' .. part
+  end
+  out[#out + 1] = '}'
+  return out
+end
+
+-- the function's signature as its file writes it, from its line to its
+-- body, each line coloured as there, comments left out, a run of lines
+-- that are each a bare name (a destructured parameter) on one; nil when
+-- the file has no body to end it
+local function sig_rows(n)
+  local bl, bc = written.sig_end(n.path, n.line)
+  if not bl or bl < n.line or bl - n.line > 60 then
+    return nil
+  end
+  local lines = code.file(n.path).lines
+  local ind = #(lines[n.line] or ''):match '^%s*'
+  local rows, inside, names = {}, false, nil
+  for l = n.line, bl do
+    local src = lines[l] or ''
+    local s = vim.trim(src)
+    local from = math.min(ind, #src:match '^%s*')
+    local len = l == bl and bc - from or nil
+    if inside then
+      inside = not s:find('*/', 1, true)
+    elseif s:sub(1, 2) == '/*' then
+      inside = not s:find('*/', 3, true)
+    elseif s == '' or s:sub(1, 2) == '//' or (len and vim.trim(src:sub(from + 1, from + len)) == '') then
+      names = nil
+    elseif l < bl and s:match '^[%w_$]+,?$' then
+      if names then
+        names:add ' '
+        code.add(names, n.path, l, true)
+      else
+        names = draw.row():add ' '
+        code.add(names, n.path, l, from)
+        rows[#rows + 1] = names
+      end
+    else
+      names = nil
+      local r = draw.row():add ' '
+      code.add(r, n.path, l, from, len)
+      rows[#rows + 1] = r
+    end
+  end
+  return #rows > 0 and rows or nil
+end
+
 local function fn_rows(m, it, W)
   local n = m.graph.nodes[it.id]
   if not n then
     return nil
   end
   local types_view = require 'seam.views.types'
-  local r = draw.row():add(' '):add(data.label(n), 'SeamMapFnBold')
   local f = types_view.fn_of(types_view.context(m, { open = {}, width = W }, n.path), it.id, 'foot:' .. it.id)
-  if f then
-    local ps = {}
-    for i, p in ipairs(f.sig.params) do
-      ps[i] = p.name .. (p.optional and '?' or '') .. (p.type and (': ' .. tv.simple(p.type)) or '')
+  local rows = sig_rows(n)
+  if rows then
+    -- what it gives, from the server, where the file does not write it
+    local w = written.fn(n.path, n.line)
+    if f and f.gives and not (w and w.ret) then
+      local key = 'foot-gives:' .. it.id
+      local gl = gives_lines(f.gives)
+      local pre = 'type Gives = '
+      local vl = vim.deepcopy(gl)
+      vl[1] = pre .. vl[1]
+      code.virtual(key, n.path, vl)
+      for i = 1, #gl do
+        local r = draw.row():add(i == 1 and ' → ' or '   ', 'SeamLabel')
+        code.add(r, key, i, i == 1 and #pre or 0)
+        rows[#rows + 1] = r
+      end
     end
-    types_view.typed(r, '(' .. table.concat(ps, ', ') .. ')', known, {}, nil)
-    r:add(' → ', 'SeamLabel')
-    types_view.typed(r, f.gives, known, {}, nil)
+  else
+    local r = draw.row():add(' '):add(data.label(n), 'SeamMapFnBold')
+    if f then
+      local ps = {}
+      for i, p in ipairs(f.sig.params) do
+        ps[i] = p.name .. (p.optional and '?' or '') .. (p.type and (': ' .. tv.simple(p.type)) or '')
+      end
+      types_view.typed(r, '(' .. table.concat(ps, ', ') .. ')', known, {}, nil)
+      r:add(' → ', 'SeamLabel')
+      types_view.typed(r, f.gives, known, {}, nil)
+    end
+    rows = { r }
   end
-  r:add('   ' .. data.short(m, n.path, n.path) .. ':' .. n.line, 'SeamLabel')
-  local rows = { r }
+  rows[1]:add('   ' .. data.short(m, n.path, n.path) .. ':' .. n.line, 'SeamLabel')
   if it.at then
     local c = draw.row():add(' '):add(it.at.path:match '[^/]+$' .. ':' .. it.at.line, 'SeamLabel'):add '   '
     code.add(c, it.at.path, it.at.line, true)
     c:add('   in ', 'SeamLabel'):add(it.at.inside, 'SeamMapFn')
-    rows[2] = c
+    rows[#rows + 1] = draw.row()
+    rows[#rows + 1] = c
   end
   return rows
 end
@@ -109,6 +201,8 @@ function M.rows(m, it, W)
     return nil
   end
   table.insert(rows, 1, draw.row():add(' ' .. string.rep('─', W - 2), 'SeamMapLine'))
+  table.insert(rows, 2, draw.row())
+  rows[#rows + 1] = draw.row()
   return rows
 end
 
@@ -159,8 +253,9 @@ function M.update()
   end
   -- as tall as its lines wrapped, at least its share, at most MAX
   local h = api.nvim_win_text_height(F.win, {}).all
-  h = math.max(least, math.min(h, M.MAX, H - 4))
+  h = math.max(least, math.min(h, M.MAX, math.floor(H * M.MOST)))
   api.nvim_win_set_config(F.win, { relative = 'win', win = w.pane, row = H - h, col = 0, width = W, height = h })
+  code.paint_win(F.win)
   F.key = key
 end
 

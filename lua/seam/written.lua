@@ -55,7 +55,8 @@ end
 ---@param path string
 ---@param line integer
 ---@return seam.TSig|nil
-function M.fn(path, line)
+-- the function declared on `line` of `path`, its node and the file's text
+local function fn_at(path, line)
   local root, src = code.tree(path)
   local l = code.file(path).lines[line]
   if not root or not l then
@@ -66,7 +67,26 @@ function M.fn(path, line)
   while n and n:parent() and n:parent():type() ~= 'program' and n:parent():start() == line - 1 do
     n = n:parent()
   end
-  local f = n and first_fn(n)
+  return n and first_fn(n), src
+end
+
+--- Where the signature of the function declared on `line` of `path` ends:
+--- the line its body starts on and the byte before it, both 1-based.
+---@param path string
+---@param line integer
+---@return integer|nil, integer|nil
+function M.sig_end(path, line)
+  local f = fn_at(path, line)
+  local b = f and field(f, 'body')
+  if not b then
+    return nil
+  end
+  local r, c = b:start()
+  return r + 1, c
+end
+
+function M.fn(path, line)
+  local f, src = fn_at(path, line)
   if not f then
     return nil
   end
