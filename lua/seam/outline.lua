@@ -67,7 +67,10 @@ function M.functions(m, path)
   return out
 end
 
--- every file the tree holds: with a node or an export, no test, through the lens
+--- Every file the tree holds, path -> true: those with a function or an
+--- export, no test, through the lens.
+---@param m table
+---@return table<string, true>
 local function files(m)
   local top = calls.visible(m, 'top')
   local out = {}
@@ -83,6 +86,21 @@ local function files(m)
     add(e.path)
   end
   return out
+end
+M.files = files
+
+--- How many of the tree's files are in folder `dir`.
+---@param m table
+---@param dir string
+---@return integer
+function M.files_under(m, dir)
+  local n = 0
+  for path in pairs(files(m)) do
+    if path:sub(1, #dir + 1) == dir .. '/' then
+      n = n + 1
+    end
+  end
+  return n
 end
 
 -- the tree's folders and files, walked once for a model and its lens
