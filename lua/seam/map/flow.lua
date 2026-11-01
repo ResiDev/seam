@@ -3,9 +3,8 @@
 -- row, written as what it takes → its name → what it gives; from what it
 -- gives a line on down to its callers, gathered the same way. Each item
 -- where it is and its name in columns, then its signature straight after;
--- nothing is cut: a line too long for the pane goes on under itself. The
--- line of each call in the gutter, an empty row between groups and
--- where an item asks, between files. Pure:
+-- nothing is cut: a line too long for the pane goes on under itself. An
+-- empty row between groups and where an item asks, between files. Pure:
 -- pieces in, rows out with what each name stands for in `meta.hits`.
 local canvas = require 'seam.map.canvas'
 local M = {}
@@ -13,11 +12,10 @@ local M = {}
 -- the most items a side lists before `⋯ N more`, opened with l
 M.CAP = 40
 
--- the gutter: a line number right-aligned, then a space; the line runs down after it
-M.G = 5
+-- the column the line down the left runs in
+M.G = 1
 
 ---@class seam.FlowItem
----@field gutter string|nil the line of the call, in the gutter
 ---@field cols table[][] each column's pieces `{ text, hl, hit }`, aligned down the side
 ---@field tail table[]|nil pieces straight after the columns, going on under themselves past the pane's edge
 ---@field gap boolean|nil an empty row before it
@@ -169,7 +167,7 @@ end
 --- the centre's output (`centre.out`, the piece it starts at), else its
 --- end, a line on down to `bottom`'s heads.
 ---@param top seam.FlowGroup[]
----@param centre { segs: table[], gutter: string|nil, out: integer|nil }
+---@param centre { segs: table[], out: integer|nil }
 ---@param bottom seam.FlowGroup[]
 ---@param o { width: integer, all_top: boolean|nil, all_bottom: boolean|nil }
 ---@return table[]
@@ -189,9 +187,6 @@ function M.draw(top, centre, bottom, o)
     cv:seg(g.head, G + 3, y)
     y = y + 1
     for _, it in ipairs(g.items) do
-      if it.gutter then
-        cv:put(G - 1 - #it.gutter, y + (it.gap and 1 or 0), it.gutter, 'SeamGutter')
-      end
       y = put_item(cv, it, ws, G + 5, y, o.width)
     end
   end
@@ -207,10 +202,6 @@ function M.draw(top, centre, bottom, o)
     cv:bit(G, y, 2, 'SeamMapLine')
     cv:put(G + 1, y, '──▶', 'SeamMapLine')
     cx = G + 5
-  end
-  local yc = y
-  if centre.gutter then
-    cv:put(G - 1 - #centre.gutter, yc, centre.gutter, 'SeamGutter')
   end
   -- the centre, going on under itself; where its output starts
   local ox, oy, e

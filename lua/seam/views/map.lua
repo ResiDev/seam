@@ -51,22 +51,36 @@ end
 ---@param x seam.ORow
 ---@return { more: table<string, boolean> }
 function M.state(x)
-  st.map = st.map or { rows = {}, types = true }
+  st.map = st.map or { rows = {}, types = false }
   local k = subject(x).key or ''
   st.map.rows[k] = st.map.rows[k] or { more = {} }
   return st.map.rows[k]
 end
 
---- Is T on: the folder display with each signature, as it opens, or
---- names only?
+--- Is T on: the folder display with each signature, or names only, as it
+--- opens?
 ---@return boolean
 function M.types_on()
-  return not (st.map and st.map.types == false)
+  return st.map ~= nil and st.map.types == true
 end
 
 ---------------------------------------------------------------- facts
 
--- what a function takes and gives as the Map writes them: an object `{ … }`
+-- an object written in full when short, else as the names of its fields,
+-- their types in the foot
+local function object(t)
+  if t:sub(1, 1) ~= '{' or #t <= 30 then
+    return t
+  end
+  local ns = {}
+  for _, p in ipairs(tv.parts(t)) do
+    p = p:gsub('^readonly%s+', '')
+    ns[#ns + 1] = p:match '^([%w_$]+%??)%s*[:(<]' or p:match '^%b[]' or p
+  end
+  return '{ ' .. table.concat(ns, ', ') .. ' }'
+end
+
+-- what a function takes and gives as the Map writes them
 local function sig_text(C, id)
   local f = types_view.fn_of(C, id, 'map:' .. id)
   if not f then
@@ -74,14 +88,9 @@ local function sig_text(C, id)
   end
   local parts = {}
   for i, p in ipairs(f.sig.params) do
-    local t = p.type and tv.bound(tv.simple(p.type), f.sig.tparams) or p.name
-    parts[i] = t:sub(1, 1) == '{' and '{ … }' or t
+    parts[i] = object(p.type and tv.bound(tv.simple(p.type), f.sig.tparams) or p.name)
   end
-  local gives = f.gives
-  if gives:sub(1, 1) == '{' and #gives > 30 then
-    gives = '{ … }'
-  end
-  return table.concat(parts, ', '), gives
+  return table.concat(parts, ', '), object(f.gives)
 end
 
 -- text as pieces coloured as a signature is: types, builtins, the rest
@@ -287,8 +296,12 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
     end
     return cat({ { GAP .. '→  ', 'SeamLabel' } }, tsegs(g))
   end
+  -- the line each function is declared on in its file
+  local function decl(e)
+    return { ':' .. m.graph.nodes[e.id].line, 'SeamLabel' }
+  end
   local function place(e)
-    return { { folder_text(data.where(m, e.path, home)), 'SeamLabel' }, { e.path:match '[^/]+$', 'SeamText', { kind = 'file', path = e.path } } }
+    return { { folder_text(data.where(m, e.path, home)), 'SeamLabel' }, { e.path:match '[^/]+$', 'SeamText', { kind = 'file', path = e.path } }, decl(e) }
   end
   local function at_text(e)
     return e.at and { { e.at.path:match '[^/]+$', 'SeamText', { kind = 'file', path = e.at.path } }, { ':' .. e.at.line, 'SeamLabel' } } or place(e)
@@ -350,7 +363,10 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
       for _, e in ipairs(grp.list) do
         local cols, tail
         if by == 'folder' and is_top then
-          local f = e.path ~= prev and { { e.path:match '[^/]+$', 'SeamText', { kind = 'file', path = e.path } } } or {}
+          -- its file once, then each function's line after it
+          local file = e.path:match '[^/]+$'
+          local f = e.path ~= prev and { { file, 'SeamText', { kind = 'file', path = e.path } }, decl(e) }
+            or { { string.rep(' ', vim.fn.strchars(file)) }, decl(e) }
           cols, tail = { f, { name(e) } }, cat(takes(e), gives(e))
         elseif by == 'folder' then
           cols, tail = { at_text(e), { name(e) } }, cat(takes(e), gives(e))
@@ -362,7 +378,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
         -- by folder an empty row between the files the calls are in
         local gap = by == 'folder' and is_top and prev ~= nil and e.path ~= prev
         prev = e.path
-        items[#items + 1] = { cols = cols, tail = tail, gap = gap, gutter = is_top and fn and e.at and tostring(e.at.line) or nil }
+        items[#items + 1] = { cols = cols, tail = tail, gap = gap }
       end
       res[#res + 1] = { head = head, items = items }
     end
@@ -371,7 +387,6 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   local centre
   if fn then
     local t, g = sig(x.id)
-    local n = m.graph.nodes[x.id]
     local segs, out = {}, nil
     if t then
       segs = cat(tsegs('(' .. t .. ')'), { { ' → ', 'SeamLabel' } })
@@ -382,7 +397,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
       out = #segs + 1
       segs = cat(segs, tsegs(g))
     end
-    centre = { segs = segs, gutter = tostring(n.line), out = out }
+    centre = { segs = segs, out = out }
   else
     centre = { segs = { { centre_name, x.kind == 'type' and 'SeamTypeBold' or 'SeamBold' } } }
   end

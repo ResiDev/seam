@@ -395,7 +395,7 @@ do
     if st.outline.order ~= 'tree' or st.outline.cursor ~= fk then
       fail 's a third time did not come back to the tree on the same row'
     end
-    -- two views, one display each: <Tab> Types and back, <C-Tab> nothing
+    -- two views, one display each: <Tab> Types and round, <S-Tab> nothing
     where = 'tree <Tab>'
     local before = lines(st.obuf.pane)
     key '<Tab>'
@@ -403,17 +403,17 @@ do
     if st.view.at ~= 'Types' or vim.deep_equal(lines(st.obuf.pane), before) then
       fail '<Tab> did not show the Types view'
     end
-    key '<S-Tab>'
+    local V = require 'seam.views'
+    for _ = 2, #V.tabs(tree_screen.subject()) do
+      key '<Tab>'
+    end
     check_tree()
-    for _, k in ipairs { '<C-Tab>', '<C-S-Tab>' } do
-      key(k)
-      if st.view.at ~= 'Code' or not vim.deep_equal(lines(st.obuf.pane), before) then
-        fail(k .. ' changed the pane with one display')
-      end
+    key '<S-Tab>'
+    if st.view.at ~= 'Code' or not vim.deep_equal(lines(st.obuf.pane), before) then
+      fail '<S-Tab> changed the pane with one display'
     end
     -- beside the tree every view is a tab: <Tab> through them all comes round
-    -- to Code, <S-Tab> back the other way
-    local V = require 'seam.views'
+    -- to Code
     where = 'tree <Tab> round'
     local n = #V.tabs(tree_screen.subject())
     for _ = 1, n do
@@ -422,11 +422,6 @@ do
     if st.view.at ~= 'Code' or not vim.deep_equal(lines(st.obuf.pane), before) then
       fail(('%d <Tab> did not come round to Code: %s'):format(n, st.view.at))
     end
-    key '<S-Tab>'
-    if st.view.at ~= V.tabs(tree_screen.subject())[n].name then
-      fail('<S-Tab> from Code did not go to the last tab: ' .. st.view.at)
-    end
-    key '<Tab>'
     -- gm: straight to the Map, lit, and the same key back to Code; a tab
     -- here, so the status line leaves them to ?
     for _, a in ipairs { { 'gm', 'Map' } } do
@@ -680,7 +675,7 @@ end
 -- name as the code's types say, the head the trail; the name under the
 -- cursor answers in the pane, a value's later uses lit; n N go from import
 -- to import; J on a call goes on to it, K back to the very name, 3K three
--- back, K from the first the tree on its row; <S-Tab> its types and back;
+-- back, K from the first the tree on its row; gs its types and back;
 -- gf the line under the cursor in your own code
 local screen_code = require 'seam.screen_code'
 local codetypes = require 'seam.codetypes'
@@ -891,9 +886,9 @@ do
         fail(('%dK did not come back to the tree on its row: %s'):format(depth, tostring(st.screen)))
       end
       -- the types display and back
-      where = 'code ' .. c.id .. ' <S-Tab>'
+      where = 'code ' .. c.id .. ' gs'
       key 'J'
-      key '<S-Tab>'
+      key 'gs'
       local tl = lines(st.cbuf.code)
       if st.code.display ~= 'types' or not (tl[1] or ''):find(c.name, 1, true) or not (tl[1] or ''):match(c.line .. '%s*$') then
         fail('the types display does not start with the function: ' .. (tl[1] or ''))
@@ -904,10 +899,10 @@ do
           break
         end
       end
-      key '<S-Tab>'
+      key 'gs'
       check_code()
       if st.code.display ~= 'code' then
-        fail '<S-Tab> on the types did not come back to the code'
+        fail 'gs on the types did not come back to the code'
       end
       -- L opens the lens over the code; q closes it, back in the code
       key 'L'
@@ -969,7 +964,7 @@ do
 end
 
 -- The Map in the pane, on every contract's row or a spread of them: gm,
--- every display through <C-Tab> and back with <C-S-Tab>, the head naming
+-- every display through <S-Tab> and round, the head naming
 -- it, no row wider than the pane; in the pane the foot telling the name
 -- under the cursor, the line that calls it as that line reads; <Esc> back
 local views = require 'seam.views'
@@ -1059,19 +1054,9 @@ for ci, c in ipairs(contracts) do
           fail 'the foot stayed with the cursor back in the tree'
         end
       end
-      key '<C-Tab>'
-      if di == #ds then
-        local function now()
-          return select(2, views.shown(tree_screen.subject(), st.view))
-        end
-        if now() ~= ds[1] then
-          fail '<C-Tab> on the last display did not come round to the first'
-        end
-        key '<C-S-Tab>'
-        if now() ~= ds[#ds] then
-          fail '<C-S-Tab> on the first display did not go round to the last'
-        end
-        key '<C-Tab>'
+      key '<S-Tab>'
+      if di == #ds and select(2, views.shown(tree_screen.subject(), st.view)) ~= ds[1] then
+        fail '<S-Tab> on the last display did not come round to the first'
       end
     end
   end
@@ -1264,7 +1249,12 @@ do
       if st.ptype then
         fail 'the tree moved and the pane still shows the type'
       end
-      key '<S-Tab>'
+      for _ = 1, 3 do
+        if st.view.at == 'Code' then
+          break
+        end
+        key '<Tab>'
+      end
     end
   end
 end

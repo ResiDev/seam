@@ -314,11 +314,11 @@ function M.all_keys()
     {
       'The pane',
       {
-        { '<Tab> <S-Tab>', 'the next and previous tab: Code, Types, Map' },
+        { '<Tab>', 'the next tab: Code, Types, Map' },
         { 'gm', 'straight to the Map, and back' },
-        { '<C-Tab> <C-S-Tab>', 'next and previous display' },
+        { '<S-Tab>', 'the next display' },
         { 'D', 'the diff on or off, here and on the code screen, for the session' },
-        { 'T', 'the Map by folder: each signature, or names only' },
+        { 'T', 'the Map by folder: names only, or each signature' },
         { '<C-d> <C-u> <M-j> <M-k>', 'scroll it half a screen' },
         { '<C-e> <C-y>', 'scroll it a line' },
       },
@@ -409,12 +409,8 @@ local function o(buf)
 end
 
 local function tree_keys(buf)
-  for _, k in ipairs { { '<Tab>', 1 }, { '<S-Tab>', -1 } } do
-    vim.keymap.set('n', k[1], pane.step(k[2]), o(buf))
-  end
-  for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
-    vim.keymap.set('n', k[1], pane.step(k[2], true), o(buf))
-  end
+  vim.keymap.set('n', '<Tab>', pane.step(1), o(buf))
+  vim.keymap.set('n', '<S-Tab>', pane.step(1, true), o(buf))
   pane.view_keys(buf)
   vim.keymap.set('n', '?', function()
     hints.open(M.all_keys())

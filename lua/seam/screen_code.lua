@@ -365,7 +365,7 @@ function M.redraw()
   show()
 end
 
---- `<C-Tab>` `<C-S-Tab>` in the code: the code, or its types.
+--- `gs` in the code: the code, or its types.
 ---@param d integer
 function M.step_display(d)
   local i = vim.fn.index(M.DISPLAYS, st.code.display) + 1
@@ -461,7 +461,7 @@ function M.all_keys()
         { 'J', 'the code screen on the function or file the name under the cursor is' },
         { 'K', 'back to the very name you left from; 3K three back; from the first, the tree' },
         { '+ -', 'in its types, open and close the type under the cursor' },
-        { '<S-Tab>', 'the code, or its types' },
+        { 'gs', 'the code, or its types' },
         { 'D', 'the diff on or off, here and in the pane, for the session' },
       },
     },
@@ -470,7 +470,7 @@ function M.all_keys()
       {
         { '<Tab>', 'Code or Types of the name under the cursor; from a view aside, back' },
         { 'gm', 'the Map, and back' },
-        { '<C-Tab> <C-S-Tab>', 'next and previous display of its view' },
+        { '<S-Tab>', 'the next display of its view' },
         { '<M-j> <M-k>', 'scroll it half a screen, the cursor staying in the code' },
       },
     },
@@ -524,7 +524,7 @@ function M.status()
     rg[#rg + 1] = 'J'
   end
   rg[#rg + 1] = 'K'
-  rg[#rg + 1] = '<S-Tab>'
+  rg[#rg + 1] = 'gs'
   local pg = pane.view_hints(M.subject())
   if pane.can_scroll() then
     pg[#pg + 1] = '<M-j> <M-k>'
@@ -557,15 +557,13 @@ local function code_keys(buf)
       require('seam.codediff').next_line(st.cwin.code, top().path, k[2])
     end, o(buf))
   end
-  -- <S-Tab> the left side, the code or its types; <Tab> and <C-Tab> the pane's
-  vim.keymap.set('n', '<S-Tab>', function()
+  -- gs the left side, the code or its types; <Tab> and <S-Tab> the pane's
+  vim.keymap.set('n', 'gs', function()
     M.step_display(1)
   end, o(buf))
   vim.keymap.set('n', '<Tab>', pane.step(1), o(buf))
+  vim.keymap.set('n', '<S-Tab>', pane.step(1, true), o(buf))
   pane.view_keys(buf)
-  for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
-    vim.keymap.set('n', k[1], pane.step(k[2], true), o(buf))
-  end
   vim.keymap.set('n', '<M-j>', pane.scroll '<C-d>', o(buf))
   vim.keymap.set('n', '<M-k>', pane.scroll '<C-u>', o(buf))
   vim.keymap.set('n', '+', function()

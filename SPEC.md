@@ -103,7 +103,7 @@ view: `D` turns the diff on in Code and Types (What changed, below).
 |---|---|---|---|---|
 | **Code** | | the file | its body, imports underlined | its declaration |
 | **Types** | what comes in and goes out: the types its exports take and give | the same for the file, then the types it declares | what it takes and gives, each type expandable | where it comes from and what it becomes, one step each way; its fields with who sets and reads each |
-| **Map** | two displays on `<C-Tab>`: folder, type (section 6) | the same two | the same two | the same two |
+| **Map** | two displays on `<S-Tab>`: folder, type (section 6) | the same two | the same two | the same two |
 
 - **Built from, Used by and size are gone** (2026-11-01). The Map's flow
   shows what Built from and Used by did for a function, each call and
@@ -171,8 +171,9 @@ Decided 2026-10-31, from the mocks `design/mocks/types-view-*.png`:
   blank line between functions. Built from and Used by become single views
   in the same pane, redesigned to fit it.
 - **A view and its display.** Each view can be shown more than one way,
-  its display. `<Tab>` and `<S-Tab>` change the view; `<C-Tab>` and
-  `<C-S-Tab>` step its display forward and back. The same keys work in the
+  its display. `<Tab>` changes the view; `<S-Tab>` steps its display
+  (since 2026-11-01; it was `<C-Tab>` and `<C-S-Tab>`, and `<S-Tab>` the
+  view before). The same keys work in the
   tree and in the pane, so `v` keeps its own meaning in the pane. The
   display chosen stays for that view as the cursor moves, and the pane's
   head names it after the view's tab. Ghostty takes `ctrl+tab` and
@@ -389,6 +390,8 @@ Open:
   the code on the left is the Code view brought over, and its displays are
   the code and its types. `<C-Tab>` steps the display of what the cursor is
   in; the tree has none, so there it steps the pane's. `v` is not used.
+  Since 2026-11-01 `<S-Tab>` steps the pane's display and `gs` the code
+  or its types.
 - ~~The keys that open and close a type.~~ `+` and `-`, decided with the
   mocks `design/mocks/open-type-*.png` (see "Types open in place" above).
 
@@ -431,7 +434,7 @@ seam in its worktree, and pick its start with `f`. Then:
   codediff, Vim's own `vim.text.diff` and seam's drawing in the same shape.
   Removed lines show where they were, unnumbered on red; added on green;
   the words that changed in each lit stronger.
-- **Its displays,** on `<C-Tab>` while the diff is on and the row changed:
+- **Its displays,** on `<S-Tab>` while the diff is on and the row changed:
   changes only, the default, every run of unchanged lines folded to
   `⋯ 12 lines unchanged` with three lines kept around each change
   (`design/mocks/changed-signs.png`); and the whole file
@@ -622,11 +625,11 @@ two, in order with a lane a file, the body cut to its calls, size by reach,
 an icicle, types as boxes with functions on the arrows, values as lanes.
 
 **Chosen.** The Map has two displays, the same on every kind of row,
-`<C-Tab>` stepping through them. The head lists them, the one shown bold.
+`<S-Tab>` stepping through them. The head lists them, the one shown bold.
 
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
-| **folder** | the flow: its calls above under their folders, each a line, its file, the name, what it takes, what it gives, the line of the call in the gutter; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from what it gives a step left and on down under the row to its callers, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows; an empty row between folders and between the files the calls are in. `T`: names only, both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
+| **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from what it gives a step left and on down under the row to its callers, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
 | **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
@@ -649,6 +652,16 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   follows its name, ragged, and a long one wraps under itself; empty rows
   between folders and between files keep it scannable, and the callers
   hang under the row, not off its right end.
+
+- **No gutter, names only first, a foot to read** (2026-11-01, the user
+  again). The line numbers in a gutter looked bad and named the call's
+  line beside another file; each function's own line now follows its
+  file. An object was `{ … }`, which hid what a function needs; now its
+  fields' names, their types in the foot. The foot was one row cut at the
+  edge on a float's colour: now at least 15% of the pane, wrapped, in the
+  pane's colours. Folder opens names only, `T` the signatures. `<S-Tab>`
+  steps the display, `<Tab>` the tabs, and the code screen's code or
+  types moved to `gs`.
 
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
@@ -807,11 +820,12 @@ nothing to do where the cursor is does nothing, and its hint isn't shown.
 | `j` `k` | move |
 | `l` `h` | open and close a function's calls in the tree |
 | `J` `K` | the code screen on it, and back to the very row or name; `3K` three back; back to the tree is `K` until there |
-| `<Tab>` `<S-Tab>` | the next and previous view |
-| `<C-Tab>` `<C-S-Tab>` | the next and previous display of what the cursor is in; from the tree, the pane's |
+| `<Tab>` | the next view |
+| `<S-Tab>` | the next display of the pane's view |
+| `gs` | the code, or its types, on the code screen |
 | `+` `-` | open and close the type under the cursor, one level a press |
 | `>` `<` | a level more or less, in the Map |
-| `T` | each signature, or names only, in the Map by folder |
+| `T` | names only, as it opens, or each signature, in the Map by folder |
 | `n` `N` | the next and previous import in the code |
 | `]c` `[c` | the next and previous change |
 | `gc` | only what changed in the tree, and back |

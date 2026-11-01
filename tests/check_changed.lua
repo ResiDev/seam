@@ -195,7 +195,7 @@ return function(t)
     fail '[c did not come back'
   end
 
-  -- D: the diff on; Code on the function its lines, removed then added, on <C-Tab> the whole file
+  -- D: the diff on; Code on the function its lines, removed then added, on <S-Tab> the whole file
   t.where 'changed D'
   local pane_ = require 'seam.pane'
   local draw = require 'seam.draw'
@@ -243,11 +243,11 @@ return function(t)
     end
     api.nvim_set_current_win(st.owin.tree)
     local short = api.nvim_buf_line_count(st.obuf.pane)
-    key '<C-Tab>'
+    key '<S-Tab>'
     if select(2, views.shown(tree_screen.at(), st.view)) ~= 'whole file' or api.nvim_buf_line_count(st.obuf.pane) < short then
       fail 'the whole file is not shown, or is shorter than the changes only'
     end
-    key '<C-S-Tab>'
+    key '<S-Tab>'
     -- Types with the diff: its line as it was, then as it is
     t.where 'changed D types'
     key '<Tab>'
@@ -265,7 +265,10 @@ return function(t)
         fail('Types with the diff does not have its line as it was over its line: ' .. tostring(tl[1]) .. ' / ' .. tostring(tl[2]))
       end
     end
-    key '<S-Tab>'
+    -- round the tabs back to Code
+    for _ = 2, #views.tabs(tree_screen.at()) do
+      key '<Tab>'
+    end
   end
   -- a function in another file, which the range left alone: Code as it is
   t.where 'changed D plain'
@@ -331,12 +334,12 @@ return function(t)
         fail(('the code screen removed %d lines, the function its own %d'):format(#got, #want))
       end
       -- its types: the function's line as it was over it
-      key '<S-Tab>'
+      key 'gs'
       local tl = api.nvim_buf_get_lines(st.cbuf.code, 0, 2, false)
       if not ((tl[1] or ''):sub(1, 1) == '-' and (tl[1] or ''):find('seamWas', 1, true) and (tl[2] or ''):sub(1, 1) == '+') then
         fail('the types display with the diff does not start with the line as it was: ' .. tostring(tl[1]))
       end
-      key '<S-Tab>'
+      key 'gs'
       key 'D'
       if st.diff then
         fail 'D on the code screen did not turn the diff off'

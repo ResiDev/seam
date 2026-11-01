@@ -198,7 +198,7 @@ function M.can_step(row, sv)
   return v ~= nil and ((not M.is_tab(v) and #M.tabs(row) > 0) or #M.tabs(row) > 1)
 end
 
---- `<Tab>` `<S-Tab>`: from a view aside back to the tab chosen; on a tab,
+--- `<Tab>`: from a view aside back to the tab chosen; on a tab,
 --- the next one, or with `d` -1 the one before, round the ends. False when
 --- nothing changed.
 ---@param row seam.ORow|nil
