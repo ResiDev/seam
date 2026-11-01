@@ -107,11 +107,16 @@ view: `D` turns the diff on in Code and Types (What changed, below).
 | **Used by** | who imports from it | the files that import it, each line | each place that calls it: the file, the line, and the code there | who takes it and who gives it |
 | **Map** | four displays on `<C-Tab>`: tree, both ways, folders, size (section 6) | the same four | the same four | the same four; its tree is types as boxes, functions on the arrows |
 
-- **Two tabs, the others aside** (decided 2026-11-01, `design/mocks/tabs-aside.png`).
-  The pane's head has the two tabs, the one shown lit. An aside view shown
+- **Beside the tree, every view a tab; on the code screen, two tabs and the
+  others aside** (decided 2026-11-01). Beside the tree the head has all the
+  tabs the row has, Code, Types, Built from, Used by and Map, the one shown
+  lit (`design/mocks/keys-tree-a.png`, its Changed tab now the diff on `D`);
+  `<Tab>` `<S-Tab>` step through them, and `gu` `gb` `gm` go straight to one
+  and back. On the code screen, where the code is read, the head has the two
+  tabs, Code and Types, the one shown lit (`design/mocks/tabs-aside.png`). An aside view shown
   is named after them, lit, a gap between, and the two tabs both dim; its
-  display after it. The status line's pane group has `gu` `gb` `gm` only
-  where the row has that view. A row with neither Code nor Types shows the
+  display after it. The status line's pane group has `gu` `gb` `gm` there
+  only where the row has that view; beside the tree they are left to `?`. A row with neither Code nor Types shows the
   first aside view it has, named in the head; every row has one or the
   other (a folder has Types, a row gone has Code), so this is a fallback.
 - **Used by is where it's called.** The cursor on a use shows the caller's
@@ -524,9 +529,10 @@ all functions alike. 1a was decided as layout A under Types.
 ### 2. Switching views
 
 **A chosen,** tabs in the pane's head (see Types: the higher view). Then,
-2026-11-01, the tabs were cut to Code and Types and the rest went aside on
-their own keys, a mix of A and C: `design/mocks/tabs-aside.png`
-(`design/mocks/src/tabsdiff/mock.py`).
+2026-11-01, the code screen's tabs were cut to Code and Types and the rest
+went aside on their own keys, a mix of A and C: `design/mocks/tabs-aside.png`
+(`design/mocks/src/tabsdiff/mock.py`). Beside the tree all stay tabs, A,
+with the keys of C as well.
 
 - A. Tabs in the pane's head, `Code  Types  Built from  Used by  Map
   Changed`, the one shown lit.

@@ -231,7 +231,7 @@ return function(t)
       fail 'the removed line and the line now are not there'
     end
     local head = table.concat(api.nvim_buf_get_lines(st.obuf.phead, 0, -1, false), ' ')
-    if not head:find('signature changed', 1, true) or not head:find('Code     Types    changes only', 1, true) then
+    if not head:find('signature changed', 1, true) or not head:find('Map    changes only', 1, true) then
       fail('the head does not say the signature changed, or name the display: ' .. head)
     end
     -- ]c in the pane: the change
@@ -265,7 +265,7 @@ return function(t)
         fail('Types with the diff does not have its line as it was over its line: ' .. tostring(tl[1]) .. ' / ' .. tostring(tl[2]))
       end
     end
-    key '<Tab>'
+    key '<S-Tab>'
   end
   -- a function in another file, which the range left alone: Code as it is
   t.where 'changed D plain'

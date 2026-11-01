@@ -181,7 +181,8 @@ local function check_tree()
   if x and not (head[1] or ''):find(name, 1, true) then
     fail('the pane head does not name ' .. name .. ': ' .. (head[1] or ''))
   end
-  -- the two tabs, a view aside named after them when shown
+  -- beside the tree every view the row has is a tab, in their order; on the
+  -- code screen two tabs, a view aside named after them when shown
   local V = require 'seam.views'
   local shown, display = V.shown(x, st.view)
   local tabs_of = vim.tbl_map(function(v)
@@ -191,11 +192,28 @@ local function check_tree()
   if x and x.kind == 'dir' and table.concat(tabs_of, ' ') == 'Code Types' then
     want_tabs = 'Code     Types'
   end
+  if st.screen ~= 'code' then
+    local all = vim.tbl_map(function(v)
+      return v.name
+    end, V.of(x))
+    local order, last = { Code = 1, Types = 2, ['Built from'] = 3, ['Used by'] = 4, Map = 5 }, 0
+    for _, n in ipairs(all) do
+      if not order[n] or order[n] < last then
+        fail('beside the tree the tabs are out of order: ' .. table.concat(all, ', '))
+        break
+      end
+      last = order[n]
+    end
+    if x and x.kind ~= 'gone' and #all < 3 then
+      fail('beside the tree the row has only the tabs ' .. table.concat(all, ', '))
+    end
+    want_tabs = table.concat(all, '     ')
+  end
   if table.concat(tabs_of, '     ') ~= want_tabs then
     fail(('the row has the tabs %q, not %q'):format(table.concat(tabs_of, '     '), want_tabs))
   end
   local want = want_tabs
-  if shown and not shown.tab then
+  if shown and not V.is_tab(shown) then
     want = want .. '        ' .. shown.name
   end
   local ds = shown and V.displays(shown, x) or {}
@@ -393,25 +411,40 @@ do
         fail(k .. ' changed the pane with one display')
       end
     end
-    -- gu gb gm: the view aside, named after the tabs and hinted where the
-    -- row has it; the same key again, or <Tab>, back to Code
+    -- beside the tree every view is a tab: <Tab> through them all comes round
+    -- to Code, <S-Tab> back the other way
     local V = require 'seam.views'
+    where = 'tree <Tab> round'
+    local n = #V.tabs(tree_screen.subject())
+    for _ = 1, n do
+      key '<Tab>'
+    end
+    if st.view.at ~= 'Code' or not vim.deep_equal(lines(st.obuf.pane), before) then
+      fail(('%d <Tab> did not come round to Code: %s'):format(n, st.view.at))
+    end
+    key '<S-Tab>'
+    if st.view.at ~= V.tabs(tree_screen.subject())[n].name then
+      fail('<S-Tab> from Code did not go to the last tab: ' .. st.view.at)
+    end
+    key '<Tab>'
+    -- gu gb gm: straight to that tab, lit, and the same key back to Code; tabs
+    -- here, so the status line leaves them to ?
     for _, a in ipairs { { 'gu', 'Used by' }, { 'gb', 'Built from' }, { 'gm', 'Map' } } do
       where = 'tree ' .. a[1]
       local has = V.has(tree_screen.subject(), a[2]) ~= nil
-      if has ~= vim.tbl_contains(require('seam.pane').view_hints(tree_screen.subject()), a[1]) then
-        fail(('%s is hinted %s, the row %s'):format(a[1], tostring(not has), has and 'has it' or 'has not'))
+      if vim.tbl_contains(require('seam.pane').view_hints(tree_screen.subject()), a[1]) then
+        fail(a[1] .. ' is hinted beside the tree, where it is a tab')
       end
       if has then
         key(a[1])
         check_tree()
-        if (V.shown(tree_screen.subject(), st.view) or {}).name ~= a[2] or not (lines(st.obuf.phead)[3] or ''):find('Types        ' .. a[2], 1, true) then
-          fail(a[1] .. ' did not show ' .. a[2] .. ' named after the tabs: ' .. (lines(st.obuf.phead)[3] or ''))
+        if (V.shown(tree_screen.subject(), st.view) or {}).name ~= a[2] or not (lines(st.obuf.phead)[3] or ''):find(a[2], 1, true) then
+          fail(a[1] .. ' did not show ' .. a[2] .. ': ' .. (lines(st.obuf.phead)[3] or ''))
         end
-        key(a[1] == 'gb' and '<Tab>' or a[1])
+        key(a[1])
         check_tree()
         if st.view.aside or not vim.deep_equal(lines(st.obuf.pane), before) then
-          fail((a[1] == 'gb' and '<Tab>' or a[1]) .. ' on ' .. a[2] .. ' did not come back to Code')
+          fail(a[1] .. ' again on ' .. a[2] .. ' did not come back to Code')
         end
       end
     end
