@@ -8,7 +8,6 @@ local M = {}
 
 M.st = st
 M.index = index.index
-M.open_calls = screen.open_calls
 M.lens_changed = screen.lens_changed
 M.open_lens = screen.open_lens
 M.close = screen.close
@@ -72,10 +71,11 @@ M.ways = { 'overview', 'page', 'calls', 'called_by', 'types' }
 
 --- From your own code: seam on what the word under the cursor names. `how`:
 --- 'overview' (the tree on that function or contract, where it lives),
---- 'page' (the same, its Used by in the pane), 'calls' or 'called_by' (the
---- call tree anchored on that function, down or up), or 'types' (the Types
---- view of the type it names, in the tree's pane). Several by that name, or
---- nothing, the `/` picker holding the word: the tree's or the call tree's.
+--- 'page' (the same, its Used by in the pane), 'calls' (the code screen on
+--- that function, K back to its row in the tree), 'called_by' (the tree on
+--- it, its Used by in the pane), or 'types' (the Types view of the type it
+--- names, in the tree's pane). Several by that name, or nothing, the tree's
+--- `/` picker holding the word.
 ---@param how? 'overview'|'page'|'calls'|'called_by'|'types'
 function M.here(how)
   how = how or 'overview'
@@ -103,75 +103,57 @@ function M.here(how)
         return
       end
       local r = require('seam.here').resolve(m, word, path, line, how)
-      local dir = how == 'called_by' and 'up' or 'down'
-      local calls = how == 'calls' or how == 'called_by'
       local function say(msg)
         vim.notify('seam: ' .. msg, vim.log.levels.INFO)
       end
       -- several, or nothing: the / picker holding the word
       local function pick()
         screen.show()
-        if calls and m.graph then
-          screen.open_calls(nil)
-          screen.calls_pick(word, dir)
-        else
-          require('seam.screen_tree').search(word)
-        end
+        require('seam.screen_tree').search(word)
       end
-      local function anchor(node)
-        screen.open_calls(node.id, dir)
-      end
-      -- a page is the row's Used by now
+      -- a page is the row's Used by now, and so is called by
       local function used_by()
-        if how == 'page' then
+        if how == 'page' or how == 'called_by' then
           st.view = st.view or require('seam.views').new()
           st.view.at = 'Used by'
+        end
+      end
+      -- the tree on a function, and for calls its code screen over it
+      local function fn(node)
+        used_by()
+        screen.show(node.id)
+        if how == 'calls' then
+          require('seam.screen_code').open { kind = 'fn', id = node.id }
         end
       end
       local c = r.contract
       if c then
         local node = m.graph and m.graph.nodes[c.id]
-        if calls and node then
-          return anchor(node)
-        elseif calls then
-          say(c.name .. ' is not a function, component or class: its contract')
-        end
         if not vim.tbl_contains(m.contracts, c) then
           say('the lens hides ' .. c.name .. ' (' .. c.path .. '); L to see it')
           return pick()
         end
+        if node then
+          return fn(node)
+        elseif how == 'calls' then
+          say(c.name .. ' is not a function, component or class: its contract')
+        end
         used_by()
         screen.show(c)
         -- a type has no row: it shows in the pane, its file's row under it
-        if how == 'page' and not node and m.flows and m.flows[c.name] then
+        if (how == 'page' or how == 'called_by') and m.flows and m.flows[c.name] then
           require('seam.screen_tree').show_type(c.name, 'Used by')
         end
-      elseif r.node then
-        if (how == 'overview' or how == 'page') and not r.node.test then
-          used_by()
-          return screen.show(r.node.id)
-        end
-        if not calls then
-          say(r.node.name .. ' is not a contract: its calls')
-        end
-        anchor(r.node)
+      elseif r.node and not r.node.test then
+        fn(r.node)
       elseif r.candidates then
         pick()
       else
-        if word ~= '' and calls then
+        if word ~= '' and (how == 'calls' or how == 'called_by') then
           say('no function named ' .. word)
         end
         pick()
       end
-    end,
-  })
-end
-
---- Seam on the repo, the call tree from where the code starts.
-function M.from_top()
-  M.start(nil, {
-    after = function()
-      screen.open_calls(nil)
     end,
   })
 end

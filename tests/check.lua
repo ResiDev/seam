@@ -10,7 +10,6 @@ local api = vim.api
 local seam = require 'seam'
 assert(debug.getinfo(seam.open, 'S').source:find(root, 1, true), 'seam is not loaded from ' .. root)
 local screen = require 'seam.screen'
-local calls = require 'seam.calls'
 local picker = require 'seam.picker'
 local function lens_any(c)
   return c.contracts or c.built or c.used
@@ -263,11 +262,11 @@ do
   end
   -- a function calling into another file, another package if one does
   local f, best = nil, -1
-  local down = require('seam.calls').visible(m, 'down')
+  local down = require('seam.graph').visible(m, 'down')
   for id, n in pairs(g and g.nodes or {}) do
     if n.kind ~= 'module' and not n.test and not require('seam.index').is_test(n.path) then
       local score = 0
-      for _, k in ipairs(require('seam.calls').kids(g, id, 'down', down)) do
+      for _, k in ipairs(require('seam.graph').kids(g, id, 'down', down)) do
         local where_ = under_of(m, n.path, g.nodes[k.id].path)
         score = math.max(score, where_ == 'SeamUnder' and 1 or where_ and 2 or 0)
       end
@@ -305,7 +304,7 @@ do
     end
     key 'l'
     check_tree()
-    local kids = require('seam.calls').kids(g, f.id, 'down', down)
+    local kids = require('seam.graph').kids(g, f.id, 'down', down)
     local fk = fkey .. '\n' .. f.id
     local i0 = row_of(fk)
     for j, k in ipairs(kids) do
@@ -601,544 +600,283 @@ do
   seam.lens_changed()
 end
 
-local check_code
+-- the code screen: J on a function's row puts its code on the left, each
+-- line its number and the source as written, each value's type after its
+-- name as the code's types say, the head the trail; the name under the
+-- cursor answers in the pane, a value's later uses lit; n N go from import
+-- to import; J on a call goes on to it, K back to the very name, 3K three
+-- back, K from the first the tree on its row; <C-Tab> its types and back;
+-- gf the line under the cursor in your own code
+local screen_code = require 'seam.screen_code'
+local codetypes = require 'seam.codetypes'
+local names = require 'seam.names'
+local ns_uses = api.nvim_get_namespaces()['seam.uses']
 
--- the call tree: its four windows on its own buffers, the list its rows with
--- the cursor on the row the view says, the call lit beside it, the budget
--- inside the window, the head saying where it is and which way
-local function check_calls(fresh)
-  if st.screen ~= 'calls' or not st.calls then
-    return fail 'not on the Calls screen'
-  end
-  local w, r = st.cwin, st.calls_rows
-  for _, k in ipairs { 'head', 'list', 'code' } do
-    if not valid(w[k]) or api.nvim_win_get_buf(w[k]) ~= st.cbuf[k] then
-      return fail('the ' .. k .. ' window is not there with its buffer')
-    end
-  end
-  if #api.nvim_tabpage_list_wins(st.tab) ~= 3 then
-    fail(('%d windows on the Calls screen, not 3'):format(#api.nvim_tabpage_list_wins(st.tab)))
-  end
-  if api.nvim_buf_line_count(st.cbuf.list) ~= math.max(1, #r.rows) then
-    fail 'the list is not its rows'
-  end
-  local i = api.nvim_win_get_cursor(w.list)[1]
-  local x = r.rows[i]
-  if #r.rows > 0 and not x then
-    return fail 'the cursor is off the rows'
-  end
-  if x and x.key ~= st.calls.cursor then
-    fail('the cursor is on ' .. x.key:gsub('\n', ' > ') .. ', the view on ' .. tostring(st.calls.cursor):gsub('\n', ' > '))
-  end
-  check_code(x and i or nil)
-  if fresh and r.levels > 0 and #r.rows > api.nvim_win_get_height(w.list) then
-    fail(('the budget opened %d levels into %d rows, %d high'):format(r.levels, #r.rows, api.nvim_win_get_height(w.list)))
-  end
-  for j, y in ipairs(r.rows) do
-    if y.parent and y.parent >= j then
-      return fail 'a row sits above the row it hangs from'
-    end
-  end
-  -- the head: the way here ending on the anchor and where it is, then the
-  -- two ways from it with their counts, the one shown lit; from the top,
-  -- the way here alone. What the lens keeps out of the tree, after the tabs,
-  -- or from the top on the first line; nothing when it keeps nothing out
-  local head = api.nvim_buf_get_lines(st.cbuf.head, 0, -1, false)
-  local m = st.models[st.cur]
-  local a = st.calls.anchor and m.graph.nodes[st.calls.anchor]
-  if #head ~= (a and 3 or 1) or api.nvim_win_get_height(w.head) ~= #head then
-    fail('the head is not the way here and the tabs: ' .. table.concat(head, ' | '))
-  end
-  local HIDDEN = '    ?%+(%d+) hidden  L lens$'
-  local hidden = calls.hidden(m.graph, st.calls, m)
-  local first = (head[1] or ''):gsub(HIDDEN, '')
-  if not first:match '^ Seams › ' then
-    fail('the head does not start at Seams: ' .. first)
-  end
-  local ends = not a and ' › where the code starts' or ('   ' .. a.path .. (a.line > 0 and ':' .. a.line or ''))
-  if first:sub(-#ends) ~= ends then
-    fail('the way here does not end ' .. ends .. ': ' .. first)
-  end
-  local said = head[a and 3 or 1] or ''
-  if tonumber(said:match(HIDDEN) or 0) ~= hidden then
-    fail(('the head does not say %d hidden: %s'):format(hidden, said))
-  end
-  if a then
-    local down = #calls.kids(m.graph, a.id, 'down', calls.visible(m, 'down'))
-    local up = calls.used_by(m.graph, a.id, calls.visible(m, 'up'))
-    if not said:match(('^  Calls %d   Called by %d '):format(down, up)) then
-      fail(('the tabs are not Calls %d and Called by %d: %s'):format(down, up, said))
-    end
-    local lit = st.calls.dir == 'up' and 'Called by' or 'Calls'
-    local on
-    for _, mk in ipairs(api.nvim_buf_get_extmarks(st.cbuf.head, require('seam.draw').ns, { 2, 0 }, { 2, -1 }, { details = true })) do
-      if mk[4].hl_group == 'SeamTab' then
-        on = said:sub(mk[3] + 1, mk[4].end_col):match '^ (%D+) '
-      end
-    end
-    if on ~= lit then
-      fail(('the tab lit is %s, not %s'):format(tostring(on), lit))
-    end
-  end
-  local word = st.calls.dir == 'up' and 'above' or 'below'
-  local titles = vim.wo[w.list].winbar:gsub('%%#%w+#', '')
-  if require('seam.draw.calls').typed(m) then
-    if not titles:match '^%s+takes → gives$' then
-      fail('the titles are not takes → gives: ' .. titles)
-    end
-  elseif not titles:match('^%s+' .. word .. '%s+used by%s+file%s+line$') then
-    fail('the titles are not ' .. word .. ', used by, file, line: ' .. titles)
-  end
-  -- a shared function the budget left folded says so where local would go
-  for j, y in ipairs(r.rows) do
-    local line = api.nvim_buf_get_lines(st.cbuf.list, j - 1, j, false)[1] or ''
-    local says = y.shared and y.fold == 'folded' and y.id and not y.id:match ':0:$' or false
-    if says ~= (line:find(' shared', 1, true) ~= nil) then
-      fail(('row %d says shared when it is not, or not when it is: %s'):format(j, line))
-      break
-    end
-  end
+-- the place on top of the trail
+local function top()
+  return st.code and st.code.trail[#st.code.trail]
 end
 
--- the code beside the tree: the view chosen, or itself when nothing calls
--- it; called at, one lit line that is a real call of a real caller, the
--- name on it underlined; itself, the call `]]` stepped to lit
-check_code = function(i)
-  local g, m = st.models[st.cur].graph, st.models[st.cur]
-  local p = calls.pane(g, st.calls, st.calls_rows, i, m)
-  if not p then
+local function check_code()
+  if st.screen ~= 'code' or not screen_code.valid() then
+    return fail('not on the code screen: ' .. tostring(st.screen))
+  end
+  local m, e, w = st.models[st.cur], top(), st.cwin
+  for k, b in pairs { head = st.obuf.head, chead = st.cbuf.chead, code = st.cbuf.code, phead = st.obuf.phead, pane = st.obuf.pane } do
+    if api.nvim_win_get_buf(w[k]) ~= b then
+      fail(k .. ' does not show its buffer')
+    end
+  end
+  local want = ' Seams'
+  for _, x in ipairs(st.code.trail) do
+    want = want .. ' › ' .. (x.id and require('seam.draw').shape(m.graph.nodes[x.id]) or x.path:match '[^/]+$')
+  end
+  if lines(st.obuf.head)[1] ~= want then
+    fail(('the head says %q, not %q'):format(lines(st.obuf.head)[1], want))
+  end
+  local cw = api.nvim_win_get_width(w.code)
+  if cw < screen_code.MIN or cw > screen_code.W then
+    fail('the code is ' .. cw .. ' wide')
+  end
+  if st.code.display ~= 'code' then
     return
   end
-  local lines = api.nvim_buf_get_lines(st.cbuf.code, 0, -1, false)
-  local lit, used, marks = {}, {}, api.nvim_buf_get_extmarks(st.cbuf.code, require('seam.draw').ns, 0, -1, { details = true })
-  for _, mk in ipairs(marks) do
-    used[mk[2]] = used[mk[2]] or mk[4].hl_group == 'SeamUse'
+  local src = code.file(e.path).lines
+  local first, last
+  for i, l in ipairs(lines(st.cbuf.code)) do
+    local n, rest = l:match '^%s*(%d+)  (.*)$'
+    n = tonumber(n)
+    if not n or (rest ~= (src[n] or '') and l:match '^%s*%d+%s*$' == nil) then
+      fail(('code row %d is not a numbered line of %s: %s'):format(i, e.path, l))
+      break
+    end
+    first, last = first or n, n
   end
-  for _, mk in ipairs(marks) do
-    if mk[4].line_hl_group == 'SeamLit' then
-      lit[#lit + 1] = tonumber((lines[mk[2] + 1] or ''):match '^%s*(%d+)')
-      lit.used = used[mk[2]]
-    end
-  end
-  local text = table.concat(lines, '\n')
-  local what = p.node.id .. ' (' .. p.code .. ')'
-  if #p.places == 0 then
-    if p.code == 'called' or not text:find('nothing calls it', 1, true) then
-      fail(what .. ': nothing calls it, and the code does not say so')
-    end
-  elseif st.calls.code and p.code ~= st.calls.code and vim.tbl_contains(calls.codes(p), st.calls.code) then
-    fail(what .. ': the code is not the view chosen, ' .. st.calls.code)
-  end
-  if p.code == 'types' then
-    local named = m.sigs[p.node.id] and require('seam.types').named(m.sigs[p.node.id], m.flows) or {}
-    for _, n in ipairs(named) do
-      if not text:find('%f[%w]' .. vim.pesc(n) .. '   ' .. m.flows[n].decls[1].kind .. ' in ') then
-        fail(what .. ': no declaration of ' .. n)
-      end
-    end
-    if #named == 0 and not (text:find('no type of the repo', 1, true) or text:find('said nothing of it', 1, true)) then
-      fail(what .. ': no types, and the code does not say so')
-    end
-  elseif p.code == 'called' then
-    local u = p.places[p.n]
-    local real = false
-    for _, e in ipairs(g.up[p.node.id] or {}) do
-      real = real or (u and e.from == u.from and e.line == u.line)
-    end
-    if not real or #lit ~= 1 or lit[1] ~= u.line or not lit.used then
-      fail(('%s: place %d of %d lit at %s, not a call of %s'):format(what, p.n, #p.places, tostring(lit[1]), p.node.name))
-    end
-    if not text:find(('called at  %d of %d'):format(p.n, #p.places), 1, true) then
-      fail(what .. ': the head does not say which place')
-    end
-  elseif p.n > 0 and (#lit ~= 1 or lit[1] ~= p.lines[p.n]) then
-    fail(('%s: call %d at %d, lit %s'):format(what, p.n, p.lines[p.n], tostring(lit[1])))
-  end
-  return p
-end
-
--- <Tab> swaps the code and the choice sticks across j; ]] and [[ step
--- round the places or calls, from the tree and from the code
-local function swap()
-  local function step(k, from_code)
-    local before = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, api.nvim_win_get_cursor(st.cwin.list)[1], st.models[st.cur])
-    if from_code then
-      key '<C-w>l'
-    end
-    key(k)
-    if from_code then
-      if api.nvim_get_current_win() ~= st.cwin.code then
-        fail(k .. ' in the code left it')
-      end
-      key '<Esc>'
-    elseif api.nvim_get_current_win() ~= st.cwin.list then
-      fail(k .. ' in the tree took the cursor')
-    end
-    check_calls(false)
-    local now = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, api.nvim_win_get_cursor(st.cwin.list)[1], st.models[st.cur])
-    local list = before and (before.code == 'called' and before.places or before.lines) or {}
-    if before and now and #list > 1 then
-      local want = (k == ']]' or k == 'n') and before.n % #list + 1 or (before.n <= 1 and #list or before.n - 1)
-      if now.n ~= want then
-        fail(('%s went from %d to %d of %d, not %d'):format(k, before.n, now.n, #list, want))
-      end
+  -- the types after the names: those the code's types say, where they say
+  local got, hints = {}, {}
+  for _, mk in ipairs(api.nvim_buf_get_extmarks(st.cbuf.code, require('seam.draw').ns, 0, -1, { details = true })) do
+    if mk[4].virt_text then
+      got[#got + 1] = (first + mk[2]) .. ':' .. mk[4].virt_text[1][1]
     end
   end
-  for _ = 1, 3 do
-    local before = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, api.nvim_win_get_cursor(st.cwin.list)[1], st.models[st.cur])
-    if not before then
-      return
-    end
-    local code_ = calls.next_code(before)
-    key '<Tab>'
-    if st.calls.code ~= code_ then
-      fail('<Tab> did not go to ' .. code_ .. ' from ' .. before.code)
-    end
-    check_calls(false)
-    if code_ ~= 'types' then
-      step 'n'
-      step 'n'
-      step 'N'
-      step(']]', true)
-      step('[[', true)
-    end
-    key 'j'
-    if st.calls.code ~= code_ then
-      fail('j did not keep ' .. code_)
-    end
-    check_calls(false)
-    if code_ ~= 'types' then
-      step 'N'
-    end
+  for _, h in ipairs(codetypes.hints(m, e.path, first or 1, last or 0)) do
+    hints[#hints + 1] = h.line .. ':' .. h.text
+  end
+  table.sort(got)
+  table.sort(hints)
+  if not vim.deep_equal(got, hints) then
+    fail(('the types after the names are %d, the code has %d'):format(#got, #hints))
   end
 end
 
-local function find_row(k)
-  for i, x in ipairs(st.calls_rows and st.calls_rows.rows or {}) do
-    if x.key == k then
-      return i, x
+-- the cursor on the name at line `l` (the source's), byte `c` of it
+local function cursor_at(l, c)
+  local row = l - st.code.s + 1
+  local start = require('seam.draw').meta(st.cbuf.code, row).start or 0
+  api.nvim_win_set_cursor(st.cwin.code, { row, start + c })
+  api.nvim_exec_autocmds('CursorMoved', { buffer = st.cbuf.code })
+end
+
+-- what the pane shows for the name under the cursor, against seam.names
+local function check_answer()
+  local e, n = top(), st.code.n
+  local x = screen_code.subject()
+  local ph = lines(st.obuf.phead)[1] or ''
+  if not n then
+    if x.kind ~= e.kind or (x.id or x.path) ~= (e.id or e.path) then
+      fail 'off a name the pane does not show the function'
     end
+    return
+  end
+  if n.kind == 'call' and not (x.kind == 'fn' and x.id == n.id) then
+    fail('on the call ' .. n.name .. ' the pane does not show its function')
+  elseif n.kind == 'type' and not (x.kind == 'type' and x.name == n.decl.name) then
+    fail('on the type ' .. n.name .. ' the pane does not show it')
+  elseif n.kind == 'file' and not (x.kind == 'file' and x.path == n.path) then
+    fail('on ' .. n.name .. ' the pane does not show its file')
+  elseif (n.kind == 'value' or n.kind == 'param' or n.kind == 'field' or n.kind == 'method') and not ph:find(n.name, 1, true) then
+    fail(('on the %s %s the pane says %q'):format(n.kind, n.name, ph))
+  end
+  -- its later uses lit, each name and its line
+  local lit = 0
+  for _, mk in ipairs(api.nvim_buf_get_extmarks(st.cbuf.code, ns_uses, 0, -1, { details = true })) do
+    lit = lit + (mk[4].hl_group == 'SeamUseName' and 1 or 0)
+  end
+  -- those on the screen: the uses run on past the function
+  local last = st.code.s + api.nvim_buf_line_count(st.cbuf.code) - 1
+  local want = 0
+  for _, u in ipairs(n.uses or {}) do
+    want = want + (u.line >= st.code.s and u.line <= last and 1 or 0)
+  end
+  want = (n.uses and #n.uses > 0) and want + 1 or 0
+  if lit ~= want then
+    fail(('%s: %d names lit, not its %d uses on the screen and itself'):format(n.name, lit, want))
   end
 end
 
--- J on any row does nothing until the code screen lands: still the tree,
--- as it was
-local function j_stays()
-  local v = st.calls
-  local was = { v.anchor, v.dir, vim.deepcopy(v.open), v.cursor, #v.back }
-  key 'J'
-  check_calls(false)
-  if not vim.deep_equal({ v.anchor, v.dir, v.open, v.cursor, #v.back }, was) then
-    fail 'J changed the call tree'
-  end
-end
-
--- L opens the lens over the tree; closing it leaves the tree as it was
-local function lens_and_back()
-  local v = st.calls
-  local was = { v.anchor, v.dir, vim.deepcopy(v.open), v.cursor }
-  key 'L'
-  if not require('seam.lens_panel').is_open() then
-    return fail 'L did not open the lens'
-  end
-  key 'q'
-  if require('seam.lens_panel').is_open() or api.nvim_get_current_win() ~= st.cwin.list then
-    fail 'q did not close the lens back to the tree'
-  end
-  check_calls(false)
-  if not vim.deep_equal({ v.anchor, v.dir, v.open, v.cursor }, was) then
-    fail 'the lens closed on another tree'
-  end
-end
-
--- the head gives the cursor back to the tree; the code keeps it
--- until <Esc>
-local function windows()
-  key '<C-w>k'
-  if api.nvim_get_current_win() ~= st.cwin.list then
-    fail 'the head kept the cursor'
-  end
-  key '<C-w>l'
-  if api.nvim_get_current_win() ~= st.cwin.code then
-    fail 'the code did not take the cursor'
-  end
-  key '<Esc>'
-  if api.nvim_get_current_win() ~= st.cwin.list then
-    fail '<Esc> in the code did not go back to the tree'
-  end
+-- the tree on a contract's function, the cursor on its row
+local function on_tree(c)
+  screen.show(c)
+  api.nvim_set_current_win(st.owin.tree)
+  local x = tree_screen.at()
+  return x and x.id == c.id
 end
 
 do
-  local g = st.models[st.cur].graph
-  if not g then
-    fail 'the index has no call graph'
-  else
-    -- the tree on a contract's function, the cursor on its row
-    local function on_screen(c)
-      screen.show(c)
-      api.nvim_set_current_win(st.owin.tree)
-      local x = tree_screen.at()
-      return x and x.id == c.id
+  local m = st.models[st.cur]
+  local g = m.graph
+  local list = {}
+  for _, c in ipairs(m.contracts) do
+    if g and g.nodes[c.id] and #(g.down[c.id] or {}) > 0 then
+      list[#list + 1] = c
     end
-    local function on(c)
-      local x = st.screen == 'tree' and tree_screen.at()
-      return x and x.id == c.id
-    end
-    local list = {}
-    for _, c in ipairs(st.models[st.cur].contracts) do
-      if g.nodes[c.id] and #(g.down[c.id] or {}) > 0 then
-        list[#list + 1] = c
+  end
+  local n = math.min(#list, max > 0 and max or #list)
+  local kinds = {}
+  for ci = 1, n do
+    local c = list[math.floor((ci - 1) * #list / n) + 1]
+    where = 'code ' .. c.id
+    if on_tree(c) then
+      local row = st.outline.cursor
+      key 'J'
+      check_code()
+      if not (top() and top().id == c.id) then
+        fail 'J did not put the function on the code screen'
       end
-    end
-    local n = math.min(#list, max > 0 and max or #list)
-    for ci = 1, n do
-      local c = list[math.floor((ci - 1) * #list / n) + 1]
-      where = 'calls ' .. c.id
-      if on_screen(c) then
-        key 'c'
-        check_calls(true)
-        for _, k in ipairs { 'j', 'l', 'l', 'h', 'h', 'O', 'H', ']', '[', 'j', 'j', 'k', 'l' } do
-          where = 'calls ' .. c.id .. ' ' .. k
-          key(k)
-          check_calls(false)
-        end
-        where = 'calls ' .. c.id .. ' swap'
-        swap()
-        for _, k in ipairs { '<CR>', '~' } do
-          where = 'calls ' .. c.id .. ' ' .. k
-          key(k)
-          check_calls(true)
-        end
-        where = 'calls ' .. c.id .. ' ~ swap'
-        swap()
-        for _, k in ipairs { 'k', 'l', 'k', 'O', ']', 'H', '[', 'C', 'j', 'l', 'j' } do
-          where = 'calls ' .. c.id .. ' ' .. k
-          key(k)
-          check_calls(false)
-        end
-        where = 'calls ' .. c.id .. ' L'
-        lens_and_back()
-        where = 'calls ' .. c.id .. ' J'
-        j_stays()
-        where = 'calls ' .. c.id .. ' windows'
-        windows()
-        where = 'calls ' .. c.id .. ' back'
-        for j = 1, 10 do
-          if st.screen ~= 'calls' then
-            break
-          end
-          -- the first from the code beside the tree
-          if j == 1 then
-            key '<C-w>l'
-          end
-          key(j % 2 == 0 and '<BS>' or 'K')
-          if st.screen == 'calls' and api.nvim_get_current_win() ~= st.cwin.list then
-            fail 'K from the code did not come back to the tree'
-          end
-        end
-        if not on(c) then
-          fail(('<BS> came back to %s, not the tree on %s'):format(st.screen == 'tree' and tostring(st.outline.cursor) or st.screen, c.name))
-        end
-        -- - from deeper: straight to the tree, on the anchor
-        where = 'calls ' .. c.id .. ' -'
-        on_screen(c)
-        key 'c'
-        local x = st.calls_rows.rows[1]
-        local xn = x and x.id and st.models[st.cur].graph.nodes[x.id]
-        if xn and not xn.test and xn.kind ~= 'module' then
-          key '<CR>'
-          key '-'
-          if not on(xn) then
-            fail('- did not go to the tree on ' .. x.id)
-          end
-        else
-          key '-'
-          if not on(c) then
-            fail('- did not go to the tree on ' .. c.name)
+      -- every name on its first lines, each kind answering
+      local root, s = names.tree(c.path), st.code.s
+      local src = code.file(c.path).lines
+      for l = s, math.min(s + 40, c.end_line or s) do
+        for at in (src[l] or ''):gmatch '()[%a_$][%w_$]*' do
+          local a = names.at(m, c.path, l, at - 1)
+          if a and a.col == at - 1 then
+            kinds[a.kind] = true
+            where = ('code %s %d:%d %s'):format(c.id, l, at - 1, a.name)
+            cursor_at(l, at - 1)
+            check_answer()
           end
         end
       end
-    end
-    -- / anchors on any function: typed, <C-n> to the second, <CR>; the
-    -- direction kept, K back; <Esc> changes nothing and leaves no insert mode
-    if #list > 0 then
-      where = 'calls /'
-      local m = st.models[st.cur]
-      seam.open_calls(list[1].id)
-      key '~'
-      local q = m.graph.nodes[list[1].id].name:sub(1, 3)
-      local want = picker.fuzzy(calls.callables(m.graph, m), q)
-      local was = st.calls.anchor
-      key('/' .. q .. '<C-n><CR>')
-      local to = want[math.min(2, #want)]
-      if picker.is_open() then
-        fail '<CR> did not close the picker'
-      elseif not to or st.calls.anchor ~= to.id or st.calls.dir ~= 'up' then
-        fail(('/%s<C-n><CR> anchored on %s %s, not %s up'):format(q, tostring(st.calls.anchor), st.calls.dir, to and to.id or 'nothing'))
-      end
-      check_calls(true)
-      key '/zzz<Esc>'
-      if picker.is_open() or api.nvim_get_mode().mode ~= 'n' or api.nvim_get_current_win() ~= st.cwin.list then
-        fail '<Esc> did not close the picker back to the tree in normal mode'
-      elseif to and st.calls.anchor ~= to.id then
-        fail '<Esc> changed the anchor'
-      end
-      key 'K'
-      if st.calls.anchor ~= was or st.calls.dir ~= 'up' then
-        fail('K after / came back to ' .. tostring(st.calls.anchor) .. ', not ' .. was)
-      end
-      check_calls(true)
-      key '<BS>'
-    end
-    where = 'calls from the top'
-    seam.open_calls(nil)
-    check_calls(true)
-    for _, k in ipairs { 'j', 'j', 'l', 'O', 'H' } do
-      key(k)
-    end
-    -- h folds an open folder, l opens it again
-    where = 'calls from the top h'
-    local di
-    for i, x in ipairs(st.calls_rows.rows) do
-      di = di or (x.kind == 'dir' and x.fold == 'open' and #x.kids > 0 and i) or nil
-    end
-    if not di then
-      fail 'no open folder from the top'
-    else
-      local dkey, n = st.calls_rows.rows[di].key, #st.calls_rows.rows
-      key(di .. 'G')
-      key 'h'
-      check_calls(false)
-      local _, d = find_row(dkey)
-      if not (d and d.fold == 'folded' and #st.calls_rows.rows < n and st.calls.cursor == dkey) then
-        fail 'h on an open folder did not fold it'
-      end
-      key 'l'
-      if #st.calls_rows.rows ~= n then
-        fail 'l did not open the folder again as it was'
-      end
-    end
-    key '<BS>'
-    if st.screen ~= 'tree' then
-      fail '<BS> from the top did not come back to the tree'
-    end
-    -- the repository the design was drawn on: its facts, and on screen
-    local start = 'packages/core/src/run/run.ts:83:startRun'
-    if g.nodes[start] then
-      where = 'calls raf-run-redesign'
-      local callees = {}
-      for _, e in ipairs(g.down[start]) do
-        callees[e.to] = true
-      end
-      if vim.tbl_count(callees) ~= 29 then
-        fail(('startRun calls %d, not 29'):format(vim.tbl_count(callees)))
-      end
-      local hit = false
-      for _, u in ipairs(g.up['packages/core/src/run/run.ts:75:createRun'] or {}) do
-        hit = hit or (g.nodes[u.from].name == 'useOwnedRun' and u.line == 59 and g.nodes[u.from].path:match 'useRun%.ts$' ~= nil)
-      end
-      if not hit then
-        fail 'useOwnedRun does not call createRun at useRun.ts:59'
-      end
-      local main = g.down['apps/demo/app/main.tsx:0:'] or {}
-      if not (main[1] and g.nodes[main[1].to].name == 'App') then
-        fail "main.tsx's top does not call <App>"
-      end
-      if on_screen(st.models[st.cur].byid[start]) then
-        key 'c'
-        local top = 0
-        if not st.calls_rows then
-          fail 'c did not open the Calls screen on startRun'
+      where = 'code ' .. c.id .. ' n N'
+      local stops = {}
+      for i, l in ipairs(lines(st.cbuf.code)) do
+        for _, sc in ipairs(require('seam.draw').meta(st.cbuf.code, i).stops or {}) do
+          stops[#stops + 1] = { i, sc }
         end
-        for _, x in ipairs(st.calls_rows and st.calls_rows.rows or {}) do
-          top = top + (x.parent and 0 or 1)
+        local _ = l
+      end
+      if #stops > 0 then
+        api.nvim_win_set_cursor(st.cwin.code, { 1, 0 })
+        key 'n'
+        if not vim.deep_equal(api.nvim_win_get_cursor(st.cwin.code), stops[1]) then
+          fail 'n did not go to the first import'
         end
-        if top ~= 29 then
-          fail(('startRun shows %d rows under it, not 29'):format(top))
+        key 'N'
+        if not vim.deep_equal(api.nvim_win_get_cursor(st.cwin.code), stops[#stops]) then
+          fail 'N from the first did not go round to the last'
         end
-        -- / on the design's repo: createRun by name, K back to startRun
-        key '/createRun<CR>'
-        if st.calls.anchor ~= 'packages/core/src/run/run.ts:75:createRun' then
-          fail('/createRun<CR> anchored on ' .. tostring(st.calls.anchor))
+      end
+      -- J on calls, the trail growing; K back to the very name; 3K the tree
+      where = 'code ' .. c.id .. ' J K'
+      local depth = 1
+      for _ = 1, 3 do
+        local call
+        for i = 1, api.nvim_buf_line_count(st.cbuf.code) do
+          local meta = require('seam.draw').meta(st.cbuf.code, i)
+          for _, sc in ipairs(meta.stops or {}) do
+            local a = not call and meta.lnum and names.at(m, top().path, meta.lnum, sc - meta.start)
+            if a and a.kind == 'call' and not a.declares then
+              call = { i, sc, a.id }
+            end
+          end
+        end
+        if not call then
+          break
+        end
+        api.nvim_win_set_cursor(st.cwin.code, { call[1], call[2] })
+        api.nvim_exec_autocmds('CursorMoved', { buffer = st.cbuf.code })
+        key 'J'
+        depth = depth + 1
+        check_code()
+        if #st.code.trail ~= depth or top().id ~= call[3] then
+          fail('J on a call did not go to ' .. call[3])
         end
         key 'K'
-        if st.calls.anchor ~= start then
-          fail('K after /createRun came back to ' .. tostring(st.calls.anchor))
+        if not vim.deep_equal(api.nvim_win_get_cursor(st.cwin.code), { call[1], call[2] }) then
+          fail 'K did not come back to the very name'
         end
-        key '<BS>'
+        key 'J'
       end
-      -- createRun under useOwnedRun: called at opens on useRun.ts:59, among
-      -- the places of its 7 callers
-      where = 'calls raf-run-redesign createRun'
-      seam.open_calls 'packages/react/src/useRun.ts:39:useOwnedRun'
-      local ci = find_row 'packages/react/src/useRun.ts:39:useOwnedRun\npackages/core/src/run/run.ts:75:createRun'
-      if not ci then
-        fail 'createRun is not a row under useOwnedRun'
+      if depth > 1 then
+        key(depth .. 'K')
       else
-        key(ci .. 'G')
-        local p = check_code(ci)
-        local by = {}
-        for _, u in ipairs(p and p.places or {}) do
-          by[u.from] = true
-        end
-        local u = p and p.places[p.n]
-        if not (p and p.code == 'called' and vim.tbl_count(by) == 7 and u and u.line == 59 and u.from:match 'useRun%.ts:%d+:useOwnedRun$') then
-          fail(('createRun called at: %d callers, on %s, not 7 and useRun.ts:59'):format(vim.tbl_count(by), u and (u.from .. ':' .. u.line) or 'nothing'))
-        end
-        key 'n'
-        check_code(ci)
-        -- gf on the row: createRun's declaration in your own tab
-        where = 'calls raf-run-redesign gf'
-        key 'gf'
-        went('gf on createRun', 'packages/core/src/run/run.ts', 75, st.cwin.list)
-        -- gf in the code beside it: the line under the cursor, the call
-        p = calls.pane(st.models[st.cur].graph, st.calls, st.calls_rows, ci, st.models[st.cur])
-        u = p and p.places[p.n]
-        local from = u and st.models[st.cur].graph.nodes[u.from]
-        local row
-        for j, l in ipairs(api.nvim_buf_get_lines(st.cbuf.code, 0, -1, false)) do
-          row = row or (tonumber(l:match '^%s*(%d+)  ') == (u and u.line) and j) or nil
-        end
-        if not (from and row) then
-          fail 'the code beside createRun does not show its call'
-        else
-          key '<C-w>l'
-          api.nvim_win_set_cursor(st.cwin.code, { row, 0 })
-          key 'gf'
-          went('gf in the code', from.path, u.line, st.cwin.list)
-        end
-        key '<BS>'
+        key 'K'
       end
-      -- a lens hiding react in used by: createRun's callers leave useOwnedRun
-      -- out, no row says so, and the anchor counts what the tree lost;
-      -- built from hides nothing, so its calls count nothing
-      where = 'calls raf-run-redesign lens'
-      local L, saved = require 'seam.lens', st.lens
-      st.lens = L.new()
-      table.insert(st.lens.rules, { path = 'packages/react/', cols = { used = 'hide' } })
-      seam.lens_changed()
-      local create = 'packages/core/src/run/run.ts:75:createRun'
-      seam.open_calls(create)
-      key '~'
-      check_calls(true)
-      for _, x in ipairs(st.calls_rows.rows) do
-        if x.id and st.models[st.cur].graph.nodes[x.id].path:match '^packages/react/' then
-          fail(x.key:gsub('\n', ' > ') .. ' is among the callers shown')
+      if st.screen ~= 'tree' or st.outline.cursor ~= row then
+        fail(('%dK did not come back to the tree on its row: %s'):format(depth, tostring(st.screen)))
+      end
+      -- the types display and back
+      where = 'code ' .. c.id .. ' <C-Tab>'
+      key 'J'
+      key '<C-Tab>'
+      local tl = lines(st.cbuf.code)
+      if st.code.display ~= 'types' or not (tl[1] or ''):find(c.name, 1, true) or not (tl[1] or ''):match(c.line .. '%s*$') then
+        fail('the types display does not start with the function: ' .. (tl[1] or ''))
+      end
+      for i, l in ipairs(tl) do
+        if l ~= '' and not l:match '%d+%s*$' and not require('seam.draw').meta(st.cbuf.code, i).tv then
+          fail('types row ' .. i .. ' has no line: ' .. l)
           break
         end
       end
-      if calls.hidden(st.models[st.cur].graph, st.calls, st.models[st.cur]) < 1 then
-        fail "createRun's called by does not count useOwnedRun hidden"
+      key '<C-S-Tab>'
+      check_code()
+      -- <Tab> in the code steps the pane's view
+      local was = st.view.at
+      key '<Tab>'
+      if st.view.at == was and #require('seam.views').of(screen_code.subject()) > 1 then
+        fail '<Tab> in the code did not step the pane'
       end
-      key '~'
-      check_calls(true)
-      if (api.nvim_buf_get_lines(st.cbuf.head, 2, 3, false)[1] or ''):find 'hidden' then
-        fail "createRun's calls say the lens hides something"
-      end
-      key '<BS>'
-      st.lens = saved
-      seam.lens_changed()
+      -- gf on a line of the code
+      where = 'code ' .. c.id .. ' gf'
+      api.nvim_win_set_cursor(st.cwin.code, { 1, 0 })
+      local meta = require('seam.draw').meta(st.cbuf.code, 1)
+      key 'gf'
+      went('gf in the code', c.path, meta.lnum, st.cwin.code)
+      key 'K'
     end
+  end
+  for _, k in ipairs { 'call', 'value', 'param' } do
+    if n > 0 and not kinds[k] then
+      fail('no name answered as a ' .. k)
+    end
+  end
+  -- the repository the design was drawn on: createRun's queue, its field, its method
+  local cr = 'packages/core/src/run/run.ts:33:createRun'
+  if g and g.nodes[cr] then
+    where = 'code raf createRun'
+    require('seam.screen_code').open { kind = 'fn', id = cr }
+    local function on(on_line, word, want)
+      local l
+      for i = 33, 120 do
+        if (code.file('packages/core/src/run/run.ts').lines[i] or ''):find(on_line, 1, true) then
+          l = i
+          break
+        end
+      end
+      local s = code.file('packages/core/src/run/run.ts').lines[l]
+      cursor_at(l, s:find(word, s:find(on_line, 1, true), true) - 1)
+      local ph = lines(st.obuf.phead)[1] or ''
+      if not ph:find(want, 1, true) then
+        fail(('on %s the pane says %q, not %q'):format(word, ph, want))
+      end
+      check_answer()
+    end
+    on('const queue', 'queue', 'queue   made by createQueue, line 37')
+    on('const adapter', 'storage', 'options.storage   field of RunOptions')
+    on('queue.fail', 'fail', 'queue.fail   member of Queue')
+    on('export function createRun', 'options', 'options   parameter of createRun, line 33')
+    key 'K'
   end
 end
 
@@ -1339,7 +1077,6 @@ do
   local m = st.models[st.cur]
   local tv = require 'seam.typesview'
   local draw = require 'seam.draw'
-  local cdraw = require 'seam.draw.calls'
   -- the rows of the pane with their Types view meta
   local function tv_rows()
     local out = {}
@@ -1519,38 +1256,13 @@ do
       end
       key '<S-Tab>'
     end
-    -- the call tree: T the counts and back
-    where = 'types calls'
-    local one
-    for id in pairs(m.sigs) do
-      if m.graph.nodes[id].kind ~= 'module' and m.graph.up[id] and (not one or id < one) then
-        one = id
-      end
-    end
-    local up = one and m.graph.up[one][1]
-    if up then
-      seam.open_calls(up.from)
-      key 'T'
-      check_calls(false)
-      if cdraw.typed(m) then
-        fail 'T did not swap to the counts'
-      end
-      key 'T'
-      check_calls(false)
-      if not cdraw.typed(m) then
-        fail 'T again did not swap back to the types'
-      end
-      key '-'
-    end
-    if st.screen ~= 'tree' then
-      fail '- did not go to the tree'
-    end
   end
 end
 
 -- from your own code: a file of the repo in a tab of its own, the cursor on
 -- a contract's name, here() puts the tree's cursor on it, the page on it
--- with its Used by; on a local function, calls anchors on it and called by goes up; gf
+-- with its Used by; on a local function, calls puts it on the code screen
+-- and called by shows its row with its Used by; gf
 -- comes back to the file
 do
   local m = st.models[st.cur]
@@ -1616,18 +1328,27 @@ do
       where = 'here ' .. how .. ' ' .. f.id
       local from = on(f.path, f.line, name_col(f.path, f.line, f.name))
       seam.here(how)
-      if api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'calls' or not st.calls then
-        fail(how .. ' did not open the call tree')
-      elseif st.calls.anchor ~= f.id or st.calls.dir ~= (how == 'calls' and 'down' or 'up') then
-        fail(('anchored on %s %s'):format(tostring(st.calls.anchor), st.calls.dir))
+      if api.nvim_get_current_tabpage() ~= st.tab then
+        fail(how .. ' did not come to seam')
+      elseif how == 'calls' then
+        if st.screen ~= 'code' or not (top() and top().id == f.id) then
+          fail 'calls did not put the function on the code screen'
+        else
+          check_code()
+          key 'K'
+          if st.screen ~= 'tree' or (tree_screen.at() or {}).id ~= f.id then
+            fail 'K from calls did not come back to its row in the tree'
+          end
+        end
+      elseif st.screen ~= 'tree' or (tree_screen.at() or {}).id ~= f.id then
+        fail 'called by did not show its row in the tree'
       else
-        check_calls(true)
+        check_seams 'Used by'
       end
       api.nvim_set_current_tabpage(from)
       vim.cmd 'tabclose'
       api.nvim_set_current_tabpage(st.tab)
     end
-    key '<BS>'
   end
   -- a type's name: its Types view in the tree's pane
   local ty = m.flowlist and m.flowlist[1] and m.flowlist[1].decls[1]
@@ -1641,7 +1362,6 @@ do
     api.nvim_set_current_tabpage(from)
     vim.cmd 'tabclose'
     api.nvim_set_current_tabpage(st.tab)
-    key '-'
   end
   -- a word naming nothing: the tree, its search holding the word
   where = 'here nothing'

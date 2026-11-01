@@ -283,7 +283,6 @@ function M.all_keys()
         { 'l', 'open it: a folder, a file, the calls' },
         { 'h', 'close it, or up a level' },
         { 'J', 'the code screen on it: a function or a file' },
-        { 'c', 'its calls, on the Calls screen' },
       },
     },
     {
@@ -346,9 +345,6 @@ function M.status()
     if x.kind == 'fn' or x.kind == 'file' then
       row[#row + 1] = 'J'
     end
-    if x.kind == 'fn' then
-      row[#row + 1] = 'c'
-    end
     if pane.has_places() then
       row[#row + 1] = 'n N'
     end
@@ -398,12 +394,6 @@ local function tree_keys(buf)
   vim.keymap.set('n', 'R', function()
     index.load()
     M.redraw(true)
-  end, o(buf))
-  vim.keymap.set('n', 'c', function()
-    local x = M.at()
-    if x and x.kind == 'fn' then
-      S().open_calls(x.id)
-    end
   end, o(buf))
   vim.keymap.set('n', 'J', function()
     local x = M.at()

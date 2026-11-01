@@ -8,6 +8,7 @@ return {
   -- ptype: a type picked with / shown in the pane, { row, at } the tree's cursor line then; opens: the types opened in place, by the pane's row key (seam.typesview); pctx: what the pane was drawn with
   -- obuf, owin: the tree's buffers and windows, head, tree, phead (the pane's head) and pane
   -- tab: seam's tab page; from_tab: the one it was opened from, where gf shows the code
-  -- calls: the Calls screen's view (seam.CallsView), calls_rows its rows as drawn
-  -- columns: the call tree's columns, 'counts' when T chose them over what each function takes and gives
+  -- code: the code screen's trail (seam.CodeAt each, the last shown), its display, the name under the cursor (n) and the pane's row for it (subject)
+  -- cbuf, cwin: the code screen's buffers, chead and code, and windows, head, chead, code, phead and pane (the head and the pane's are the tree's buffers)
+  -- cctx, copens: what the code's types display is drawn with, the types opened in it by function
 }

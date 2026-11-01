@@ -21,7 +21,6 @@ M.WORD = {
   L = 'lens',
   q = 'close seam',
   ['<Esc>'] = 'tree',
-  c = 'calls',
   ['n N'] = 'place',
 }
 
