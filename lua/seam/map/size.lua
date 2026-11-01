@@ -73,7 +73,7 @@ function M.draw(o)
     end
     r:add(' ' .. (it.text or tostring(it.n)), 'SeamLabel')
     if it.second then
-      r:to(second):add(it.second, it.second_hl or 'SeamText')
+      r:to(second):add(draw.trunc(it.second, math.max(4, o.width - 1 - second)), it.second_hl or 'SeamText')
     end
     out[#out + 1] = r
   end

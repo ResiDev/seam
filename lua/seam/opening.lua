@@ -31,10 +31,13 @@ local function at_tv(h)
 end
 
 -- the block `-` closes where the cursor is: the innermost open around it,
--- or the function opened on its line, or the type the head opened
-local function to_close(h, t)
+-- or the function opened on its line, or the type the head opened; on a
+-- Map's box, its declaration opened under the drawing
+local function to_close(h, t, n)
   local open = h.ctx.open
-  if h.head then
+  if t and t.after and n and tv.is_open(open, nil, tv.child(t.key, t.id, n.name)) then
+    return tv.child(t.key, t.id, n.name)
+  elseif h.head then
     for k, v in pairs(open) do
       if v and k:match '^head|' and not k:match '^head|.*|' then
         return k
@@ -82,7 +85,7 @@ function M.keys()
   if not t then
     return nil, nil
   end
-  return to_open(h, t, n), to_close(h, t)
+  return to_open(h, t, n), to_close(h, t, n)
 end
 
 --- `+`: open it, drawn again by `redraw`; from the head, the cursor to the
