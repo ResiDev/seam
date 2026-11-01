@@ -1,5 +1,5 @@
--- What changed in a range of git, `from` and `to` (the working tree when
--- `to` is nil): each file new, changed or gone, and its lines at each end,
+-- What changed from a commit, `from`, to the working tree, the files as
+-- seam reads them: each file new, changed or gone, and its lines then,
 -- asked of git in the background; each declaration of a file new, gone or
 -- changed by its text under treesitter, a changed function's signature or
 -- body by what it takes and gives as written. The range is `st.range`, what
@@ -13,8 +13,7 @@ local M = {}
 M.env = nil
 
 ---@class seam.Range
----@field from string
----@field to string|nil a ref; nil, the working tree
+---@field from string a ref; the range always ends at the working tree
 
 ---@class seam.Changes
 ---@field root string
@@ -25,7 +24,6 @@ M.env = nil
 ---@field files table<string, 'new'|'changed'|'gone'> the TypeScript files that changed
 ---@field list string[] the same, sorted
 ---@field old table<string, string[]> a file's lines at `from`
----@field new table<string, string[]> a file's lines at `to`, when it is a ref
 ---@field decls table<string, seam.FileDecls> what changed in each file, as asked
 
 --- The range shown, from HEAD to the working tree until one is picked.
@@ -38,18 +36,11 @@ end
 ---@param r seam.Range
 ---@return boolean
 function M.is_default(r)
-  return r.from == 'HEAD' and r.to == nil
-end
-
---- A ref as said: its name, `working tree` for none.
----@param ref string|nil
----@return string
-function M.name(ref)
-  return ref or 'working tree'
+  return r.from == 'HEAD'
 end
 
 local function key_of(r)
-  return r.from .. '\0' .. (r.to or '')
+  return r.from
 end
 
 --- What git said of the range shown, once it has.
@@ -119,7 +110,7 @@ end
 function M.ask(root, done)
   local r = vim.deepcopy(M.range())
   ---@type seam.Changes
-  local C = { root = root, range = r, key = key_of(r), pending = true, files = {}, list = {}, old = {}, new = {}, decls = {} }
+  local C = { root = root, range = r, key = key_of(r), pending = true, files = {}, list = {}, old = {}, decls = {} }
   st.changes = C
   local function finish(err)
     C.pending, C.err = false, err
@@ -139,10 +130,6 @@ function M.ask(root, done)
         specs[#specs + 1] = r.from .. ':' .. path
         at[#at + 1] = { C.old, path }
       end
-      if r.to and s ~= 'gone' then
-        specs[#specs + 1] = r.to .. ':' .. path
-        at[#at + 1] = { C.new, path }
-      end
     end
     if #specs == 0 then
       return finish()
@@ -159,11 +146,7 @@ function M.ask(root, done)
       finish()
     end)
   end
-  local args = { 'diff', '--name-status', '--no-renames', '-z', r.from }
-  if r.to then
-    args[#args + 1] = r.to
-  end
-  args[#args + 1] = '--'
+  local args = { 'diff', '--name-status', '--no-renames', '-z', r.from, '--' }
   git(root, args, nil, function(res)
     if st.changes ~= C then
       return
@@ -177,9 +160,6 @@ function M.ask(root, done)
       if M.is_ts(path) then
         C.files[path] = s == 'A' and 'new' or s == 'D' and 'gone' or 'changed'
       end
-    end
-    if r.to then
-      return texts()
     end
     git(root, { 'ls-files', '--others', '--exclude-standard', '-z' }, nil, function(u)
       if st.changes ~= C then
@@ -195,26 +175,26 @@ function M.ask(root, done)
   end)
 end
 
---- The key code reads a file's version by, at `from` or at `to`: the file
---- itself for the working tree; nil where it is not there.
+--- The key code reads a file's version by, at `from` or at `to`, the
+--- working tree: there the file itself; nil where it is not there.
 ---@param C seam.Changes
 ---@param path string
 ---@param side 'from'|'to'
 ---@return string|nil
 function M.key(C, path, side)
   local s = C.files[path]
-  if side == 'to' and not C.range.to then
+  if side == 'to' then
     return s ~= 'gone' and path or nil
   end
   if not s then
     -- unchanged: the same at both ends, so the working tree's
     return path
   end
-  local lines = (side == 'from' and C.old or C.new)[path]
+  local lines = C.old[path]
   if not lines then
     return nil
   end
-  local k = 'git:' .. (side == 'from' and C.range.from or C.range.to) .. ':' .. path
+  local k = 'git:' .. C.range.from .. ':' .. path
   if not code.has(k) then
     code.virtual(k, path, lines)
   end

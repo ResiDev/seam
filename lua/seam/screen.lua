@@ -93,7 +93,7 @@ function M.status()
     local left, right = picker.status()
     return '%#SeamMode# NORMAL %#SeamStatus# ' .. left:gsub('%%', '%%%%') .. '%=' .. right:gsub('%%', '%%%%') .. ' '
   elseif lens_panel.focused() then
-    return require('seam.hints').status('lens', { { { 'j k', 'row' }, { 'f', 'from' }, { 't', 'to' }, { 'x', 'reset' }, { 'q', 'close' } } }, 0)
+    return require('seam.hints').status('lens', { { { 'j k', 'row' }, { 'f', 'from' }, { 'x', 'reset' }, { 'q', 'close' } } }, 0)
   elseif st.screen == 'code' then
     return require('seam.screen_code').status()
   end

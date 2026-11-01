@@ -30,7 +30,7 @@ The keys are not mapped by seam; the suggested ones are in the author's config.
 
 ## The tree
 
-Folders, files, each file's functions in the file's order, and what each function calls, opened a level at a time in the order first written. On the left; the pane beside it shows the row under the cursor. Its left column carries the range's git signs (HEAD to the working tree until the lens picks another, named in the head when it is not): `+` new, `~` changed, `_` gone, a folder or file `~` when anything under it changed and `+` when it is new; a function or file gone keeps its row, struck through, where it was. A name from another file is underlined; from another package, underlined in that package's hue, its row with the package's bar. A call already open above it (recursion) is dim and does not open.
+Folders, files, each file's functions in the file's order, and what each function calls, opened a level at a time in the order first written. On the left; the pane beside it shows the row under the cursor. Its left column carries the range's git signs (from HEAD to the working tree until the lens picks another start, named in the head when it is not HEAD): `+` new, `~` changed, `_` gone, a folder or file `~` when anything under it changed and `+` when it is new; a function or file gone keeps its row, struck through, where it was. A name from another file is underlined; from another package, underlined in that package's hue, its row with the package's bar. A call already open above it (recursion) is dim and does not open.
 
 The status line says where you are on the left, and on the right only the keys that act there, each key lit with its word, in three groups: the row │ the pane │ seam. A narrow window drops seam's group first, then the pane's. When the range has changes, `]c [c` and `gc` lead the row's group and take the room of `h`, `s` and `/`, which stay in `?`, and `D` ends the pane's group. With the diff on, the status line starts `diff on`.
 
@@ -105,7 +105,7 @@ The name under the cursor answers in the pane, or off a name the nearest on its 
 |---|---|
 | `j` `k` and Vim's motions | move; the pane follows the name under the cursor, else the nearest on the line |
 | `n` `N` | the next or previous import: a name from another file, round the ends |
-| `]c` `[c` | the next or previous change in the range, its lines numbered in the signs' colours, or with the diff on where its lines are; when the range ends at the working tree |
+| `]c` `[c` | the next or previous change in the range, its lines numbered in the signs' colours, or with the diff on where its lines are |
 | `J` | on a call or an imported name, the code screen on its function or file, on top of the trail |
 | `K` | back: the previous on the trail, the cursor on the very name you left from; a count goes back more (`3K`); from the first, the tree on its row |
 | `<S-Tab>` | the code, or its types: the function's line, then its values in the order made, `name  Type`, each function inside under its own line, indented; a file, its declarations. With the diff on, a line whose signature changed as it was, `-` on red, over itself, `+` on green, and a type opened with its own `+` `-` lines |
@@ -125,7 +125,7 @@ The code's head gives the cursor back to the code. In the pane, the pane's keys;
 
 ## The lens
 
-A float over the tree. Its first row is the range of changes, `changes  from HEAD  to working tree`, what the signs, `gc`, `]c` `[c` and the diff follow; it is kept while seam is open. Then one row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
+A float over the tree. Its first row is the range of changes, `changes  from HEAD  to the working tree`, always ending at the files as they are (to see another branch, check it out), what the signs, `gc`, `]c` `[c` and the diff follow; it is kept while seam is open. Then one row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
 
 | Key | Does |
 |---|---|
@@ -137,8 +137,8 @@ A float over the tree. Its first row is the range of changes, `changes  from HEA
 | `a` | the picker: folders, or type a pattern and it lists what it matches as you type; `<CR>` on the pattern takes all it matches, on a folder or file just that; `<Tab>` picks several. A new rule does nothing until a column is turned |
 | `e` | edit this row's pattern; the panel lists what it matches as you type |
 | `d` | delete this row |
-| `f` `t` | the range's from or to: a picker of the default, the branches, the tags and the recent commits; what is typed narrows it, or is taken as the ref when git knows it (`HEAD~3`, a hash) |
-| `x` | the range back to HEAD and the working tree |
+| `f` | where the range starts: a picker of HEAD, the branches, the tags and the recent commits; what is typed narrows it, or is taken as the ref when git knows it (`HEAD~3`, a hash) |
+| `x` | the range back to starting at HEAD |
 | `q` `<Esc>` `L` | close |
 
 A pattern is a file name (`*.test.*`), a folder anywhere (`tests/`), a path (`packages/*/scripts/**`, or `**checklist**` for that text anywhere in it), a regex on the path between slashes (`/\.(test|spec)\./`), or any other text found in the path. All but a regex ignore case unless they have a capital.

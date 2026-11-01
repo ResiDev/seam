@@ -12,7 +12,7 @@ local ns = api.nvim_create_namespace 'seam.lens'
 ---@field root fun(): string  -- the repo, for previewing its files
 ---@field changed fun()   -- the lens changed; filter and redraw behind the panel
 ---@field range fun(): seam.Range  -- the range of changes, on its first row
----@field set_range fun(r: seam.Range)  -- picked with f, t or x
+---@field set_range fun(r: seam.Range)  -- picked with f or x
 
 -- plain for only and the muted red of what the lens hides for hide: green
 -- and bright red would read as package hues
@@ -90,8 +90,7 @@ local function rows()
       .at(1, 'changes', 'SeamBold')
       .add('   from  ', 'SeamLensOff')
       .add(g.from, 'SeamRange')
-      .add('   to  ', 'SeamLensOff')
-      .add(g.to or 'working tree', 'SeamRange')
+      .add('   to  the working tree', 'SeamLensOff')
       .add('      what the signs and ]c [c follow', 'SeamLensOff')
   )
   push(line())
@@ -145,7 +144,7 @@ local function rows()
     or {
       'c b u  turn a column: only, hide, neither   ␣  all three together',
       'C B U  clear a column   X  clear all   a add   e edit   d delete   q close',
-      'on changes: f from   t to   a branch, a tag, a hash, HEAD~3;   x back to HEAD → working tree',
+      'on changes: f from   a branch, a tag, a hash, HEAD~3, to the working tree;   x back to HEAD',
     }
   for _, k in ipairs(keys) do
     push(line().at(1, k, 'SeamLensOff'))
@@ -471,7 +470,7 @@ local function pick()
   }
 end
 
--- `f` `t` `x` (seam.refs.lens), the panel drawn again after
+-- `f` `x` (seam.refs.lens), the panel drawn again after
 local function range(which)
   local at = P.cursor
   P.picking = which ~= 'reset' or nil
@@ -578,7 +577,7 @@ function M.open(host, at)
   end)
   map('X', clear)
   map('d', delete)
-  for k, which in pairs { f = 'from', t = 'to', x = 'reset' } do
+  for k, which in pairs { f = 'from', x = 'reset' } do
     map(k, function()
       range(which)
     end)
