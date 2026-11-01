@@ -132,7 +132,9 @@ function M.lines(out, m, path, s, e, nodes, diffed)
   end
   -- the lines the range changed, their numbers in the signs' colours
   local cd = require 'seam.codediff'
-  local inline = diffed and cd.diff_of(path)
+  -- one function: its own lines then and now, as the pane diffs it; else the file
+  local whole = s == 1 and e == #code.file(path).lines
+  local inline = diffed and cd.diff_of(path, not whole and #nodes == 1 and nodes[1].name or nil)
   local marks = inline and {} or cd.marks(path)
   M.rows(out, path, set, {}, function(cr, start, src, l)
     if marks[l] then

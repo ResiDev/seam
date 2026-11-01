@@ -315,6 +315,24 @@ return function(t)
       if meta.lnum or not text:find('seamWas: number', 1, true) or require('seam.draw').meta(st.cbuf.code, i + 1).lnum ~= n1.line then
         fail(']c on the code screen with the diff is not on the removed line before ' .. n1.line .. ': ' .. text)
       end
+      -- the lines removed are the function's own, as the pane's Code has them, not the file's laid inside it
+      local C = changes.get()
+      local items, ka, _, a0 = require('seam.views.changed').decl_items(C, path, n1.name, false)
+      local want, got = {}, {}
+      for _, it in ipairs(items or {}) do
+        if it.kind == 'del' then
+          want[#want + 1] = vim.trim(changes.lines(ka)[it.a + a0] or '')
+        end
+      end
+      for r = 1, api.nvim_buf_line_count(st.cbuf.code) do
+        local rm = require('seam.draw').meta(st.cbuf.code, r)
+        if rm.at and not rm.lnum then
+          got[#got + 1] = vim.trim(api.nvim_buf_get_lines(st.cbuf.code, r - 1, r, false)[1] or '')
+        end
+      end
+      if not vim.deep_equal(got, want) then
+        fail(('the code screen removed %d lines, the function its own %d'):format(#got, #want))
+      end
       -- its types: the function's line as it was over it
       key '<S-Tab>'
       local tl = api.nvim_buf_get_lines(st.cbuf.code, 0, 2, false)
