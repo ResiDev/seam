@@ -1155,6 +1155,117 @@ for nm, cap, body, d in (("mapz-type-size-fields", "A type, size, by field", fie
            phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", d, opts=TDISP, hint="     l opens") + body,
            "Model  map · size", cursor="Model", trail="Model")
 
+# ── round five: built from first, and folders top to bottom ─────────────
+# both ways with what it is built from on the left and who uses it on the
+# right, the order of the tabs; every line still runs from the user to the used
+def fn_both_flipped(root):
+    L = [s("b", N[k]["name"]) for k in kids(root)]
+    R = [s("fd", where(N[c]["path"]) + "  ") + s("b", N[c]["name"] or "(top level)") for c in CALLERS[root] if not is_test(N[c]["path"])]
+    lw = max(width(x) for x in L)
+    n = max(len(L), len(R)); mid = n // 2
+    cv = Canvas(PW, n)
+    l0 = mid - len(L) // 2; r0 = mid - len(R) // 2
+    for j, seg in enumerate(L):
+        cv.seg(seg, lw - width(seg), l0 + j); cv.h(lw + 1, lw + 3, l0 + j, "c")
+    cv.v(lw + 3, l0, l0 + len(L) - 1, "c"); cv.h(lw + 3, lw + 6, mid, "c")
+    nm = N[root]["name"]
+    cv.put(lw + 7, mid, nm, "b bold")
+    bx = lw + 8 + len(nm)
+    cv.h(bx, bx + 3, mid, "c"); cv.v(bx + 3, r0, r0 + len(R) - 1, "c")
+    for j, seg in enumerate(R):
+        cv.h(bx + 3, bx + 5, r0 + j, "c"); cv.seg(seg, bx + 6, r0 + j)
+    return cv.rows()
+
+# folders top to bottom: what it is built from above, who uses it below,
+# a box a folder, as many across as fit, names wrapped to the room, never cut
+PW = 108
+def vertical(centre, sub, top, bottom, tests=0, tfiles=0, ccls="b bold", word=("call", "calls")):
+    def group(items):
+        g = collections.OrderedDict()
+        for path, nm in items:
+            g.setdefault(where(path), collections.OrderedDict()).setdefault(posixpath.basename(path), [])
+            if nm not in g[where(path)][posixpath.basename(path)]: g[where(path)][posixpath.basename(path)].append(nm)
+        return collections.OrderedDict(sorted(g.items(), key=lambda kv: -sum(len(v) for v in kv[1].values())))
+    def wrap(names, w):
+        lines, cur = [], ""
+        for nm in names:
+            if cur and len(cur) + 2 + len(nm) > w: lines.append(cur); cur = nm
+            else: cur = (cur + "  " + nm) if cur else nm
+        return lines + [cur]
+    def lab(k): return f"{k} {word[0] if k == 1 else word[1]}"
+    def lay(g):
+        out = []
+        for d, files in g.items():
+            mf = max(len(f) for f in files)
+            room = PW - 2 - (mf + 6)
+            ls = {f: wrap(v, room) for f, v in files.items()}
+            k = sum(len(v) for v in files.values())
+            w = max(mf + 4 + max(len(l) for v in ls.values() for l in v) + 4, len(d) + len(lab(k)) + 9)
+            out.append(dict(d=d, files=files, ls=ls, mf=mf, k=k, w=w, h=sum(len(v) for v in ls.values()) + 3))
+        return out
+    def band(boxes, y):
+        x, rowh = 0, 0
+        for b in boxes:
+            if x and x + b["w"] > PW: y += rowh + 1; x, rowh = 0, 0
+            b["x"], b["y"] = x, y; x += b["w"] + 2; rowh = max(rowh, b["h"])
+        return y + rowh
+    def draw(b):
+        x, y = b["x"], b["y"]
+        cv.box(x, y, b["w"], b["h"], "d3")
+        cv.put(x + 2, y, " " + b["d"] + " ", "fg bold")
+        cv.put(x + 3 + len(b["d"]) + 1, y, " " + lab(b["k"]) + " ", "o")
+        j = 0
+        for f, v in b["files"].items():
+            cv.put(x + 2, y + 2 + j, f, "fd")
+            for l in b["ls"][f]: cv.put(x + 4 + b["mf"], y + 2 + j, l, "b"); j += 1
+    T, B = lay(group(top)), lay(group(bottom))
+    cv = Canvas(PW, 1)
+    y = band(T, 0) if T else -1
+    cx = 6
+    tx = cx + 2 + len(centre) // 2
+    # the trunk up into what it is built from
+    cy = y + 3
+    if T:
+        cv.v(tx, y + 1, cy, "c"); cv.put(tx, y + 1, "▲", "c")
+        cv.put(tx + 2, y + 2, f"{sum(b['k'] for b in T)} {word[1]}", "c")
+    cv.box(cx, cy, len(centre) + 4, 3, "d3"); cv.put(cx + 2, cy + 1, centre, ccls); cv.put(cx + len(centre) + 6, cy + 1, sub, "c")
+    y = cy + 2
+    if B:
+        cv.v(tx, y, y + 3, "c"); cv.put(tx, y + 1, "▲", "c")
+        n = sum(b["k"] for b in B)
+        cv.put(tx + 2, y + 2, f"used {n} " + ("time" if n == 1 else "times") + (f", and {tests} in tests, {tfiles} files" if tests else ""), "c")
+        band(B, y + 4)
+    for b in T + B: draw(b)
+    return cv.rows()
+
+crR = [(N[k]["path"], N[k]["name"]) for k in kids(ROOT) if N[k]["path"].startswith("packages/")]
+callers = CALLERS[ROOT]
+crL = [(N[c]["path"], N[c]["name"] or "(top level)") for c in callers if not is_test(N[c]["path"])]
+crT = [c for c in callers if is_test(N[c]["path"])]
+screen("mapw-fn-both", "A function, both ways, built from first",
+       "What createRun is built from on the left, who uses it on the right, the order of the tabs. Every line runs from the user to the used.",
+       phead(crh, "function in run/run.ts:33   called by 16, calls 17", "both ways", hint="") + fn_both_flipped(ROOT),
+       "createRun()  map · both ways")
+screen("mapw-fn-folders", "A function, folders, top to bottom",
+       "What createRun is built from above, by folder, as many boxes across as fit; who uses it below. Names wrap to the pane, never cut. The arrows point at what is used.",
+       phead(crh, "function in run/run.ts:33   called by 16, calls 17", "folders", hint="") +
+       vertical("createRun", "run/", crR, crL, len(crT), len({N[c]["path"] for c in crT})),
+       "createRun()  map · folders")
+ins = [i for i, n in N.items() if n["path"] == RUNTS]
+ft, fb, fc = [], [], set()
+for i in ins:
+    for c in CALLERS[i]:
+        if N[c]["path"] == RUNTS: continue
+        if is_test(N[c]["path"]): fc.add(c); continue
+        fb.append((N[c]["path"], N[c]["name"] or "(top level)"))
+    for k in kids(i):
+        if N[k]["path"] != RUNTS and N[k]["path"].startswith("packages/"): ft.append((N[k]["path"], N[k]["name"]))
+screen("mapw-file-folders", "A file, folders, top to bottom",
+       "run.ts: the folders it calls into above, who calls into it below.",
+       phead(s("fg bold", "run.ts"), "file in run/", "folders", hint="") +
+       vertical("run.ts", "run/", ft, fb, len(fc), len({N[c]["path"] for c in fc}), ccls="fg bold"),
+       "run.ts  map · folders", cursor="run.ts", trail="run.ts")
+
 # ── the gallery ─────────────────────────────────────────────────────────
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):
