@@ -1069,8 +1069,8 @@ lua/seam/
   map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows
   map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
   map/tree.lua      the tree display: levels, branches opened and closed, ⋯ N more, a name seen higher; a folder's and a file's a rank down a level
-  map/both.lua      both ways: callers left, calls right, cut to ⋯ N more
-  map/folders.lua   the folders display: boxes of folders with their files and names, the counts on the arrows
+  map/both.lua      both ways: calls left, callers right, each side by folder and file, cut to ⋯ N more
+  map/folders.lua   the folders display top to bottom: built from above, used by below, boxes of folders with their files and names
   map/fgraph.lua    a folder's own folders as boxes in bands, what is used above what uses it, each listing what it calls
   map/size.lua      the size display: a bar each, the number after it, a second column
   map/typegraph.lua a type's tree: types as boxes, functions on the arrows, makers on the left, what gives it back above
