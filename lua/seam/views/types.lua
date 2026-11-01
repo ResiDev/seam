@@ -285,6 +285,12 @@ local function columns(C, fs, max)
   for _, f in ipairs(fs) do
     nw = math.max(nw, width(f.node.name))
     pw = math.max(pw, width(f.takes))
+    -- with the diff on, room for what it took too
+    local d = C.diff and require('seam.views.changed').fn_state(f.node)
+    local was = d and d.state == 'signature' and require('seam.views.changed').was_sig(f.node, d)
+    if was then
+      pw = math.max(pw, width(tv.takes(was)))
+    end
     gw = math.max(gw, width(f.gives))
   end
   local room = C.width - nw - math.min(gw, 40) - 8

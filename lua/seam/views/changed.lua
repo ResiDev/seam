@@ -380,6 +380,16 @@ function M.type_changed(path, name)
   return C ~= nil and not C.range.to and changes.decl(C, path, name) ~= nil
 end
 
+--- What a function took and gave at the range's start, as written then.
+---@param node table
+---@param d seam.DeclChange
+---@return seam.TSig|nil
+function M.was_sig(node, d)
+  local key = changes.key(assert(changes.get()), node.path, 'from')
+  local s = key and d.from and written.fn(key, d.from.line)
+  return s and tv.sig(s, nil) or nil
+end
+
 --- A function's line as it was at the range's start, `-` on red: with
 --- `cols` in the Types view's shape and columns, what it takes, its name,
 --- what it gives; else as written, its parameters named. `gives` what it
@@ -394,8 +404,7 @@ function M.was_row(node, d, gives, cols)
   local key = changes.key(C, node.path, 'from')
   local r = row { at = { path = node.path, line = math.max(1, node.line) }, change = true }
   r:add('-', 'SeamSignDelete'):add ' '
-  local s = cols and key and written.fn(key, d.from.line)
-  local sig = s and tv.sig(s, nil)
+  local sig = cols and M.was_sig(node, d)
   if sig then
     local types_view = require 'seam.views.types'
     local known = function(w)
