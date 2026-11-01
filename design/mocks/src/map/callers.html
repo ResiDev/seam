@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root { color-scheme: dark; }
+.page { display: flex; flex-direction: column; gap: 22px; font-family: var(--font-sans, sans-serif); }
+.card h3 { margin: 0 0 4px; font-size: 14px; }
+.card p { margin: 0 0 8px; font-size: 12.5px; color: var(--muted-foreground, #9aa); max-width: 680px; }
+pre { margin: 0; padding: 16px; border-radius: var(--radius, 8px); background: #1a1b26; color: #c0caf5;
+  font: 10.4px/1.55 var(--font-mono, monospace); overflow-x: auto; }
+.d { color: #565f89; } .t { color: #2ac3de; } .f { color: #7dcfff; } .l { color: #545c7e; }
+.b { color: #7aa2f7; font-weight: 700; } .B { color: #7aa2f7; font-weight: 700; text-decoration: underline; }
+.k { color: #bb9af7; }
+</style></head><body><div class="page"><div class="card"><h3>A. Now</h3><p>The line leaves what tasksOf gives and falls into heads that are what each caller gives. It reads as four more outputs.</p><pre><span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[])</span> <span class="d">→</span> <span class="b">tasksOf</span> <span class="d">→</span> readonly <span class="t">DefinedTask</span>[]
+<span class="l">                                        │</span>
+<span class="l">  ┌─────────────────────────────────────┘</span>
+<span class="l">  │</span>
+<span class="l">  ├─</span> <span class="t">RunState</span>
+<span class="l">  │</span>    tasks.ts<span class="d">:133</span>   <span class="f">finish</span>            <span class="d">(</span><span class="t">RunState</span><span class="d">,</span> <span class="t">RunState</span><span class="d">)</span>
+<span class="l">  │</span>
+<span class="l">  ├─</span> readonly <span class="t">Effect</span>[]
+<span class="l">  │</span>    update.ts<span class="d">:82</span>   <span class="f">checklistEvents</span>   <span class="d">(</span><span class="t">Ran</span><span class="d">,</span> <span class="t">Given</span><span class="d">,</span> <span class="t">Views</span><span class="d">)</span>
+<span class="l">  │</span>
+<span class="l">  ├─</span> <span class="t">string</span> | <span class="t">null</span>
+<span class="l">  │</span>    tasks.ts<span class="d">:35</span>    <span class="f">taskIdFor</span>         <span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[], string)</span>
+<span class="l">  │</span>
+<span class="l">  └─</span> <span class="d">nothing</span>
+       tasks.ts<span class="d">:101</span>   <span class="f">conditions</span>        <span class="d">(runState, change)</span></pre></div><div class="card"><h3>B. Up into the name</h3><p>The line rises into tasksOf with ▲, never touching what it gives; the callers by folder, each with its whole signature, its own → on its line.</p><pre><span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[])</span> <span class="d">→</span> <span class="b">tasksOf</span> <span class="d">→</span> readonly <span class="t">DefinedTask</span>[]
+<span class="l">                                 ▲</span>
+<span class="l">  ┌──────────────────────────────┘</span>
+<span class="l">  │</span>
+<span class="l">  └─</span> <span class="k">run/</span>
+       tasks.ts<span class="d">:35</span>    <span class="f">taskIdFor</span>         <span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[], string)</span>   <span class="d">→</span>  <span class="t">string</span> | <span class="t">null</span>
+               <span class="d">:101</span>   <span class="f">conditions</span>        <span class="d">(runState, change)</span>   <span class="d">nothing</span>
+               <span class="d">:133</span>   <span class="f">finish</span>            <span class="d">(</span><span class="t">RunState</span><span class="d">,</span> <span class="t">RunState</span><span class="d">)</span>   <span class="d">→</span>  <span class="t">RunState</span>
+       update.ts<span class="d">:82</span>   <span class="f">checklistEvents</span>   <span class="d">(</span><span class="t">Ran</span><span class="d">,</span> <span class="t">Given</span><span class="d">,</span> <span class="t">Views</span><span class="d">)</span>   <span class="d">→</span>  readonly <span class="t">Effect</span>[]</pre></div><div class="card"><h3>C. The call itself</h3><p>As B, but under each caller the line that calls it, copied in its colours, tasksOf lit in every one: you see them calling it, and what they do with what it gives.</p><pre><span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[])</span> <span class="d">→</span> <span class="b">tasksOf</span> <span class="d">→</span> readonly <span class="t">DefinedTask</span>[]
+<span class="l">                                 ▲</span>
+<span class="l">  ┌──────────────────────────────┘</span>
+<span class="l">  │</span>
+<span class="l">  ├─</span> <span class="f">taskIdFor</span>         tasks.ts<span class="d">:35</span>
+<span class="l">  │</span>    <span class="B">tasksOf</span>(groups).<span class="f">find</span>((task) <span class="k">=&gt;</span> task.walkthrough?.id <span class="k">===</span> walkthrough)?.id <span class="k">??</span> <span class="k">null</span>;
+<span class="l">  │</span>
+<span class="l">  ├─</span> <span class="f">conditions</span>        tasks.ts<span class="d">:101</span>
+<span class="l">  │</span>    <span class="k">const</span> open <span class="k">=</span> <span class="B">tasksOf</span>(runState.walkthroughsAndChecklistsInUse.checklistDefinitions).<span class="f">filter</span>(
+<span class="l">  │</span>
+<span class="l">  ├─</span> <span class="f">finish</span>            tasks.ts<span class="d">:133</span>
+<span class="l">  │</span>    <span class="k">for</span> (<span class="k">const</span> task <span class="k">of</span> moved <span class="k">?</span> <span class="B">tasksOf</span>(after.walkthroughsAndChecklistsInUse.checklistDefinitions) <span class="k">:</span> []) {
+<span class="l">  │</span>
+<span class="l">  └─</span> <span class="f">checklistEvents</span>   update.ts<span class="d">:82</span>
+       <span class="k">for</span> (<span class="k">const</span> event <span class="k">of</span> <span class="f">eventsBetween</span>(<span class="B">tasksOf</span>(after.walkthroughsAndChecklistsInUse.checklistDefinitions),
+         announcedFrom, now, credit)) {</pre></div><div class="card"><h3>D. Callers on top</h3><p>Top to bottom is who calls whom: its callers flow down into tasksOf, what it calls hangs below. Every arrow means calls; the calls lose their place above.</p><pre><span class="l">  ┌─</span> <span class="k">run/</span>
+<span class="l">  │</span>    tasks.ts<span class="d">:35</span>    <span class="f">taskIdFor</span>         <span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[], string)</span>   <span class="d">→</span>  <span class="t">string</span> | <span class="t">null</span>
+<span class="l">  │</span>            <span class="d">:101</span>   <span class="f">conditions</span>        <span class="d">(runState, change)</span>   <span class="d">nothing</span>
+<span class="l">  │</span>            <span class="d">:133</span>   <span class="f">finish</span>            <span class="d">(</span><span class="t">RunState</span><span class="d">,</span> <span class="t">RunState</span><span class="d">)</span>   <span class="d">→</span>  <span class="t">RunState</span>
+<span class="l">  │</span>    update.ts<span class="d">:82</span>   <span class="f">checklistEvents</span>   <span class="d">(</span><span class="t">Ran</span><span class="d">,</span> <span class="t">Given</span><span class="d">,</span> <span class="t">Views</span><span class="d">)</span>   <span class="d">→</span>  readonly <span class="t">Effect</span>[]
+<span class="l">  │</span>
+<span class="l">  └──────────────────────────────┐</span>
+<span class="l">                                 ▼</span>
+<span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[])</span> <span class="d">→</span> <span class="b">tasksOf</span> <span class="d">→</span> readonly <span class="t">DefinedTask</span>[]
+<span class="d">                                 calls nothing</span></pre></div><div class="card"><h3>E. Names on one line</h3><p>Under the name, its callers as names only, by file; their signatures and the line that calls it in the foot. Least to read.</p><pre><span class="d">(readonly </span><span class="t">ChecklistGroup</span><span class="d">[])</span> <span class="d">→</span> <span class="b">tasksOf</span> <span class="d">→</span> readonly <span class="t">DefinedTask</span>[]
+<span class="l">                                 ▲</span>
+<span class="l">                                 └──</span> tasks.ts  <span class="f">taskIdFor</span>  <span class="f">conditions</span>  <span class="f">finish</span>     update.ts  <span class="f">checklistEvents</span></pre></div><div class="card"><h3>F. Callers on the left</h3><p>The Map as it began: callers left of the row, a line from each into it, as reading goes. The calls stay above.</p><pre><span class="f">taskIdFor</span>        <span class="d">tasks.ts:35</span>   <span class="l">─┐</span>
+<span class="f">conditions</span>       <span class="d">tasks.ts:101</span>  <span class="l">─┤</span>
+<span class="f">finish</span>           <span class="d">tasks.ts:133</span>  <span class="l">─┼─▶</span> <span class="b">tasksOf</span> <span class="d">→</span> readonly <span class="t">DefinedTask</span>[]
+<span class="f">checklistEvents</span>  <span class="d">update.ts:82</span>  <span class="l">─┘</span>
+                                    <span class="d">takes (readonly </span><span class="t">ChecklistGroup</span><span class="d">[])</span></pre></div></div></body></html>
