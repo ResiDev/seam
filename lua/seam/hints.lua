@@ -23,7 +23,6 @@ M.WORD = {
   ['<Esc>'] = 'tree',
   ['<CR>'] = 'page',
   c = 'calls',
-  t = 'types',
 }
 
 local GAP, BAR = '   ', '  │  '

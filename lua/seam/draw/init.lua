@@ -88,7 +88,7 @@ function M.shape(c)
 end
 
 --- What an entry under the page shown is called in its trail: a page by its
---- contract, the Calls and Types screens by their labels.
+--- contract, the Calls screen by its label.
 ---@param e table an entry of `st.stack`
 ---@return string
 function M.trail(e)
