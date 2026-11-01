@@ -280,6 +280,7 @@ function M.hints(back)
   if st.screen == 'code' then
     seam[#seam + 1] = 'K'
   end
+  seam[#seam + 1] = 'L'
   seam[#seam + 1] = 'q'
   return row, pane, seam
 end
@@ -292,7 +293,7 @@ function M.all_keys(back)
   if st.screen == 'code' then
     seam[#seam + 1] = { 'K', 'back where you were, a count for more' }
   end
-  vim.list_extend(seam, { { 'gf gd', 'that place in your own code' }, { 'q', 'close seam' } })
+  vim.list_extend(seam, { { 'L', 'the lens: what seam shows, and the range of changes' }, { 'gf gd', 'that place in your own code' }, { 'q', 'close seam' } })
   return {
     {
       'The pane',
@@ -379,6 +380,9 @@ function M.keys(buf)
       end
     end, o(buf))
   end
+  vim.keymap.set('n', 'L', function()
+    require('seam.screen').open_lens()
+  end, o(buf))
   vim.keymap.set('n', '?', function()
     require('seam.hints').open(screen().all_keys())
   end, o(buf))
