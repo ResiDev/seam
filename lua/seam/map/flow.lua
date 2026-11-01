@@ -15,6 +15,10 @@ M.CAP = 40
 -- the column the line down the left runs in
 M.G = 1
 
+-- the rows the line falls from the row's output before it turns to its
+-- callers, so they stand apart from it
+M.DROP = 2
+
 ---@class seam.FlowItem
 ---@field cols table[][] each column's pieces `{ text, hl, hit }`, aligned down the side
 ---@field tail table[]|nil pieces straight after the columns, going on under themselves past the pane's edge
@@ -97,7 +101,8 @@ local function words(segs)
       local sp = s[1]:find(' ', i, true)
       local e = sp or #s[1]
       local text = s[1]:sub(i, e)
-      cur.pieces[#cur.pieces + 1] = { text, s[2], s[3] }
+      -- the mark of where the row's output starts kept on its first letter
+      cur.pieces[#cur.pieces + 1] = { text, s[2], s[3], out = i == 1 and s.out or nil }
       cur.w = cur.w + vim.fn.strchars(text)
       if sp then
         close()
@@ -138,7 +143,7 @@ function M.wrap(segs, room)
     end
     local last = l[#l]
     if last then
-      l[#l] = { (last[1]:gsub(' +$', '')), last[2], last[3] }
+      l[#l] = { (last[1]:gsub(' +$', '')), last[2], last[3], out = last.out }
     end
   end
   return lines
@@ -205,12 +210,15 @@ function M.draw(top, centre, bottom, o)
   end
   -- the centre, going on under itself; where its output starts
   local ox, oy, e
-  local k = 0
-  for li, l in ipairs(M.wrap(centre.segs, o.width - cx - 2)) do
+  local segs = { unpack(centre.segs) }
+  local o_ = centre.out and segs[centre.out]
+  if o_ then
+    segs[centre.out] = { o_[1], o_[2], o_[3], out = true }
+  end
+  for li, l in ipairs(M.wrap(segs, o.width - cx - 2)) do
     local x = li == 1 and cx or cx + 2
     for _, s in ipairs(l) do
-      k = k + 1
-      if k == centre.out then
+      if s.out then
         ox, oy = x, y
       end
       x = cv:put(x, y, s[1], s[2], s[3])
@@ -222,19 +230,21 @@ function M.draw(top, centre, bottom, o)
   if #bots > 0 then
     local bx, top_y
     if ox then
-      -- from under what it gives a step down and left, then down under the row
-      bx, top_y = math.min(ox, cx + 2), oy + 1
+      -- from under what it gives down a while, left, then down under the row
+      local turn = y + M.DROP
+      bx, top_y = math.min(ox, cx + 2), turn
+      cv:v(ox, oy, turn)
       if bx < ox then
-        cv:v(ox, oy, oy + 1)
-        cv:h(bx, ox, oy + 1)
+        cv:h(bx, ox, turn)
       else
         top_y = oy
       end
-      y = y + 1
+      y = turn + 1
     else
       bx, top_y = e + 3, y
       cv:put(e + 1, y, '──', 'SeamMapLine')
       cv:bit(bx, y, 8, 'SeamMapLine')
+      y = y + M.DROP
     end
     local bws = widths(bots)
     local last = top_y
