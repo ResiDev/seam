@@ -551,6 +551,11 @@ screen8("map8-flow-big", "C as a map on createRun",
         "The same with 17 calls.",
         CR, flow(CR), "flow", None, opts=("folder", "type", "flow"))
 
+UP = byname("update", "run/update.ts")
+screen8("map8-type-files", "type, a type given from two files",
+        "update's calls: Work comes from run/update.ts and from run/walkthroughs.ts, a line for each file, the type written once.",
+        UP, by_type(UP) , "type", None)
+
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):
     G.append(f"<h2>{H.escape(title)}</h2><p class='cap'>{H.escape(cap)}</p>{body}")
