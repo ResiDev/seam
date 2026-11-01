@@ -897,7 +897,7 @@ The screens are locked in the design docs. The code must keep these rules:
 
 - **Layout.** The tree is 46 wide, the pane the rest, under a head line
   across the top. The code screen is two: the code as wide as it needs,
-  60 to 112, the pane the rest. All need 150 columns. Narrower than that is not
+  60 to 112 and at most 60% of the screen, the pane the rest, 40% or more. All need 150 columns. Narrower than that is not
   designed. v1 says so and opens anyway.
 - **Trees.** Every tree is built by one module, `tree.lua`, from paths. Two
   spaces a level. Directories end in `/`. A chain of lone directories shares

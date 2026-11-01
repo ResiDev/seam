@@ -265,6 +265,25 @@ local file = vim.tbl_map(function(r)
 end, codetypes.file(m, 'src/queue.ts'))
 eq(file, { 'type Queue', 'fn createQueue' }, "a file's declarations")
 
+-- off a name, the nearest on its line that answers; a line with none, nothing
+do
+  local l = L 'const queue = createQueue("x");'
+  local function near(col)
+    local n = names.near(m, RUN, l, col)
+    return n and n.name
+  end
+  eq(near(0), 'queue', 'the indent before a line: its first name')
+  eq(near(-1), 'queue', 'the gutter: the first name')
+  eq(near(200), 'createQueue', 'past the end: the nearest name that answers, not the string')
+  local _, c = pos(RUN, 'const queue = createQueue("x");', 'createQueue')
+  eq(near(c - 1), 'createQueue', 'on the space after = : the nearer name')
+  local blank
+  for i, x in ipairs(vim.split(FILES[RUN], '\n')) do
+    blank = blank or (x == '}' and i or nil)
+  end
+  eq(names.near(m, RUN, blank, 0), nil, 'a line with no names')
+end
+
 io.stdout:write(('names: %d checks, %d failures\n'):format(checks, #failures))
 vim.fn.delete(dir, 'rf')
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')

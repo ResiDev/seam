@@ -316,7 +316,7 @@ function M.all_keys()
         { 'n N', 'into it, on the next and previous place, in Used by and Built from' },
         { '> <', 'a level more or less, in the Map' },
         { 'T', 'inputs and outputs, in the Map' },
-        { '<C-d> <C-u>', 'scroll it half a screen' },
+        { '<C-d> <C-u> <M-j> <M-k>', 'scroll it half a screen' },
         { '<C-e> <C-y>', 'scroll it a line' },
       },
     },
@@ -437,6 +437,8 @@ local function tree_keys(buf)
   for _, k in ipairs { '<C-d>', '<C-u>', '<C-e>', '<C-y>' } do
     vim.keymap.set('n', k, pane.scroll(k), o(buf))
   end
+  vim.keymap.set('n', '<M-j>', pane.scroll '<C-d>', o(buf))
+  vim.keymap.set('n', '<M-k>', pane.scroll '<C-u>', o(buf))
   vim.keymap.set('n', '/', function()
     M.search()
   end, o(buf))

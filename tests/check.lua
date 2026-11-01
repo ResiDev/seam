@@ -610,7 +610,7 @@ end
 -- name as the code's types say, the head the trail; the name under the
 -- cursor answers in the pane, a value's later uses lit; n N go from import
 -- to import; J on a call goes on to it, K back to the very name, 3K three
--- back, K from the first the tree on its row; <C-Tab> its types and back;
+-- back, K from the first the tree on its row; <S-Tab> its types and back;
 -- gf the line under the cursor in your own code
 local screen_code = require 'seam.screen_code'
 local codetypes = require 'seam.codetypes'
@@ -821,9 +821,9 @@ do
         fail(('%dK did not come back to the tree on its row: %s'):format(depth, tostring(st.screen)))
       end
       -- the types display and back
-      where = 'code ' .. c.id .. ' <C-Tab>'
+      where = 'code ' .. c.id .. ' <S-Tab>'
       key 'J'
-      key '<C-Tab>'
+      key '<S-Tab>'
       local tl = lines(st.cbuf.code)
       if st.code.display ~= 'types' or not (tl[1] or ''):find(c.name, 1, true) or not (tl[1] or ''):match(c.line .. '%s*$') then
         fail('the types display does not start with the function: ' .. (tl[1] or ''))
@@ -834,8 +834,11 @@ do
           break
         end
       end
-      key '<C-S-Tab>'
+      key '<S-Tab>'
       check_code()
+      if st.code.display ~= 'code' then
+        fail '<S-Tab> on the types did not come back to the code'
+      end
       -- <Tab> in the code steps the pane's view
       local was = st.view.at
       key '<Tab>'

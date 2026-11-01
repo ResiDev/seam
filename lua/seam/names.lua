@@ -507,6 +507,54 @@ function M.at(m, path, line, col)
   end
 end
 
+--- The name at `col` on `line`, else the one on that line nearest it that
+--- answers; nil on a line with none.
+---@param m table the model
+---@param path string
+---@param line integer
+---@param col integer
+---@return seam.Name|nil
+function M.near(m, path, line, col)
+  local hit = col >= 0 and M.at(m, path, line, col)
+  if hit then
+    return hit
+  end
+  local C = file(path)
+  if not C then
+    return nil
+  end
+  local row, leaves = line - 1, {}
+  local function walk(n)
+    for c in n:iter_children() do
+      local sr, _, er = c:range()
+      if sr <= row and er >= row then
+        if c:named_child_count() == 0 then
+          if c:named() and sr == row then
+            local _, sc, _, ec = c:range()
+            leaves[#leaves + 1] = { sc, ec }
+          end
+        else
+          walk(c)
+        end
+      end
+    end
+  end
+  walk(C.root)
+  local function dist(x)
+    return col < x[1] and x[1] - col or col >= x[2] and col - x[2] + 1 or 0
+  end
+  table.sort(leaves, function(a, b)
+    local da, db = dist(a), dist(b)
+    return da < db or da == db and a[1] < b[1]
+  end)
+  for _, x in ipairs(leaves) do
+    local n = M.at(m, path, line, x[1])
+    if n then
+      return n
+    end
+  end
+end
+
 --- The uses of the binding at `line`, `col` after it, in its scope.
 ---@param path string
 ---@param line integer
