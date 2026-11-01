@@ -500,6 +500,7 @@ function M.all_keys()
       'The code',
       {
         { 'n N', 'the next and previous import: a name from another file' },
+        { ']c [c', 'the next and previous change' },
         { 'J', 'the code screen on the function or file the name under the cursor is' },
         { 'K', 'back to the very name you left from; 3K three back; from the first, the tree' },
         { '+ -', 'in its types, open and close the type under the cursor' },
@@ -546,6 +547,9 @@ function M.status()
   if c then
     rg[#rg + 1] = '-'
   end
+  if #require('seam.views.changed').line_stops(st.cwin.code, e.path) > 0 then
+    rg[#rg + 1] = ']c [c'
+  end
   if j_target() then
     rg[#rg + 1] = 'J'
   end
@@ -578,6 +582,11 @@ local function code_keys(buf)
   vim.keymap.set('n', 'N', function()
     M.next_import(-1)
   end, o(buf))
+  for _, k in ipairs { { ']c', 1 }, { '[c', -1 } } do
+    vim.keymap.set('n', k[1], function()
+      require('seam.views.changed').next_line(st.cwin.code, top().path, k[2])
+    end, o(buf))
+  end
   for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
     vim.keymap.set('n', k[1], function()
       M.step_display(k[2])

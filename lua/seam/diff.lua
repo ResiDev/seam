@@ -137,6 +137,13 @@ end
 ---@return seam.Hunk[]
 function M.hunks(a, b)
   local out = {}
+  -- one side empty: all of the other, which codediff does not say
+  if #a == 0 or #b == 0 then
+    if #a + #b > 0 then
+      out[1] = { a = 1, na = #a, b = 1, nb = #b, del = {}, add = {} }
+    end
+    return out
+  end
   local cd = codediff()
   if cd then
     local ok, r = pcall(cd.compute_diff, a, b, { max_computation_time_ms = 1000 })

@@ -200,6 +200,8 @@ eq(#diff.layout(hs, #B), 14, 'the whole file: every line, the removed one too')
 local gone = diff.layout(diff.hunks({ 'x', 'y', 'z' }, { 'x', 'z' }), 2)
 eq(shape(gone), { 'same 1', 'del 2 *', 'same 2' }, 'a removed line where it was')
 eq(gone[3].a, 3, 'an unchanged line after a removed one, its line at from')
+eq(shape(diff.layout(diff.hunks({ 'x', 'y' }, {}), 0)), { 'del 1 *', 'del 2' }, 'all of it gone')
+eq(shape(diff.layout(diff.hunks({}, { 'x' }), 1)), { 'add 1 *' }, 'all of it new')
 
 io.stdout:write(('changes: %d checks, %d failures\n'):format(checks, #failures))
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')

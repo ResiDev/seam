@@ -82,9 +82,16 @@ M.list = {
     name = 'Used by',
     displays = seams_view.USED,
     has = typed,
-    draw = through(seams_view.used_by),
+    -- a function that changed: who uses it now, then who used it at the range's start
+    draw = function(out, row, m, display, ctx)
+      local x = as_type(row)
+      if changed_view.changed_fn(m, x) then
+        return changed_view.used_by(out, x, m, display, ctx, seams_view.used_by)
+      end
+      seams_view.used_by(out, x, m, display, ctx)
+    end,
     count = function(m, row)
-      return seams_view.used_count(m, as_type(row))
+      return changed_view.used_count(m, as_type(row)) or seams_view.used_count(m, as_type(row))
     end,
   },
   {
