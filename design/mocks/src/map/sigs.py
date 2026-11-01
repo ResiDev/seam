@@ -696,6 +696,125 @@ screen8("map9-folder-big", "C grouped by folder on createRun",
         "The same by folder.",
         CR, gflow(CR, "folder"), "folder", None, opts=O9)
 
+# ── round ten: the flow in a narrow pane (105 columns) ──────────────────
+NW = 105
+def split_params(s):
+    out, depth, cur = [], 0, ""
+    for ch in s:
+        if ch in "<({[": depth += 1
+        if ch in ">)}]": depth -= 1
+        if ch == "," and depth == 0: out.append(cur.strip()); cur = ""
+        else: cur += ch
+    if cur.strip(): out.append(cur.strip())
+    return out
+def raw_sig(i):
+    x = SIG.get((N[i]["path"], N[i]["name"]))
+    if not x: return None
+    def part(p):
+        t = simple(p.get("type") or p["name"])
+        return "{ … }" if t.startswith("{") else t
+    takes = ", ".join(part(p) for p in x["params"])
+    g = sig(i, 200)[1]
+    return takes, g
+def narrow(r, mode, W=NW):
+    """the flow by folder fitted to W columns: 'fit' cuts what it takes to
+    the room left, what it gives whole; 'wrap' carries what it takes on to
+    lines under it; 'ragged' writes what it gives straight after"""
+    L, R = sides(r)
+    home_calls = sorted(L, key=lambda i: (N[i]["path"], callee_line(r, i)))
+    groups = collections.OrderedDict()
+    for i in home_calls: groups.setdefault(where(N[i]["path"]), []).append(i)
+    groups = sorted(groups.items(), key=lambda kv: -len(kv[1]))
+    fw = max(len(base(N[i]["path"])) for i in L)
+    nw = max(len(label(i)) for i in L)
+    lead = 5 + 5          # gutter, the line and its indent
+    x0 = lead + fw + 2 + nw + 2
+    def gv(i):
+        s_ = raw_sig(i); g = s_[1] if s_ else ""
+        return "nothing" if g == "void" else g
+    gw = min(max(len(gv(i)) for i in L) + 2, 28)
+    room = W - x0 - gw - 2
+    rows = []
+    for gi, (d, ids) in enumerate(groups):
+        rows.append((s("", "     ") + s("c", "┌─ " if gi == 0 else "├─ ") + s("fg bold", d[:-6] if d.endswith(" files") else d), ""))
+        prev = None
+        for i in ids:
+            s_ = raw_sig(i); tk = "(" + s_[0] + ")" if s_ else ""
+            g = gv(i)
+            f = base(N[i]["path"])
+            head = s("c", str(callee_line(r, i)).rjust(4) + " ") + s("c", "│    ") + s("fd", (f if f != prev else "").ljust(fw + 2)) + s("b", label(i).ljust(nw + 2))
+            prev = f
+            gseg = (s("c", "→ ") + tsegs(cut(g, gw - 2))) if g != "nothing" else s("c", "nothing")
+            if mode == "fit":
+                tt = tsegs(cut(tk, room), dim=True)
+                rows.append((head + tt + s("", " " * (room - tw(tt) + 2)) + gseg, ""))
+            elif mode == "ragged":
+                full = tsegs(tk, dim=True) + s("", " ") + ((s("c", "→ ") + tsegs(g)) if g != "nothing" else s("c", "nothing"))
+                line = head + full
+                if tw(line) > W: 
+                    # cut at the edge
+                    out, n = [], 0
+                    for c_, x_ in line:
+                        if n + len(x_) > W - 1: out.append((c_, x_[:W - 1 - n])); out.append(("c", "…")); break
+                        out.append((c_, x_)); n += len(x_)
+                    line = out
+                rows.append((line, ""))
+            else:  # wrap
+                parts = split_params(tk[1:-1]) if tk else []
+                lines_, cur = [], "("
+                for k, p_ in enumerate(parts):
+                    piece = p_ + (", " if k < len(parts) - 1 else ")")
+                    if len(cur) + len(piece) > room and cur != "(":
+                        lines_.append(cur.rstrip()); cur = " "
+                    cur += piece
+                if not parts: cur = "()" if tk else ""
+                lines_.append(cur)
+                for k, l_ in enumerate(lines_):
+                    tt = tsegs(l_, dim=True)
+                    last = k == len(lines_) - 1
+                    pre = head if k == 0 else s("c", "     │    ") + s("", " " * (fw + 2 + nw + 2))
+                    rows.append((pre + tt + (s("", " " * max(room - tw(tt) + 2, 2)) + gseg if last else []), ""))
+    rows.append((s("c", "     │"), ""))
+    t_, g_ = raw_sig(r)
+    centre = s("c", str(N[r]["line"]).rjust(4) + " ") + s("c", "└──▶ ") + tsegs("(" + t_ + ")") + s("c", " → ") + s("b bold", N[r]["name"]) + s("c", " → ") + tsegs(g_)
+    rows.append((centre + s("c", " ──┐") if mode != "fit" else centre, ""))
+    # callers: off the row's end, or for fit under the arrow, the line going on down
+    callers = [i for _, files in by_file(R) for fs in files.values() for i in fs]
+    cg = collections.OrderedDict()
+    for i in callers: cg.setdefault(where(N[i]["path"]), []).append(i)
+    if mode == "fit":
+        bx = 8
+        rows[-1] = (s("c", str(N[r]["line"]).rjust(4) + " ") + s("c", "└─┬▶ ") + tsegs("(" + t_ + ")") + s("c", " → ") + s("b bold", N[r]["name"]) + s("c", " → ") + tsegs(g_), "")
+        bx = 7
+    else:
+        bx = tw(centre) + 3
+    cnw = max(len(label(i)) for i in callers)
+    for gi, (d, ids) in enumerate(cg.items()):
+        lastg = gi == len(cg) - 1
+        rows.append((s("", " " * bx) + s("c", "└─ " if lastg else "├─ ") + s("fg bold", d[:-6] if d.endswith(" files") else d), ""))
+        for i in ids:
+            s_ = raw_sig(i)
+            room2 = W - bx - 5 - cnw - 2 - 20
+            tk = cut("(" + s_[0] + ")", max(room2, 10)) if s_ else ""
+            g = cut(s_[1], 16) if s_ else ""
+            rows.append((s("", " " * bx) + s("c", "   " if lastg else "│  ") + s("", "  ") + s("b", label(i).ljust(cnw + 2)) + tsegs(tk, dim=True) + s("", "  ") + (s("c", "→ ") + tsegs(g, dim=True) if g else []) + s("", "  ") + s("fd", base(N[i]["path"])) + s("c", f":{callee_line(i, r)}"), ""))
+    return rows
+def narrow_shot(name, title, cap, rows):
+    hd = phead8(CR, "folder")
+    body = compose([], [(hd + rows + blank(2), NW + 2)], "createRun()  map · folder", "")
+    lib.write_shot(name, body)
+    SHOTS.append((name, title, cap, body))
+narrow_shot("map10-now", "Now, at 105 columns", "What it does in a pane 105 wide: the takes padded to the widest, the gives pushed to the edge and cut.", gflow(CR, "folder")[:])
+narrow_shot("map10-fit", "A. Fit: what it gives whole, what it takes cut to the room left",
+            "What it gives is what the row gets back, so it stays whole; what it takes is cut to what the pane leaves, in full at the foot. The callers branch off the arrow instead of the row's end, so they get the width too.",
+            narrow(CR, "fit"))
+narrow_shot("map10-wrap", "B. Wrap: what it takes goes on to the next line",
+            "Nothing is cut: a long list of what it takes breaks after a comma onto lines under it, what it gives on its last line.",
+            narrow(CR, "wrap"))
+narrow_shot("map10-ragged", "C. Ragged: what it gives straight after what it takes",
+            "No columns past the name: each line as long as it is, cut only at the edge.",
+            narrow(CR, "ragged"))
+
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):
     G.append(f"<h2>{H.escape(title)}</h2><p class='cap'>{H.escape(cap)}</p>{body}")
