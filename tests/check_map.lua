@@ -1,5 +1,5 @@
 -- The Map, driven through its keys, from tests/check.lua: on a function,
--- its file, its folder and a type, each of the four displays on <C-Tab>,
+-- its file, its folder and a type, reached with gm, each of the four displays on <C-Tab>,
 -- the head listing them, no row wider than the pane; on the tree > and <,
 -- l and h on a branch, T; on a type's tree + and - on a box.
 local api = vim.api
@@ -57,7 +57,10 @@ return function(t)
   local function displays(what)
     t.where('map displays ' .. what)
     tree_win()
-    st.view.at = 'Map'
+    -- gm from the tree, the Map aside
+    if (views.shown(pane.subject(), st.view) or {}).name ~= 'Map' then
+      key 'gm'
+    end
     st.view.display.Map = 'tree'
     pane.redraw()
     if shown() ~= 'tree' then
@@ -203,7 +206,7 @@ return function(t)
     key 'j'
     key 'k'
   end
-  st.view.at = 'Code'
+  st.view.at, st.view.aside = 'Code', nil
   tree_win()
   pane.redraw()
 end

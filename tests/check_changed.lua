@@ -4,9 +4,10 @@
 -- out), git asked with it as the repo's own, so the range from HEAD to the
 -- working tree undoes that edit: the file's function changed in its
 -- signature, one gone and one new. Nothing is written in the repo.
--- The signs in the tree, gc, ]c [c, the Changed view and its displays, ]c
--- in the pane, Used by now and at HEAD, the lens's range, a range picked,
--- ]c on the code screen.
+-- The signs in the tree, gc, ]c [c, D's diff in Code and its displays and
+-- in Types, ]c in the pane, a row the range left alone plain, Used by now
+-- and at HEAD on gu, the lens's range, a range picked, ]c on the code
+-- screen, its code and its types with the diff.
 local api = vim.api
 local changes = require 'seam.changes'
 local outline = require 'seam.outline'
@@ -183,20 +184,31 @@ return function(t)
     fail '[c did not come back'
   end
 
-  -- the Changed view on the function: its line first, its lines, removed then added
-  t.where 'changed view'
+  -- D: the diff on; Code on the function its lines, removed then added, on <C-Tab> the whole file
+  t.where 'changed D'
+  local pane_ = require 'seam.pane'
+  local draw = require 'seam.draw'
   screen.show(n1.id)
   api.nvim_set_current_win(st.owin.tree)
-  st.view.at = 'Changed'
+  st.view.at, st.view.aside = 'Code', nil
   tree_screen.redraw(true)
-  local v = views.shown(tree_screen.at(), st.view)
-  if not (v and v.name == 'Changed') then
-    fail 'the Changed view is not shown on the function'
+  if st.diff then
+    fail 'the diff is on before D'
+  end
+  if not pane_.can_diff() then
+    fail 'D is not hinted on a range with changes'
+  end
+  key 'D'
+  local v, d = views.shown(tree_screen.at(), st.view)
+  if not st.diff or not tree_screen.status():find('diff on', 1, true) then
+    fail 'D did not turn the diff on, said in the status line'
+  elseif not (v and v.name == 'Code' and d == 'changes only') then
+    fail(('with the diff on the function shows %s %s, not Code changes only'):format(tostring(v and v.name), tostring(d)))
   else
     local pane = api.nvim_buf_get_lines(st.obuf.pane, 0, -1, false)
     local del, add
     for i, l in ipairs(pane) do
-      local meta = require('seam.draw').meta(st.obuf.pane, i)
+      local meta = draw.meta(st.obuf.pane, i)
       if l:find('seamWas: number', 1, true) and meta.change and not meta.lnum then
         del = i
       end
@@ -208,23 +220,57 @@ return function(t)
       fail 'the removed line and the line now are not there'
     end
     local head = table.concat(api.nvim_buf_get_lines(st.obuf.phead, 0, -1, false), ' ')
-    if not head:find('signature changed', 1, true) then
-      fail('the head does not say the signature changed: ' .. head)
+    if not head:find('signature changed', 1, true) or not head:find('Code     Types    changes only', 1, true) then
+      fail('the head does not say the signature changed, or name the display: ' .. head)
     end
     -- ]c in the pane: the change
     api.nvim_set_current_win(st.owin.pane)
     key '1G'
     key ']c'
-    if not require('seam.draw').meta(st.obuf.pane, api.nvim_win_get_cursor(st.owin.pane)[1]).change then
+    if not draw.meta(st.obuf.pane, api.nvim_win_get_cursor(st.owin.pane)[1]).change then
       fail ']c in the pane is not on a change'
     end
     api.nvim_set_current_win(st.owin.tree)
     local short = api.nvim_buf_line_count(st.obuf.pane)
     key '<C-Tab>'
-    if api.nvim_buf_line_count(st.obuf.pane) < short then
-      fail 'the whole file is shorter than the changes only'
+    if select(2, views.shown(tree_screen.at(), st.view)) ~= 'whole file' or api.nvim_buf_line_count(st.obuf.pane) < short then
+      fail 'the whole file is not shown, or is shorter than the changes only'
     end
     key '<C-S-Tab>'
+    -- Types with the diff: its line as it was, then as it is
+    t.where 'changed D types'
+    key '<Tab>'
+    if (views.shown(tree_screen.at(), st.view) or {}).name ~= 'Types' then
+      fail '<Tab> did not show Types'
+    elseif m.sigs then
+      local tl = api.nvim_buf_get_lines(st.obuf.pane, 0, -1, false)
+      local was
+      for i, l in ipairs(tl) do
+        if not was and l:sub(1, 2) == '- ' and l:find(n1.name, 1, true) and draw.meta(st.obuf.pane, i).change then
+          was = i
+        end
+      end
+      if not was or (tl[was + 1] or ''):sub(1, 2) ~= '+ ' or not tl[was + 1]:find(n1.name, 1, true) then
+        fail('Types with the diff does not have its line as it was over its line: ' .. tostring(tl[1]) .. ' / ' .. tostring(tl[2]))
+      end
+    end
+    key '<Tab>'
+  end
+  -- a function in another file, which the range left alone: Code as it is
+  t.where 'changed D plain'
+  for id, n in pairs(g.nodes) do
+    if n.kind == 'function' and n.path ~= path and outline.files(m)[n.path] and not n.test then
+      screen.show(id)
+      api.nvim_set_current_win(st.owin.tree)
+      local x = tree_screen.at()
+      if x and x.id == id then
+        local v2 = views.shown(x, st.view)
+        if not (v2 and v2.name == 'Code') or #views.displays(v2, x) ~= 1 or #pane_.stops 'change' > 0 then
+          fail(n.name .. ', which did not change, does not show its code as it is with the diff on')
+        end
+        break
+      end
+    end
   end
   -- on the gone row, its lines removed
   if rg then
@@ -243,13 +289,15 @@ return function(t)
   t.where 'changed used by'
   screen.show(n1.id)
   api.nvim_set_current_win(st.owin.tree)
-  st.view.at = 'Used by'
-  tree_screen.redraw(true)
+  key 'gu'
   local pane = table.concat(api.nvim_buf_get_lines(st.obuf.pane, 0, -1, false), '\n')
   if not (pane:find('\n now', 1, true) and pane:find('\n at HEAD', 1, true) and pane:find('was  (', 1, true)) then
     fail 'Used by does not say who uses it now and at HEAD'
   end
-  st.view.at = 'Code'
+  key 'gu'
+  if st.view.aside then
+    fail 'gu again did not come back'
+  end
 
   -- the code screen: ]c to the line that changed
   t.where 'changed code screen'
@@ -260,6 +308,28 @@ return function(t)
     key 'gg'
     key ']c'
     local meta = require('seam.draw').meta(st.cbuf.code, api.nvim_win_get_cursor(st.cwin.code)[1])
+    if st.diff then
+      -- with the diff: the removed line before the line now, ]c on it
+      local i = api.nvim_win_get_cursor(st.cwin.code)[1]
+      local text = api.nvim_buf_get_lines(st.cbuf.code, i - 1, i, false)[1] or ''
+      if meta.lnum or not text:find('seamWas: number', 1, true) or require('seam.draw').meta(st.cbuf.code, i + 1).lnum ~= n1.line then
+        fail(']c on the code screen with the diff is not on the removed line before ' .. n1.line .. ': ' .. text)
+      end
+      -- its types: the function's line as it was over it
+      key '<S-Tab>'
+      local tl = api.nvim_buf_get_lines(st.cbuf.code, 0, 2, false)
+      if not ((tl[1] or ''):sub(1, 1) == '-' and (tl[1] or ''):find('seamWas', 1, true) and (tl[2] or ''):sub(1, 1) == '+') then
+        fail('the types display with the diff does not start with the line as it was: ' .. tostring(tl[1]))
+      end
+      key '<S-Tab>'
+      key 'D'
+      if st.diff then
+        fail 'D on the code screen did not turn the diff off'
+      end
+      key 'gg'
+      key ']c'
+      meta = require('seam.draw').meta(st.cbuf.code, api.nvim_win_get_cursor(st.cwin.code)[1])
+    end
     if meta.lnum ~= n1.line then
       fail(']c on the code screen went to ' .. tostring(meta.lnum) .. ', not ' .. n1.line)
     end
@@ -301,6 +371,7 @@ return function(t)
     fail 'x did not put the range back'
   end
 
+  st.diff = nil
   changes.env = nil
   vim.fn.delete(tmp, 'rf')
   ask()
