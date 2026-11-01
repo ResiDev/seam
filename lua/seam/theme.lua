@@ -5,7 +5,7 @@ local st = require 'seam.state'
 local M = {}
 
 local HUES = { '#7aa2f7', '#9ece6a', '#ff9e64', '#bb9af7', '#1abc9c', '#7dcfff', '#e0af68', '#f7768e' }
-local GREY = { name = 'SeamHueGrey', bar = 'SeamBarGrey' }
+local GREY = { name = 'SeamHueGrey', bar = 'SeamBarGrey', under = 'SeamUnderGrey' }
 
 function M.setup()
   local function s(n, o)
@@ -26,6 +26,14 @@ function M.setup()
   s('SeamRefLost', { underdashed = true, sp = '#e0af68' })
   s('SeamRefAt', { bg = '#3d59a1', bold = true })
   s('SeamTab', { fg = '#c0caf5', bg = '#3b4261', bold = true })
+  -- the keys: lit, their word dim, a dim bar between groups; the status line's own on its background
+  s('SeamKey', { fg = '#7aa2f7', bold = true })
+  s('SeamKeyWord', { fg = '#737aa2' })
+  s('SeamStatusKey', { fg = '#7aa2f7', bg = '#16161e', bold = true })
+  s('SeamStatusKeyWord', { fg = '#737aa2', bg = '#16161e' })
+  s('SeamStatusSep', { fg = '#3b4261', bg = '#16161e' })
+  -- where a name lives: another file underlined in the text's colour, another package in its hue
+  s('SeamUnder', { underline = true })
   s('SeamTest', { fg = '#565f89', italic = true })
   s('SeamOwn', { fg = '#737aa2' })
   s('SeamGutter', { fg = '#4f5679' })
@@ -45,9 +53,11 @@ function M.setup()
   for i, h in ipairs(HUES) do
     s('SeamHue' .. i, { fg = h, bold = true })
     s('SeamBar' .. i, { fg = h })
+    s('SeamUnder' .. i, { underline = true, sp = h })
   end
   s('SeamHueGrey', { fg = '#737aa2', bold = true })
   s('SeamBarGrey', { fg = '#414868' })
+  s('SeamUnderGrey', { underline = true, sp = '#737aa2' })
   s('SeamHueNeutral', { fg = '#c0caf5', bold = true })
   s('SeamBarNeutral', { fg = '#a9b1d6' })
   -- the diagram is drawn by thread's renderer, whose setup has not run here
@@ -99,15 +109,16 @@ function M.assign(m, file)
   end
   st.hues = {}
   for i, p in ipairs(order) do
-    st.hues[p] = i <= #HUES and { name = 'SeamHue' .. i, bar = 'SeamBar' .. i } or GREY
+    st.hues[p] = i <= #HUES and { name = 'SeamHue' .. i, bar = 'SeamBar' .. i, under = 'SeamUnder' .. i } or GREY
   end
 end
 
---- A package's groups: `name` for its name, `bar` for its bars.
+--- A package's groups: `name` for its name, `bar` for its bars, `under`
+--- for a name from it underlined.
 ---@param pkg string
----@return { name: string, bar: string }
+---@return { name: string, bar: string, under: string }
 function M.hue(pkg)
-  return st.hues[pkg] or GREY
+  return st.hues and st.hues[pkg] or GREY
 end
 
 return M
