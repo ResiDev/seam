@@ -4,6 +4,7 @@
 -- are seam.screen's.
 local api = vim.api
 local draw = require 'seam.draw'
+local graph = require 'seam.graph'
 local hints = require 'seam.hints'
 local index = require 'seam.index'
 local odraw = require 'seam.draw.outline'
@@ -265,7 +266,7 @@ function M.search(query)
   local m = index.model()
   local g = m.graph
   local items, nodes = {}, {}
-  local top, up = require('seam.calls').visible(m, 'top'), require('seam.calls').visible(m, 'up')
+  local top, up = graph.visible(m, 'top'), graph.visible(m, 'up')
   for id, n in pairs(g and g.nodes or {}) do
     if n.kind ~= 'module' and not n.test and top(n.path) then
       items[#items + 1] = { id = id, name = n.name, used_by = outline.used_by(g, id, up) }

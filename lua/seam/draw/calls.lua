@@ -354,36 +354,7 @@ local function around(s, e, want, max)
   end
 end
 
--- code rows of `path` for the lines in `set`, a ⋯ between runs; `lit`
--- lines lit, with `mark(r, start, src, l)` underlining on each row
-local function code_rows(out, path, set, lit, mark)
-  local lines = vim.tbl_keys(set)
-  table.sort(lines)
-  local gw = math.max(3, #tostring(lines[#lines] or 1))
-  local P = code.file(path)
-  local first, prev
-  for _, l in ipairs(lines) do
-    if prev and l > prev + 1 then
-      out[#out + 1] = row():add(string.rep(' ', gw) .. '⋯', 'SeamLabel')
-    end
-    local cr = row { kind = 'code', lnum = l }
-    cr:add(string.format(' %' .. gw .. 'd  ', l), 'SeamGutter')
-    local start = cr.b
-    code.add(cr, path, l)
-    if lit[l] then
-      cr.line_hl = 'SeamLit'
-      first = first or #out + 1
-    end
-    mark(cr, start, P.lines[l] or '', l)
-    out[#out + 1] = cr
-    prev = l
-  end
-  return first
-end
-
---- Code rows of `path` for the lines in `set`, a ⋯ between runs, `lit`
---- lines lit, `mark(r, start, src, l)` underlining on each; the first lit.
-M.code_rows = code_rows
+local code_rows = require('seam.views.code').rows
 
 -- the views over the code, the one shown lit; with nothing calling it and
 -- no types, itself alone

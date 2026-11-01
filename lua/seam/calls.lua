@@ -86,16 +86,7 @@ end
 --- starts from the top are the contracts. Every count and list goes by it.
 M.LENS = { down = 'built', up = 'used', top = 'contracts' }
 
---- Whether a path shows, read `way`, under the model's lens.
----@param m table|nil the model, its lens in m.visible
----@param way seam.Dir|'top'
----@return fun(path: string): boolean
-function M.visible(m, way)
-  local v, col = m and m.visible, M.LENS[way]
-  return v and function(path)
-    return v(path, col)
-  end or all
-end
+M.visible = require('seam.graph').visible
 
 local function memo(g, what)
   g.memo = g.memo or {}
@@ -209,41 +200,7 @@ function M.roots(g, visible)
   return roots, tests
 end
 
---- A node's rows one level on: the distinct functions it calls, in the order
---- first written, or that call it, by path then line; tests apart, going up,
---- and those `visible` hides left out.
----@param g seam.Graph
----@param id string
----@param dir seam.Dir
----@param visible? fun(path: string): boolean
----@return { id: string, n: integer, lines: integer[], col: integer }[] kids, table[] tests
-function M.kids(g, id, dir, visible)
-  visible = visible or all
-  local kids, tests, at = {}, {}, {}
-  local edges, field = g.down[id] or {}, 'to'
-  if dir == 'up' then
-    edges, field = g.up[id] or {}, 'from'
-  end
-  for _, e in ipairs(edges) do
-    local to = e[field]
-    local node = g.nodes[to]
-    if node and visible(node.path) then
-      local k = at[to]
-      if k then
-        k.n = k.n + 1
-        if k.lines[#k.lines] ~= e.line then
-          k.lines[#k.lines + 1] = e.line
-        end
-      else
-        k = { id = to, n = 1, lines = { e.line }, col = e.col }
-        at[to] = k
-        local list = (dir == 'up' and node.test) and tests or kids
-        list[#list + 1] = k
-      end
-    end
-  end
-  return kids, tests
-end
+M.kids = require('seam.graph').kids
 
 --- How many distinct functions the lens keeps out of a view's tree: those it
 --- would hold without the lens and does not with it. On an anchor, what is
