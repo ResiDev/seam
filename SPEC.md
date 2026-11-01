@@ -1039,6 +1039,7 @@ lua/seam/
   diff.lua          two versions of some lines compared: the hunks, the words changed, laid out with removed lines where they were and unchanged runs folded
   signs.lua         the range's signs on the tree's rows, the rows gone kept struck through, gc and ]c [c
   refs.lua          the refs a range can start from and the picker over them, f x in the lens
+  warm.lua          the range's changes worked out ahead while you are idle: each changed file parsed and its diffs made, a few at a time
   views/changed.lua the diff on D: Code with the diff on a function, a type, a file or a folder; a type's own lines; a function's line as it was; Used by now and at from
   codediff.lua      the range's changes on the code shown: its changed lines numbered in the signs' colours, or with the diff on drawn inline; ]c [c
   views/codetypes.lua the code screen's types display: the function's line, its values, the functions inside; with the diff, a line as it was
