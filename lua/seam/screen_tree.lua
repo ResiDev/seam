@@ -3,6 +3,7 @@
 -- each, the status line's hints, and `?`. The windows and helpers it shares
 -- are seam.screen's.
 local api = vim.api
+local changes = require 'seam.changes'
 local graph = require 'seam.graph'
 local hints = require 'seam.hints'
 local index = require 'seam.index'
@@ -10,6 +11,7 @@ local odraw = require 'seam.draw.outline'
 local outline = require 'seam.outline'
 local pane = require 'seam.pane'
 local picker = require 'seam.picker'
+local signs = require 'seam.signs'
 local st = require 'seam.state'
 local views = require 'seam.views'
 local M = {}
@@ -121,7 +123,7 @@ function M.redraw(keep)
     return
   end
   local m, o = index.model(), st.outline
-  st.orows = outline.rows(m, o)
+  st.orows = signs.decorate(m, outline.rows(m, o), o.only_changed)
   local w = st.owin.tree
   st.drawing = true
   vim.wo[w].winbar = odraw.titles(o)
@@ -192,6 +194,27 @@ function M.show_type(name, view)
   st.view.at = view or 'Types'
   moved()
   return true
+end
+
+--- `gc`: only the rows that changed in the range, and the folders and
+--- files above them; again, every row.
+function M.only_changed()
+  st.outline.only_changed = not st.outline.only_changed or nil
+  M.redraw(false)
+end
+
+--- `]c` `[c`: the cursor on the next row that changed, or the one before.
+---@param d integer
+function M.next_change(d)
+  local _, i = M.at()
+  local j = i
+  for _ = 1, vim.v.count1 do
+    j = j and signs.next(st.orows or {}, j, d)
+  end
+  if j then
+    st.outline.cursor = st.orows[j].key
+    cursor_to(st.outline.cursor)
+  end
 end
 
 --- `/`: a float over the tree of every function, file and type it holds,
@@ -295,7 +318,15 @@ function M.all_keys()
         { '<C-e> <C-y>', 'scroll it a line' },
       },
     },
-    { 'The tree', { { 's', 'order: by folder, most used, most calling' }, { '/', 'search the names' } } },
+    {
+      'The tree',
+      {
+        { 's', 'order: by folder, most used, most calling' },
+        { '/', 'search the names' },
+        { 'gc', 'only what changed, and back' },
+        { ']c [c', 'the next and previous change' },
+      },
+    },
     { 'Seam', seam },
   }
 end
@@ -323,6 +354,9 @@ function M.status()
       left = left .. '  ' .. v.name:lower()
     end
   end
+  if st.outline.only_changed then
+    left = 'only what changed   ' .. left
+  end
   local rules = st.lens and #st.lens.rules or 0
   if pane.inside() then
     return hints.status(left, { pane.hints 'tree' }, rules)
@@ -348,6 +382,9 @@ function M.status()
     if pane.has_places() then
       row[#row + 1] = 'n N'
     end
+  end
+  if changes.any() then
+    row = vim.list_extend({ ']c [c', 'gc' }, row)
   end
   return hints.status(left, { row, pgroup, { 's', '/', 'L', 'q' } }, rules)
 end
@@ -394,6 +431,14 @@ local function tree_keys(buf)
   vim.keymap.set('n', 'R', function()
     index.load()
     M.redraw(true)
+    S().ask_changes()
+  end, o(buf))
+  vim.keymap.set('n', 'gc', M.only_changed, o(buf))
+  vim.keymap.set('n', ']c', function()
+    M.next_change(1)
+  end, o(buf))
+  vim.keymap.set('n', '[c', function()
+    M.next_change(-1)
   end, o(buf))
   vim.keymap.set('n', 'J', function()
     local x = M.at()

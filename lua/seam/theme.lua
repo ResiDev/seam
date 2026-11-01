@@ -47,6 +47,22 @@ function M.setup()
   -- the lens: what it hides in a muted red, apart from the pink package hue
   s('SeamLensHidden', { fg = '#c45c5c' })
   s('SeamStatusLens', { fg = '#c45c5c', bg = '#16161e' })
+  -- what changed: gitsigns' colours for the signs when it has them, a ref of the range in the head,
+  -- a declaration gone struck through, the diff's lines and the words changed on them lit stronger
+  local function sign(n, from, fg)
+    local has = next(api.nvim_get_hl(0, { name = from })) ~= nil
+    s(n, has and { link = from } or { fg = fg })
+  end
+  sign('SeamSignAdd', 'GitSignsAdd', '#9ece6a')
+  sign('SeamSignChange', 'GitSignsChange', '#e0af68')
+  sign('SeamSignDelete', 'GitSignsDelete', '#f7768e')
+  s('SeamRange', { fg = '#e0af68' })
+  s('SeamGone', { fg = '#565f89', strikethrough = true })
+  s('SeamDiffAdd', { bg = '#1d3a35' })
+  s('SeamDiffAddText', { bg = '#2c5a4a' })
+  s('SeamDiffDelete', { bg = '#3b2230' })
+  s('SeamDiffDeleteFg', { fg = '#b8a0a8' })
+  s('SeamDiffDeleteText', { bg = '#6e2a3a', fg = '#e8c8d0' })
   -- a repo type in a signature, coloured as types are in code; lit where it is the one followed
   s('SeamType', { link = '@type' })
   local ty = api.nvim_get_hl(0, { name = '@type', link = false }).fg
