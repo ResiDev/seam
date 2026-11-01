@@ -719,6 +719,7 @@ screen("mapy-fn-folders", "A function, folders",
 
 
 # folders, on a function, both sides: who calls it left, what it calls right
+HEADS = "right"
 def fn_folders_both(root):
     def group(ids):
         g = collections.OrderedDict()
@@ -765,7 +766,8 @@ def fn_folders_both(root):
     for ay, w in lys:
         cv.h(w + (0 if w > 30 else 0), lbus, ay, "c")
     cv.v(lbus, min(a for a, _ in lys + [(mid, 0)]), max(a for a, _ in lys + [(mid, 0)]), "c")
-    cv.h(lbus, cx - 2, mid, "c"); cv.put(cx - 1, mid, "▶", "c")
+    cv.h(lbus, cx - 2, mid, "c")
+    if HEADS != "none": cv.put(cx - 1, mid, "▶", "c")
     n = len(callers)
     # right: what it calls
     rbus = cx + len(nm) + 8
@@ -777,7 +779,9 @@ def fn_folders_both(root):
         draw(R[d], title, bx, y, bwidth(R[d], title))
         ay = y + 2; tops.append(ay)
         k = sum(len(v) for v in R[d].values())
-        cv.h(rbus, bx - 2, ay, "c"); cv.put(bx - 1, ay, "▶", "c")
+        cv.h(rbus, bx - 2, ay, "c")
+        if HEADS == "right": cv.put(bx - 1, ay, "▶", "c")
+        if HEADS == "in": cv.put(rbus + 1, ay, "◀", "c")
         cv.put(rbus + 2, ay, f" {k} call" + ("s " if k != 1 else " "), "o")
         y += bsize(R[d]) + 1
     cv.v(rbus, min(tops + [mid]), max(tops + [mid]), "c")
@@ -937,7 +941,7 @@ def dirname_of(p): return where(p)
 RUNTS = CORE + "run/run.ts"
 screen("mapz-file-tree", "A file, tree",
        "run.ts: the files its functions call into, then the functions it uses in each. One rank down a level, as the tree on the left goes: files, then functions, then their calls with l.",
-       phead(s("fg bold", "run.ts"), "file in run/   15 functions", "tree", hint="     T inputs and outputs   > < levels   l opens") +
+       phead(s("fg bold", "run.ts"), "file in run/   1 function", "tree", hint="     T inputs and outputs   > < levels   l opens") +
        rank_tree(s("fg bold", "run.ts"), lambda p: p == RUNTS, lambda p: posixpath.basename(p)),
        "run.ts  map · tree", cursor="run.ts", trail="run.ts")
 screen("mapz-folder-tree", "A folder, tree",
@@ -1039,6 +1043,116 @@ screen("mapz-type-folders", "A type, folders",
        phead(s("ty bold", "Model"), f"type in state.ts:152   made by {len(mk)}, taken by {len(tk)}", "folders", opts=DISP[:3], hint="     l opens a box") +
        folders_both("Model", "state.ts", mk, tk, ccls="ty bold", word=("function", "functions")),
        "Model  map · folders", cursor="Model", trail="Model")
+
+# ── round four: what the user asked after round three ───────────────
+for HEADS, nm, cap in (("in", "mapz-fn-folders-in", "Every arrow points at createRun: its callers on the left use it, the folders on the right are what it is built from."),
+                       ("none", "mapz-fn-folders-none", "No arrowheads, as both ways draws it: callers left, what it calls right, the counts on the lines.")):
+    screen(nm, "A function, folders, arrows " + HEADS, cap,
+           phead(crh, "function in run/run.ts:33   called by 16, calls 17", "folders", hint="     > < levels   l opens a box") + fn_folders_both(ROOT),
+           "createRun()  map · folders")
+HEADS = "right"
+
+# size, on a file: each of its functions, how much it reaches and how much it is used
+def file_size(path):
+    fs = [i for i, n in N.items() if n["path"] == path and n["name"]]
+    rows_ = []
+    for i in fs:
+        used = {c for c in CALLERS[i] if not is_test(N[c]["path"])}
+        rows_.append((N[i]["name"], len(reach(i)), len(used)))
+    rows_.sort(key=lambda t: -t[1])
+    mx = max(t[1] for t in rows_) or 1
+    bw = 56
+    out = [(s("", "   ") + s("", " " * 22) + s("c", "reaches") + s("", " " * (bw - 1)) + s("c", "used by"), ""), blank()[0]]
+    for nm, nr, nu in rows_:
+        w = round(bw * nr / mx)
+        r = s("", "   ") + s("b", (nm + "()").ljust(22)) + (s("bar", " " * w) if w else s("d3", "▏")) + s("c", f" {nr}")
+        r += s("", " " * (bw + 32 - width(r))) + s("fd", str(nu))
+        out.append((r, ""))
+    return out
+screen("mapz-file-size", "A file, size",
+       "update.ts's functions by how many functions each goes on to reach, with how many call it. As a function's size, for every function in the file.",
+       phead(s("fg bold", "update.ts"), "file in run/   13 functions", "size", hint="     l opens") + file_size(CORE + "run/update.ts"),
+       "update.ts  map · size", cursor="▸ update.ts", trail="update.ts")
+
+# tree, on a type, with + on the Model box: its declaration opens under it
+def type_graph_open():
+    rows = type_graph()
+    while rows and not rows[-1][0]: rows.pop()
+    decl = open(os.path.join(SRC, "state.ts")).read().split("\n")[150:159]
+    ind = 41
+    # a line down from the box to what it opened
+    out = []
+    for j, (r, c) in enumerate(rows):
+        if j >= 6:
+            w = width(r)
+            if w <= ind + 3: r = r + s("", " " * (ind + 3 - w)) + s("d3", "│")
+            else:
+                flat = "".join(tx for _, tx in r)
+                if flat[ind + 3] == " ":
+                    # put the bar into the gap
+                    acc, nr = 0, []
+                    for cl, tx in r:
+                        if acc <= ind + 3 < acc + len(tx):
+                            k = ind + 3 - acc
+                            nr += [(cl, tx[:k]), ("d3", "│"), (cl, tx[k + 1:])]
+                        else: nr.append((cl, tx))
+                        acc += len(tx)
+                    r = nr
+        out.append((r, c))
+    out.append((s("", " " * (ind + 3)) + s("d3", "│"), ""))
+    out.append((s("", " " * (ind + 3)) + s("d3", "└ ") + s("ty bold", "Model") + s("c", "   type in state.ts:152"), ""))
+    for k, line in enumerate(decl):
+        n = 151 + k
+        st = line.strip()
+        body = (s("", line[:len(line) - len(line.lstrip())]) + s("c it", st)) if st.startswith(("/**", "//")) else ts(line, on="UserRecord" if "userRecord" in line else None)
+        out.append((s("", " " * (ind + 5)) + s("d3", "│") + s("c", str(n).rjust(4)) + s("", "  ") + body, ""))
+    return out
+screen("mapz-type-tree-open", "A type, tree, + on Model",
+       "+ on a box opens its declaration under it, as a type opens anywhere else. + on a name inside opens that one, - closes it.",
+       phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", "tree", opts=DISP[:3] + ["size"], hint="     + opens a type   > < levels   l opens") + type_graph_open(),
+       "Model  map · tree", cursor="Model", trail="Model")
+
+# size, on a type: A each field by how often it is read; B the files that use it most
+def src_files():
+    out = {}
+    for dp, _, fns in os.walk(SRC):
+        for f in fns:
+            if f.endswith((".ts", ".tsx")) and not is_test(f):
+                out[os.path.relpath(os.path.join(dp, f), SRC)] = open(os.path.join(dp, f)).read()
+    return out
+SF = src_files()
+FIELDS = ["userRecord", "startRequests", "live", "held", "views"]
+def bars(items, label_w, bw=56, cls="b"):
+    mx = max(n for _, n, _ in items) or 1
+    out = []
+    for nm, n, rest in items:
+        w = round(bw * n / mx)
+        r = s("", "   ") + s(cls, nm.ljust(label_w)) + (s("bar", " " * w) if w else s("d3", "▏")) + s("c", f" {n}")
+        if rest: r += s("", " " * (bw + label_w + 10 - width(r))) + s("d3", rest)
+        out.append((r, ""))
+    return out
+def fields_size():
+    items = []
+    for f in FIELDS:
+        per = collections.Counter({p: len(re.findall(r"\.\s*" + f + r"\b", txt)) for p, txt in SF.items()})
+        per = {p: n for p, n in per.items() if n}
+        top = sorted(per, key=lambda p: -per[p])[:3]
+        items.append((f, sum(per.values()), ", ".join(top)))
+    items.sort(key=lambda t: -t[1])
+    return [(s("", "   ") + s("c", "each field, by how often it is read, and the files that read it most"), ""), blank()[0]] + bars(items, 16)
+def files_size():
+    items = []
+    for p, txt in SF.items():
+        n = len(re.findall(r"\bModel\b", txt)) + sum(len(re.findall(r"\bmodel\.\w+", txt)) for _ in [0])
+        if p == "state.ts": n -= 1
+        if n > 0: items.append((p, n, ""))
+    items.sort(key=lambda t: -t[1])
+    return [(s("", "   ") + s("c", "the files that use it, by how many times"), ""), blank()[0]] + bars(items[:16], 30, cls="fg")
+for nm, cap, body in (("mapz-type-size-fields", "A type, size, by field", fields_size()),
+                      ("mapz-type-size-files", "A type, size, by file", files_size())):
+    screen(nm, cap, "Model, size: " + cap,
+           phead(s("ty bold", "Model"), "type in state.ts:152   made by 2, taken by 7", "size", hint="     l opens") + body,
+           "Model  map · size", cursor="Model", trail="Model")
 
 # ── the gallery ─────────────────────────────────────────────────────────
 G = []
