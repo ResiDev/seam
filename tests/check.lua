@@ -10,6 +10,8 @@ local api = vim.api
 local seam = require 'seam'
 assert(debug.getinfo(seam.open, 'S').source:find(root, 1, true), 'seam is not loaded from ' .. root)
 local screen = require 'seam.screen'
+-- the pane drawn on each move, not once the cursor rests, so each key's pane is there to check
+require('seam.pane').DELAY = 0
 local picker = require 'seam.picker'
 local function lens_any(c)
   return c.contracts or c.built or c.used

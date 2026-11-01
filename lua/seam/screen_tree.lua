@@ -101,8 +101,7 @@ local function moved()
   if st.oshown ~= key then
     st.oshown = key
     odraw.head(st.obuf.head, index.model(), st.outline, subject())
-    pane.show(subject())
-    S().paint()
+    pane.follow(subject())
   end
   vim.cmd 'redrawstatus'
 end
