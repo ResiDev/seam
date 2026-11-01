@@ -883,6 +883,163 @@ screen("mapy-folder-size", "A folder, size",
        phead(s("fg bold", "run/"), "folder in core/src   10 files", "size", hint="     l opens a file") + folder_size("run/"),
        "run/  map · size", cursor="run/", trail="run/")
 
+# ── round three: the cells still blank, a file's and a type's ───────────
+def ok(p): return p.startswith(CORE) and not is_test(p)
+def where(p):
+    """a folder's name as the tree writes it"""
+    d = posixpath.dirname(short(p)) if p.startswith(CORE) else posixpath.dirname(p.replace("packages/", ""))
+    return (d + "/") if d else "core/src/ files"
+
+# tree on a file or folder: one rank down each level, as the tree on the left
+# goes: a folder's folders, then their files, then the functions in them
+def rank_tree(title_segs, inside, unit, opened=None, cap=4):
+    """inside(p): the path is in the row; unit(p): the next rank's name for a path"""
+    out = collections.OrderedDict()
+    for i, n in N.items():
+        if not ok(n["path"]) or not inside(n["path"]): continue
+        for c, _, _ in n["calls"]:
+            if c in N and ok(N[c]["path"]) and not inside(N[c]["path"]):
+                out.setdefault(unit(N[c]["path"]), collections.OrderedDict()).setdefault(N[c]["path"], set()).add(N[c]["name"])
+    order = sorted(out, key=lambda u: -sum(len(v) for v in out[u].values()))
+    rows = [(s("", " ") + title_segs, "")]
+    for j, u in enumerate(order):
+        last = j == len(order) - 1
+        files = out[u]
+        n = sum(len(v) for v in files.values())
+        r = s("c", " " + ("└─ " if last else "├─ ")) + s("fg", u)
+        r += s("", " " * max(2, 34 - width(r))) + s("d3", f"{n} name" + ("s" if n != 1 else ""))
+        rows.append((r, ""))
+        pre = "   " if last else "│  "
+        kids_ = list(files.items())
+        if unit(kids_[0][0]) == kids_[0][0].rsplit("/", 1)[-1]:   # the unit is a file: its names
+            names = sorted(next(iter(files.values())))
+            shown = names[:cap]
+            for k, nm in enumerate(shown):
+                lk = k == len(shown) - 1 and len(names) <= cap
+                rows.append((s("c", " " + pre + ("└─ " if lk else "├─ ")) + s("b", nm) + s("pun", "()"), ""))
+            if len(names) > cap: rows.append((s("c", " " + pre + f"└─ ⋯ {len(names) - cap} more"), ""))
+        else:                                                   # the unit is a folder: its files
+            fl = sorted(files.items(), key=lambda kv: -len(kv[1]))
+            shown = fl[:cap]
+            for k, (f, nms) in enumerate(shown):
+                lk = k == len(shown) - 1 and len(fl) <= cap
+                r = s("c", " " + pre + ("└─ " if lk else "├─ ")) + s("fg", posixpath.basename(f))
+                rows.append((r, ""))
+                if f == opened:
+                    pre2 = pre + ("   " if lk else "│  ")
+                    nl = sorted(nms)
+                    for m, nm in enumerate(nl):
+                        rows.append((s("c", " " + pre2 + ("└─ " if m == len(nl) - 1 else "├─ ")) + s("b", nm) + s("pun", "()"), ""))
+            if len(fl) > cap: rows.append((s("c", " " + pre + f"└─ ⋯ {len(fl) - cap} more"), ""))
+    return rows
+
+def dirname_of(p): return where(p)
+RUNTS = CORE + "run/run.ts"
+screen("mapz-file-tree", "A file, tree",
+       "run.ts: the files its functions call into, then the functions it uses in each. One rank down a level, as the tree on the left goes: files, then functions, then their calls with l.",
+       phead(s("fg bold", "run.ts"), "file in run/   15 functions", "tree", hint="     T inputs and outputs   > < levels   l opens") +
+       rank_tree(s("fg bold", "run.ts"), lambda p: p == RUNTS, lambda p: posixpath.basename(p)),
+       "run.ts  map · tree", cursor="run.ts", trail="run.ts")
+screen("mapz-folder-tree", "A folder, tree",
+       "run/: the folders it calls into, then the files in each, then the functions (records.ts opened with l). One rank down a level, as the tree on the left goes.",
+       phead(s("fg bold", "run/"), "folder in core/src   10 files", "tree", hint="     T inputs and outputs   > < levels   l opens") +
+       rank_tree(s("fg bold", "run/"), lambda p: p.startswith(CORE + "run/"), where, opened=CORE + "storage/records.ts"),
+       "run/  map · tree", cursor="run/", trail="run/")
+
+fb2, ni2, no2 = folder_both("run/run.ts")
+screen("mapz-file-both", "A file, both ways",
+       f"run.ts: the {ni2} files that call into it on the left, the {no2} files it calls out to on the right, each with the names that cross. The same as a folder's.",
+       phead(s("fg bold", "run.ts"), f"file in run/   called from {ni2} file" + ("s" if ni2 != 1 else "") + f", calls {no2}", "both ways", hint="     l opens a file") + fb2,
+       "run.ts  map · both ways", cursor="run.ts", trail="run.ts")
+
+# folders, both sides, for any row: who uses it by folder left, what it uses right
+def folders_both(centre, sub, left, right, tests=0, tfiles=0, ccls="fg bold", word=("call", "calls")):
+    def group(items):
+        g = collections.OrderedDict()
+        for path, nm in items:
+            g.setdefault(where(path), collections.OrderedDict()).setdefault(posixpath.basename(path), [])
+            if nm not in g[where(path)][posixpath.basename(path)]: g[where(path)][posixpath.basename(path)].append(nm)
+        return collections.OrderedDict(sorted(g.items(), key=lambda kv: -sum(len(v) for v in kv[1].values())))
+    def wrap(names, w=26):
+        lines, cur = [], ""
+        for nm in names:
+            if cur and len(cur) + 2 + len(nm) > w: lines.append(cur); cur = nm
+            else: cur = (cur + "  " + nm) if cur else nm
+        return lines + [cur]
+    L, R = group(left), group(right)
+    def bsize(files): return sum(len(wrap(v)) for v in files.values()) + 3
+    def bwidth(files, title):
+        mf = max(len(x) for x in files)
+        return max(mf + 4 + max(len(l) for v in files.values() for l in wrap(v)) + 4, len(title) + 8)
+    rh = sum(bsize(R[d]) for d in R) + len(R) - 1
+    lh = sum(bsize(L[d]) for d in L) + len(L) + (2 if tests else 0)
+    H_ = max(rh, lh, 3)
+    cv = Canvas(RW - 2, H_)
+    mid = H_ // 2
+    lw = max([bwidth(L[d], d) for d in L] + [len(f"⋯ {tests} in tests, {tfiles} files") + 2])
+    cx = lw + 15
+    cv.box(cx, mid - 1, len(centre) + 4, 3, "d3"); cv.put(cx + 2, mid, centre, ccls); cv.put(cx + 2, mid + 2, sub, "c")
+    def draw(files, title, x, y, w):
+        cv.box(x, y, w, bsize(files), "d3"); cv.put(x + 2, y, " " + title + " ", "fg bold")
+        mf = max(len(f) for f in files)
+        j = 0
+        for f, v in files.items():
+            cv.put(x + 2, y + 2 + j, f.ljust(mf + 2), "fd")
+            for l in wrap(v):
+                cv.put(x + 4 + mf, y + 2 + j, l, "b"); j += 1
+    def lab(k): return f" {k} {word[0] if k == 1 else word[1]} "
+    lys = []
+    y = mid - lh // 2
+    for d in L:
+        w = bwidth(L[d], d); draw(L[d], d, 0, y, w)
+        k = sum(len(v) for v in L[d].values())
+        lys.append((y + 2, w, k)); y += bsize(L[d]) + 1
+    if tests:
+        tx = f"⋯ {tests} in tests, {tfiles} files"; cv.put(2, y, tx, "c"); lys.append((y, len(tx) + 2, 0))
+    lbus = cx - 4
+    for ay, w, k in lys:
+        cv.h(w, lbus, ay, "c")
+        if k: cv.put(w + 2, ay, lab(k), "o")
+    if lys:
+        cv.v(lbus, min([a for a, _, _ in lys] + [mid]), max([a for a, _, _ in lys] + [mid]), "c")
+        cv.h(lbus, cx - 2, mid, "c"); cv.put(cx - 1, mid, "▶", "c")
+    rbus = cx + len(centre) + 6
+    bx = rbus + max([len(lab(sum(len(v) for v in R[d].values()))) for d in R] + [0]) + 5
+    y = mid - rh // 2; tops = []
+    if R: cv.h(cx + len(centre) + 4, rbus, mid, "c")
+    for d in R:
+        draw(R[d], d, bx, y, bwidth(R[d], d))
+        ay = y + 2; tops.append(ay)
+        k = sum(len(v) for v in R[d].values())
+        cv.h(rbus, bx - 2, ay, "c"); cv.put(bx - 1, ay, "▶", "c")
+        cv.put(rbus + 2, ay, lab(k), "o")
+        y += bsize(R[d]) + 1
+    if R: cv.v(rbus, min(tops + [mid]), max(tops + [mid]), "c")
+    return cv.rows()
+
+ins = [i for i, n in N.items() if n["path"] == RUNTS]
+lt, rt, tc = [], [], set()
+for i in ins:
+    for c in CALLERS[i]:
+        if N[c]["path"] == RUNTS: continue
+        if is_test(N[c]["path"]): tc.add(c); continue
+        lt.append((N[c]["path"], N[c]["name"] or "(top level)"))
+    for k in kids(i):
+        if N[k]["path"] != RUNTS and N[k]["path"].startswith("packages/"): rt.append((N[k]["path"], N[k]["name"]))
+screen("mapz-file-folders", "A file, folders",
+       "run.ts as a box: who calls into it on the left, by folder, tests folded to a count; the folders it calls into on the right. As a function's, with the file's functions together.",
+       phead(s("fg bold", "run.ts"), "file in run/", "folders", hint="     > < levels   l opens a box") +
+       folders_both("run.ts", "run/", lt, rt, len(tc), len({N[c]["path"] for c in tc})),
+       "run.ts  map · folders", cursor="run.ts", trail="run.ts")
+
+mk = [(CORE + p, x["name"]) for p, x in gives_t("Model")]
+tk = [(CORE + p, x["name"]) for p, x in takes_t("Model")]
+screen("mapz-type-folders", "A type, folders",
+       "Model as a box: the functions that make it on the left, by folder; the functions that take it on the right. Both ways, gathered into folders.",
+       phead(s("ty bold", "Model"), f"type in state.ts:152   made by {len(mk)}, taken by {len(tk)}", "folders", opts=DISP[:3], hint="     l opens a box") +
+       folders_both("Model", "state.ts", mk, tk, ccls="ty bold", word=("function", "functions")),
+       "Model  map · folders", cursor="Model", trail="Model")
+
 # ── the gallery ─────────────────────────────────────────────────────────
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):
