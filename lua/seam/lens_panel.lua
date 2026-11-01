@@ -11,7 +11,6 @@ local ns = api.nvim_create_namespace 'seam.lens'
 ---@field model fun(): table
 ---@field root fun(): string  -- the repo, for previewing its files
 ---@field changed fun()   -- the lens changed; filter and redraw behind the panel
----@field closed fun()    -- the panel closed
 
 -- plain for only and the muted red of what the lens hides for hide: green
 -- and bright red would read as package hues
@@ -403,7 +402,7 @@ local function pick()
     local parent, name = path:match '^(.*/)([^/]+/?)$'
     return parent or '', name or path
   end
-  M.close(true)
+  M.close()
   local picked = false
   Snacks.picker.pick {
     title = 'Add to the lens',
@@ -454,7 +453,7 @@ local function pick()
   }
 end
 
-function M.close(quiet)
+function M.close()
   if not P then
     return
   end
@@ -462,9 +461,6 @@ function M.close(quiet)
   P = nil
   if api.nvim_win_is_valid(p.win) then
     api.nvim_win_close(p.win, true)
-  end
-  if not quiet then
-    p.host.closed()
   end
 end
 

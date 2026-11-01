@@ -435,21 +435,6 @@ do
   eq(ids(picker.fuzzy(all, 'zzz')), {}, 'nothing matches')
   eq(all[1].name, 'start', 'a pick carries the name typing matches')
 
-  -- on a page: every contract the lens lets through, types too, the most used first
-  local cs = {
-    { id = 'src/b.ts:5:Step', name = 'Step', kind = 'type', path = 'src/b.ts', line = 5, nusers = 3 },
-    { id = 'src/a.ts:9:run', name = 'run', kind = 'function', path = 'src/a.ts', line = 9, nusers = 3 },
-    { id = 'src/a.ts:1:LIMIT', name = 'LIMIT', kind = 'const', path = 'src/a.ts', line = 1, nusers = 7 },
-    { id = 'src/c.ts:2:none', name = 'none', kind = 'const', path = 'src/c.ts', line = 2, nusers = 0 },
-  }
-  local cm = { contracts = cs, byid = {} }
-  for _, c in ipairs(cs) do
-    cm.byid[c.id] = c
-  end
-  local listed = picker.contracts(cm)
-  eq(ids(listed), { 'LIMIT 7', 'Step 3', 'run 3', 'none 0' }, 'contracts: by used by, then name')
-  eq(ids(picker.fuzzy(listed, 'st')), { 'Step 3' }, 'contracts narrow by name')
-
   -- anchoring from it keeps the direction, and K comes back
   local v = calls.new('src/p.ts:11:startRun', 'up')
   calls.anchor(v, 'src/q.ts:1:Box')

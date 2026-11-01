@@ -1,6 +1,6 @@
 -- Code panes: source files and their treesitter trees, lines copied into
 -- rows with their highlight captures painted on as they come into view, and
--- the questions asked of a file's tree: enclosing function, import, statement.
+-- the function a position sits in.
 local api = vim.api
 local M = {}
 
@@ -302,43 +302,6 @@ function M.enclosing(path, line, col)
     er = er - 1
   end
   return sr + 1, er + 1
-end
-
---- The import statement in `path` that names `name`: its 1-based lines.
-function M.import_of(path, name)
-  local P = M.file(path)
-  local root = tree(P)
-  if not root then
-    return nil
-  end
-  for child in root:iter_children() do
-    if child:type() == 'import_statement' then
-      local sr, _, er = child:range()
-      for r = sr, er do
-        local l = P.lines[r + 1] or ''
-        if l:find('%f[%w_$]' .. vim.pesc(name) .. '%f[^%w_$]') then
-          return sr + 1, er + 1, r + 1
-        end
-      end
-    end
-  end
-end
-
---- The top-level statement containing a line (for a declaration that is
---- not an export of the data).
-function M.statement_at(path, line)
-  local P = M.file(path)
-  local root = tree(P)
-  if not root then
-    return line, line
-  end
-  for child in root:iter_children() do
-    local sr, _, er = child:range()
-    if sr + 1 <= line and er + 1 >= line then
-      return sr + 1, er + 1
-    end
-  end
-  return line, line
 end
 
 --- Underline `name` on a row of code: at byte `col` of its source line

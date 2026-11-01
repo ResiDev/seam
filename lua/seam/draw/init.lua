@@ -3,7 +3,6 @@
 local api = vim.api
 local code = require 'seam.code'
 local index = require 'seam.index'
-local st = require 'seam.state'
 local theme = require 'seam.theme'
 local M = {}
 
@@ -87,14 +86,6 @@ function M.shape(c)
   return c.name
 end
 
---- What an entry under the page shown is called in its trail: a page by its
---- contract, the Calls screen by its label.
----@param e table an entry of `st.stack`
----@return string
-function M.trail(e)
-  return e.kind == 'page' and M.shape(e.c) or e.label
-end
-
 ---@param name string
 ---@return integer
 function M.scratch(name)
@@ -138,11 +129,6 @@ function M.put(buf, rows)
     end
     if r.code then
       codes[row0] = r.code
-      if r.dim then
-        for _, c in ipairs(r.code) do
-          api.nvim_buf_set_extmark(buf, M.ns, row0, c[4], { end_col = c[4] + c[5], hl_group = 'SeamCodeDim', priority = 300 })
-        end
-      end
     end
   end
   code.track(buf, codes)
@@ -174,8 +160,7 @@ end
 
 --- Where row `lnum` of `buf` is in the code, the cursor on byte `col`: the
 --- place its row was drawn with; else the source line copied there, or the
---- declaration of the name under the cursor; else what the row stands for
---- (a contract, a dependency, a file, at its first use when it lists uses);
+--- declaration of the name under the cursor; else the file a row stands for;
 --- else the first line or name copied onto it. Nil for a folder, a blank,
 --- a title.
 ---@param buf integer
@@ -193,16 +178,7 @@ function M.at(buf, lnum, col)
       return span_place(c, col)
     end
   end
-  local d = meta.dep
-  if d and type(d.target) == 'string' and index.id_path(d.target) then
-    return { path = index.id_path(d.target), line = index.id_line(d.target), name = d.target:match '[^:]*$' }
-  elseif meta.c then
-    return { path = meta.c.path, line = meta.c.line, name = meta.c.name }
-  elseif meta.kind == 'file' and meta.path then
-    local u = type(meta.payload) == 'table' and meta.payload[1]
-    if type(u) == 'table' and u.line then
-      return { path = meta.path, line = u.line, col = u.col and u.col - 1 }
-    end
+  if meta.kind == 'file' and meta.path then
     return { path = meta.path, line = 1 }
   elseif meta.kind == 'dir' then
     return nil
@@ -249,14 +225,6 @@ function M.path(r, path, line)
   end
 end
 
---- The source shown, when there is another to switch to.
----@param r table
-function M.source(r)
-  if #st.names > 1 then
-    r:add(st.cur, 'SeamBold')
-  end
-end
-
 --- What the lens keeps out of a column, said on a line already there: `n`
 --- in red, `+n hidden` unless `what` words it, and the key that shows why.
 --- Nothing when it hides nothing.
@@ -286,13 +254,6 @@ function M.tabs(r, names, lit)
     r:add(' ' .. n .. ' ', n == lit and 'SeamTab' or 'SeamLabel')
   end
   return r
-end
-
----@param text string
----@param rest string
----@return table
-function M.title(text, rest)
-  return M.row():add(text, 'SeamSection'):add('   ' .. rest, 'SeamLabel')
 end
 
 return M

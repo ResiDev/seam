@@ -233,11 +233,12 @@ local function scroll(k)
   end
 end
 
---- Show the repo type `name` in the pane, its Types view, the tree's
---- cursor where it was; the next move of it shows its row again.
+--- Show the repo type `name` in the pane, its Types view (or `view`), the
+--- tree's cursor where it was; the next move of it shows its row again.
 ---@param name string
+---@param view? string
 ---@return boolean found
-function M.show_type(name)
+function M.show_type(name, view)
   local m = index.model()
   local f = valid() and m.flows and m.flows[name]
   local e = f and f.decls[1]
@@ -248,7 +249,7 @@ function M.show_type(name)
     row = { kind = 'type', key = 'type:' .. name, name = name, path = e.path, line = e.line, end_line = e.end_line, decl_kind = e.kind },
     at = api.nvim_win_get_cursor(st.owin.tree)[1],
   }
-  st.view.at = 'Types'
+  st.view.at = view or 'Types'
   moved()
   return true
 end
@@ -352,6 +353,10 @@ function M.next_place(d)
   end
   local w = st.owin.pane
   local cur = api.nvim_win_get_cursor(w)[1]
+  -- from the tree, the place the pane's cursor is on counts as the next
+  if not in_pane() and d > 0 then
+    cur = cur - 1
+  end
   local i
   if d > 0 then
     i = #list + 1
