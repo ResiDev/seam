@@ -25,7 +25,6 @@ local WORD = {
   ['@type.builtin'] = { 'string', 'number', 'boolean', 'unknown', 'void', 'never', 'any', 'bigint', 'symbol', 'object' },
   ['@constant.builtin'] = { 'undefined', 'null' },
   ['@boolean'] = { 'true', 'false' },
-  ['@keyword'] = { 'readonly', 'typeof', 'keyof', 'infer', 'extends', 'is', 'asserts', 'new' },
 }
 local WORD_HL = {}
 for hl, ws in pairs(WORD) do
@@ -96,8 +95,9 @@ end
 
 ---------------------------------------------------------------- drawing
 
--- `text` on `r` coloured as code: the types `known` says, `lit` lit, the
--- builtins, strings; each type placed in `names` where it sits in the row
+-- `text` on `r` coloured as code: every type named, the builtins, strings;
+-- `lit` lit; each type `known` says is one to open placed in `names` where
+-- it sits in the row
 local function typed(r, text, known, names, lit)
   local base = r.b
   r:add(text, 'SeamText')
@@ -119,13 +119,19 @@ local function typed(r, text, known, names, lit)
   for a in text:gmatch '()…' do
     r.h[#r.h + 1] = { base + a - 1, base + a - 1 + #'…', 'SeamLabel', 156 }
   end
-  for _, n in ipairs(tv.names(text, known)) do
+  for _, n in
+    ipairs(tv.names(text, function(w)
+      return not WORD_HL[w] and w:match '^[%u_$]' ~= nil
+    end))
+  do
     local s, e = base + n.s - 1, base + n.e - 1
     r.h[#r.h + 1] = { s, e, 'SeamType', 160 }
     if n.name == lit then
       r.h[#r.h + 1] = { s, e, 'SeamLit', 170 }
     end
-    names[#names + 1] = { s = s, e = e, name = n.name }
+    if known(n.name) then
+      names[#names + 1] = { s = s, e = e, name = n.name }
+    end
   end
   return r
 end
@@ -334,7 +340,7 @@ local function fn_list(out, C, fs, cols, kept)
 end
 
 local function title(out, text)
-  if #out > 0 then
+  if #out > 0 and out[#out].w > 0 then
     out[#out + 1] = row()
   end
   out[#out + 1] = row():add(' ' .. text, 'SeamBold')

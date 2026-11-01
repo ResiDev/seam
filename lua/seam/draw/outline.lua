@@ -88,6 +88,9 @@ function M.head(buf, m, o, x)
   if WORDS[o.order] then
     r:add('   ' .. WORDS[o.order], 'SeamBold')
   elseif x then
+    if x.kind == 'type' then
+      r:add(' › ', 'SeamLabel'):add(x.path:match '[^/]+$', 'SeamBold')
+    end
     r:add(' › ', 'SeamLabel'):add(M.name(m, x), 'SeamBold')
   end
   draw.put(buf, { r })
