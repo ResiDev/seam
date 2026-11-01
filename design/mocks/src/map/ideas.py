@@ -1266,6 +1266,140 @@ screen("mapw-file-folders", "A file, folders, top to bottom",
        vertical("run.ts", "run/", ft, fb, len(fc), len({N[c]["path"] for c in fc}), ccls="fg bold"),
        "run.ts  map · folders", cursor="run.ts", trail="run.ts")
 
+# ── round six: both ways by folder and file; a folder's own map top to bottom
+# both ways, each side grouped: a folder, its files, each file's names after
+# it; a line a file into the row
+def grouped_side(items, room):
+    g = collections.OrderedDict()
+    for path, nm in items:
+        g.setdefault(where(path), collections.OrderedDict()).setdefault(posixpath.basename(path), [])
+        if nm not in g[where(path)][posixpath.basename(path)]: g[where(path)][posixpath.basename(path)].append(nm)
+    lines = []   # (segs, joins)
+    for d, files in g.items():
+        lines.append((s("fg bold", d), False))
+        mf = max(len(f) for f in files)
+        for f, names in files.items():
+            first = True
+            cur = ""
+            rows_ = []
+            for nm in names:
+                if cur and len(cur) + 2 + len(nm) > room - mf - 4: rows_.append(cur); cur = nm
+                else: cur = (cur + "  " + nm) if cur else nm
+            rows_.append(cur)
+            for k, r in enumerate(rows_):
+                lines.append((s("", "  ") + s("fd", (f if k == 0 else "").ljust(mf + 2)) + s("b", r), k == 0))
+    return lines
+def both_grouped(root, centre, left, right):
+    room = (PW - len(centre) - 14) // 2
+    L, R = grouped_side(left, room), grouped_side(right, room)
+    lw = max(width(x) for x, _ in L) if L else 0
+    n = max(len(L), len(R)); mid = n // 2
+    cv = Canvas(PW, n)
+    l0 = mid - len(L) // 2; r0 = mid - len(R) // 2
+    lx = lw + 2
+    js = []
+    for j, (seg, join) in enumerate(L):
+        cv.seg(seg, 0, l0 + j)
+        if join: cv.h(width(seg) + 1, lx, l0 + j, "c"); js.append(l0 + j)
+    if js: cv.v(lx, min(js + [mid]), max(js + [mid]), "c"); cv.h(lx, lx + 3, mid, "c")
+    cx = lx + 5
+    cv.put(cx, mid, centre, "b bold")
+    bx = cx + len(centre) + 1
+    js = []
+    for j, (seg, join) in enumerate(R):
+        if join: js.append(r0 + j); cv.h(bx + 3, bx + 5, r0 + j, "c")
+        cv.seg(seg, bx + 6 - (0 if join else 0), r0 + j)
+    if js: cv.h(bx, bx + 3, mid, "c"); cv.v(bx + 3, min(js + [mid]), max(js + [mid]), "c")
+    return cv.rows()
+screen("mapw-fn-both-grouped", "A function, both ways, by folder and file",
+       "What createRun calls on the left, gathered into folders and their files, each file's names after it; who calls it on the right the same way. A line a file.",
+       phead(crh, "function in run/run.ts:33   called by 16, calls 17", "both ways", hint="") +
+       both_grouped(ROOT, "createRun", crR, crL),
+       "createRun()  map · both ways")
+
+# a folder's own map top to bottom: its files (or folders) in bands, what is
+# used above what uses it, each a box listing what it calls in the folder
+def ranks(units, edges):
+    out = {u: [] for u in units}; ins = {u: 0 for u in units}; wt = {u: 0 for u in units}
+    for a, b, n in edges: out[a].append(b); ins[b] += 1; wt[a] += n
+    rank = {}; q = [u for u in units if ins[u] == 0 and out[u]]
+    for u in q: rank[u] = 0
+    i = 0
+    while True:
+        while i < len(q):
+            k = q[i]; i += 1
+            for t in out[k]:
+                if t not in rank: rank[t] = rank[k] + 1; q.append(t)
+        rest = [u for u in units if u not in rank and out[u]]
+        if not rest: break
+        b = max(rest, key=lambda u: wt[u]); rank[b] = 0; q.append(b)
+    last = max([rank.get(u, 0) for u in units if out[u]] + [0])
+    for u in units:
+        if not out[u]: rank[u] = last + 1 if ins[u] else 0
+    return rank
+def folder_own(folder):
+    files = sorted({n["path"] for n in N.values() if n["path"].startswith(CORE + folder) and not is_test(n["path"])})
+    sub = any("/" in p[len(CORE + folder):] for p in files)
+    def unit(p):
+        rest = p[len(CORE + folder):]
+        return (rest.split("/")[0] + "/") if sub and "/" in rest else posixpath.basename(p)
+    units = list(dict.fromkeys(unit(p) for p in files))
+    E = collections.Counter()
+    for i, n in N.items():
+        if n["path"] not in files: continue
+        for c, _, _ in n["calls"]:
+            if c in N and N[c]["path"] in files and unit(N[c]["path"]) != unit(n["path"]): E[(unit(n["path"]), unit(N[c]["path"]))] += 1
+    edges = [(a, b, k) for (a, b), k in E.items()]
+    # a band after everything it calls: what calls nothing here first; a call
+    # back round a cycle is left out of the count
+    out = collections.defaultdict(list)
+    for a_, b_, k in edges: out[a_].append(b_)
+    rk, on = {}, set()
+    def height(u):
+        if u in rk: return rk[u]
+        on.add(u)
+        h = 0
+        for v in out[u]:
+            if v not in on: h = max(h, height(v) + 1)
+        on.discard(u); rk[u] = h
+        return h
+    for u in units: height(u)
+    bands = [[u for u in units if rk[u] == r] for r in range(max(rk.values()) + 1)]
+    calls = {u: sorted([(b, k) for a, b, k in edges if a == u], key=lambda t: -t[1]) for u in units}
+    def lab(k): return f"{k} call" + ("" if k == 1 else "s")
+    def bw(u):
+        if not calls[u]: return max(len(u) + 6, len("calls nothing here") + 4)
+        return max(len(u) + 6, max(len(b) for b, _ in calls[u]) + 2 + max(len(lab(k)) for _, k in calls[u]) + 4)
+    def bh(u): return max(len(calls[u]), 1) + 2
+    cv = Canvas(PW, 1)
+    y = 0; tx = 6
+    for bi, band in enumerate(bands):
+        if not band: continue
+        if y: cv.v(tx, y, y + 1, "c"); cv.put(tx, y, "▲", "c"); y += 2
+        x = 0; h = 0
+        for u in band:
+            w = bw(u)
+            if x and x + w > PW: y += h + 1; x = 0; h = 0
+            cv.box(x, y, w, bh(u), "d3"); cv.put(x + 2, y, " " + u + " ", "fg bold")
+            if calls[u]:
+                mb = max(len(b) for b, _ in calls[u])
+                for j, (b, k) in enumerate(calls[u]):
+                    cv.put(x + 2, y + 1 + j, b, "fd")
+                    cv.put(x + 4 + mb, y + 1 + j, lab(k), "o")
+            else:
+                cv.put(x + 2, y + 1, "calls nothing here", "c")
+            x += w + 2; h = max(h, bh(u))
+        y += h
+    return cv.rows()
+screen("mapw-folder-own", "A folder, folders, top to bottom",
+       "run/'s files in bands: what is used above what uses it, the arrows pointing up at what is used. Each box lists what it calls in run/ and how often, so no line has to cross the picture.",
+       phead(s("fg bold", "run/"), "folder in core/src   10 files", "folders", hint="") + folder_own("run/"),
+       "run/  map · folders", cursor="run/", trail="run/")
+screen("mapw-folder-own-dirs", "A folder of folders, top to bottom",
+       "core/src/: its folders the same way.",
+       phead(s("fg bold", "core/src/"), "folder in packages/core", "folders", hint="") + folder_own(""),
+       "core/src/  map · folders", cursor="core/src/", trail="core/src/")
+
 # ── the gallery ─────────────────────────────────────────────────────────
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):

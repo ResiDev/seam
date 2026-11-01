@@ -175,19 +175,38 @@ eq(
   'a file: the files it calls into, the most names first'
 )
 
--- both ways
+-- both ways: each side a folder, its files, each file's names after it
 local both = require 'seam.map.both'
-rows = both.draw({ { { 'x', 'SeamName' } }, { { 'yy', 'SeamName' } } }, { { { 'p', 'SeamName' } } }, { { 'mid', 'SeamBold' } }, 80)
-eq(
-  texts(rows),
-  { '  x ╶─┐', ' yy ╶─┴──╴mid ╶────╴p' },
-  'both ways: the left right-aligned, joined to the centre, the right after it'
+local function it(folder, path, name)
+  return { folder = folder, path = path, segs = { { name, 'SeamMapFn' } } }
+end
+local L = both.side(
+  { it('st/', 'a/st/s.ts', 'b'), it('ck/', 'a/ck/c.ts', 'c'), it('st/', 'a/st/s.ts', 'b2'), it('st/', 'a/st/t.ts', 'd') },
+  40,
+  { side = 'left' }
 )
+rows = both.draw(L, both.side({ it('up/', 'a/up/u.ts', 'u') }, 40, { side = 'right' }), { { 'mid', 'SeamBold' } }, 80)
+eq(texts(rows), {
+  ' st/',
+  '   s.ts  b  b2 ╶┐             up/',
+  '   t.ts  d ╶────┼──╴mid ╶──────╴u.ts  u',
+  ' ck/            │',
+  '   c.ts  c ╶────┘',
+}, 'both ways: the folders with the most first, a file a line, its names after it, joined to the centre')
 local many = {}
 for i = 1, both.CAP + 2 do
-  many[i] = { { 'f' .. i } }
+  many[i] = it('st/', 'a/st/s.ts', 'f' .. i)
 end
-eq(#both.cut(many, 'left'), both.CAP + 1, 'a side past its cap: ⋯ more last')
+local cut = both.side(many, 30, { side = 'left' })
+eq(cut[#cut].segs[1][1], '⋯ 2 more', 'a side past its cap: ⋯ more last')
+for _, l in ipairs(cut) do
+  local w = l.indent or 0
+  for _, s in ipairs(l.segs) do
+    w = w + vim.api.nvim_strwidth(s[1])
+  end
+  expect(w <= 30, 'names wrap to the room', l)
+end
+eq({ both.rooms(10, 80, 100, 10) }, { 10, 68 }, 'the narrower side what it needs, the wider the rest')
 
 -- the folders' boxes: what it is built from above, who uses it below
 local folders = require 'seam.map.folders'
@@ -229,7 +248,7 @@ for _, r in ipairs(rows) do
 end
 expect(not cut and has(rows, 'name30'), 'names wrap to the room, none cut', texts(rows))
 
--- a folder's folders: ranks from what nothing calls, what calls nothing last
+-- a folder's folders: a band after everything it calls, what calls nothing first
 local fgraph = require 'seam.map.fgraph'
 local units = { { key = 'r', label = 'run/' }, { key = 's', label = 'st/' }, { key = 'c', label = 'ck/' }, { key = 't', label = 'top' } }
 local edges = {
@@ -239,10 +258,21 @@ local edges = {
   { from = 'c', to = 't', n = 1 },
   { from = 'c', to = 's', n = 1 },
 }
-eq(fgraph.ranks(units, edges), { r = 0, s = 1, c = 2, t = 3 }, 'the ranks: a step a call, the one calling nothing last')
+local bands = fgraph.bands(units, edges)
+expect(bands.t == 0 and bands.c > bands.t and bands.r > bands.s and bands.r > bands.c, 'what is used in a band before what uses it', bands)
 rows = fgraph.draw(units, edges, { width = 160, word = { 'call', 'calls' } })
-expect(has(rows, '3 calls') and has(rows, '5 calls') and has(rows, '1 call'), 'the counts on the arrows', texts(rows))
-expect(has(rows, '◀') == false and has(rows, '▶'), 'arrows between ranks', texts(rows))
+local function at(s)
+  for i, r in ipairs(rows) do
+    if r:text():find(s, 1, true) then
+      return i
+    end
+  end
+  return 0
+end
+expect(at '─ top ─' < at '─ run/ ─', 'the used above the user', texts(rows))
+expect(has(rows, 'calls nothing here'), 'a box calling nothing says so', texts(rows))
+expect(has(rows, 'top  5 calls') and has(rows, 'st/  3 calls'), 'each box what it calls and how often', texts(rows))
+expect(has(rows, '▲'), 'the arrows point up at what is used', texts(rows))
 
 -- the size's bars
 local size = require 'seam.map.size'
