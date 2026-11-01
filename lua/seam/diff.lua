@@ -1,7 +1,7 @@
 -- Two versions of some lines, compared: the hunks between them, with the
 -- bytes that changed on each line of a hunk, from codediff.nvim's
 -- compute_diff when it is there, else Vim's own vim.text.diff and a word
--- diff of each pair of lines; and the hunks laid out as the Changed view
+-- diff of each pair of lines; and the hunks laid out as the diff
 -- reads them, removed lines where they were, the unchanged runs folded.
 local M = {}
 

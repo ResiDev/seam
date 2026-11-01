@@ -1,9 +1,10 @@
--- The Changed view: a function's or a type's lines alone, a file whole, a
--- folder's changed files one after another, as the range changed them:
--- removed lines where they were, unnumbered on red; added lines on green;
--- the words that changed on a line lit stronger. Changes only, every run
--- of unchanged lines folded three lines from a change; or whole. On a
--- function, its line first, each type it names opening with its own lines.
+-- The diff, on D for the session: the Code view of a function's or a
+-- type's lines alone, a file whole, a folder's changed files one after
+-- another, as the range changed them: removed lines where they were,
+-- unnumbered on red; added lines on green; the words that changed on a line
+-- lit stronger. Changes only, every run of unchanged lines folded three
+-- lines from a change; or whole. For the Types view, a type's own lines and
+-- a function's line as it was. Used by now and at the range's start.
 local changes = require 'seam.changes'
 local code = require 'seam.code'
 local diff = require 'seam.diff'
@@ -11,6 +12,7 @@ local draw = require 'seam.draw'
 local graph = require 'seam.graph'
 local index = require 'seam.index'
 local outline = require 'seam.outline'
+local st = require 'seam.state'
 local tv = require 'seam.typesview'
 local written = require 'seam.written'
 local M = {}
@@ -82,12 +84,24 @@ function M.types_changed(m, C, node)
   return got
 end
 
---- Does the row show anything in the range: changed, new, gone, or a
---- function a type it names changed in?
+--- Is the diff on (D), and has git said what changed?
+---@return boolean
+function M.on()
+  return st.diff == true and changes.get() ~= nil
+end
+
+--- `D`: the diff on or off, for the session.
+function M.toggle()
+  st.diff = not st.diff or nil
+end
+
+--- Does the row show anything in the range: changed, new, gone, or (but
+--- for `own`, its own lines only) a function a type it names changed in?
 ---@param m table
 ---@param x seam.ORow
+---@param own? boolean
 ---@return boolean
-function M.has(m, x)
+function M.has(m, x, own)
   local C = changes.get()
   if not (C and #C.list > 0) or x.kind == 'name' then
     return false
@@ -98,12 +112,12 @@ function M.has(m, x)
   if not name then
     return C.files[path] ~= nil
   end
-  return changes.decl(C, path, name) ~= nil or (x.kind == 'fn' and #M.types_changed(m, C, m.graph.nodes[x.id]) > 0)
+  return changes.decl(C, path, name) ~= nil or (not own and x.kind == 'fn' and #M.types_changed(m, C, m.graph.nodes[x.id]) > 0)
 end
 
 local WORD = { new = 'new', gone = 'gone', signature = 'signature changed', body = 'body changed', changed = 'changed' }
 
---- What the pane's head says of the row in Changed.
+--- What the pane's head says of the row with the diff on.
 ---@param m table
 ---@param x seam.ORow
 ---@return string|nil
@@ -139,6 +153,35 @@ local function lit(r, start, spans, hl)
   end
 end
 
+--- A removed line as a row: unnumbered, `indent` columns in, on red, the
+--- words that changed on it lit stronger; `at` where gf goes, `change`
+--- when a change starts on it.
+---@param text string
+---@param spans integer[][]|nil
+---@param indent integer
+---@param at table
+---@param change boolean|nil
+---@return table
+function M.del_row(text, spans, indent, at, change)
+  local r = row { at = at, change = change }
+  r:add(string.rep(' ', indent))
+  local start = r.b
+  r:add(text, 'SeamDiffDeleteFg')
+  r.bg = 'SeamDiffDelete'
+  lit(r, start, spans, 'SeamDiffDeleteText')
+  return r
+end
+
+--- An added line's row on green, the words that changed on it lit
+--- stronger, its code starting at byte `start`.
+---@param r table
+---@param start integer
+---@param spans integer[][]|nil
+function M.add_lit(r, start, spans)
+  r.bg = 'SeamDiffAdd'
+  lit(r, start, spans, 'SeamDiffAddText')
+end
+
 --- Rows of laid-out lines: an added or unchanged line numbered, as code;
 --- a removed one unnumbered on red; a fold. Lines a0 + i of the version at
 --- `from` (`ka`) and b0 + i of the one at `to` (`kb`), `path` the file gf goes to.
@@ -160,13 +203,7 @@ function M.lines(out, items, ka, kb, path, a0, b0)
     if it.kind == 'fold' then
       out[#out + 1] = row():add(string.rep(' ', gw - 1) .. '  ⋯ ' .. plural(it.n, 'line') .. ' unchanged', 'SeamLabel')
     elseif it.kind == 'del' then
-      local r = row { at = { path = path, line = math.max(1, b0 + it.b - 1) }, change = it.start }
-      r:add(string.rep(' ', gw + 3))
-      local start = r.b
-      r:add(A[a0 + it.a] or '', 'SeamDiffDeleteFg')
-      r.bg = 'SeamDiffDelete'
-      lit(r, start, it.spans, 'SeamDiffDeleteText')
-      out[#out + 1] = r
+      out[#out + 1] = M.del_row(A[a0 + it.a] or '', it.spans, gw + 3, { path = path, line = math.max(1, b0 + it.b - 1) }, it.start)
     else
       local l = b0 + it.b
       local r = row { kind = 'code', lnum = l, change = it.start, at = { path = path, line = l } }
@@ -174,8 +211,7 @@ function M.lines(out, items, ka, kb, path, a0, b0)
       local start = r.b
       code.add(r, kb, l)
       if it.kind == 'add' then
-        r.bg = 'SeamDiffAdd'
-        lit(r, start, it.spans, 'SeamDiffAddText')
+        M.add_lit(r, start, it.spans)
       end
       out[#out + 1] = r
     end
@@ -209,24 +245,9 @@ local function file_rows(out, C, path, fold)
   M.lines(out, diff.items(changes.lines(ka), changes.lines(kb), { fold = fold }), ka, kb, path, 0, 0)
 end
 
--- a function's line as the Types view draws it, its types opening with their own lines
-local function fn_line(out, m, x, ctx)
-  if not m.sigs then
-    return
-  end
-  local types_view = require 'seam.views.types'
-  local C = types_view.context(m, ctx, m.graph.nodes[x.id].path)
-  C.diff = M.block_diff
-  local f = types_view.fn_of(C, x.id, 'c:' .. x.id)
-  if f then
-    types_view.fn_rows(out, C, f, types_view.columns(C, { f }, ctx.width), false, false)
-    out[#out + 1] = row()
-  end
-end
-
 ---------------------------------------------------------------- a type opened
 
---- A type opened in place in the Changed view (seam.views.types' block),
+--- A type opened in place with the diff on (seam.views.types' block),
 --- its own lines marked: an added one `+`, the removed ones put back where
 --- they were, `-`; `changed` set on the block when the type changed.
 ---@param d table the declaration: its path, name, line
@@ -266,83 +287,6 @@ function M.block_diff(d, lines)
     vim.list_extend(out, before[at] or {})
   end
   return out, true
-end
-
----------------------------------------------------------------- in the code
-
---- The lines of `path` as it is that the range changed, when it ends at the
---- working tree: each `add`, `change` or, the line after lines removed,
---- `delete`; and the lines where each change starts, in order.
----@param path string
----@return table<integer, string>, integer[]
-function M.marks(path)
-  local C = changes.get()
-  if not (C and not C.range.to and C.files[path] and C.files[path] ~= 'gone') then
-    return {}, {}
-  end
-  C.marks = C.marks or {}
-  local got = C.marks[path]
-  if not got then
-    local by, starts = {}, {}
-    local B = changes.lines(path)
-    for _, h in ipairs(diff.hunks(changes.lines(changes.key(C, path, 'from')), B)) do
-      starts[#starts + 1] = math.min(h.b, math.max(1, #B))
-      for l = h.b, h.b + h.nb - 1 do
-        by[l] = h.na == 0 and 'add' or 'change'
-      end
-      if h.nb == 0 then
-        by[starts[#starts]] = by[starts[#starts]] or 'delete'
-      end
-    end
-    got = { by, starts }
-    C.marks[path] = got
-  end
-  return got[1], got[2]
-end
-
-M.MARK_HL = { add = 'SeamSignAdd', change = 'SeamSignChange', delete = 'SeamSignDelete' }
-
---- The code rows of `path` in window `win` where a change starts.
----@param win integer
----@param path string
----@return integer[]
-function M.line_stops(win, path)
-  local _, starts = M.marks(path)
-  local at, rows = {}, {}
-  if not vim.api.nvim_win_is_valid(win) then
-    return rows
-  end
-  for _, l in ipairs(starts) do
-    at[l] = true
-  end
-  local buf = vim.api.nvim_win_get_buf(win)
-  for i = 1, #starts > 0 and vim.api.nvim_buf_line_count(buf) or 0 do
-    if at[draw.meta(buf, i).lnum or -1] then
-      rows[#rows + 1] = i
-    end
-  end
-  return rows
-end
-
---- `]c` `[c` on code rows of `path` in window `win`: the cursor on the next
---- row where a change starts, or the one before, round the ends.
----@param win integer
----@param path string
----@param d integer
-function M.next_line(win, path, d)
-  local rows = M.line_stops(win, path)
-  if #rows == 0 then
-    return
-  end
-  local cur = vim.api.nvim_win_get_cursor(win)[1]
-  local pick = d > 0 and rows[1] or rows[#rows]
-  for k = d > 0 and 1 or #rows, d > 0 and #rows or 1, d do
-    if (d > 0 and rows[k] > cur) or (d < 0 and rows[k] < cur) then
-      pick = rows[k]
-      break
-    end
-  end
-  vim.api.nvim_win_set_cursor(win, { pick, 0 })
 end
 
 ---------------------------------------------------------------- Used by
@@ -413,6 +357,59 @@ local function was_line(r, key, d, name, gives)
   types_view.typed(r, '(' .. table.concat(ps, ', ') .. ')', known, {}, nil)
   r:add(' → ', 'SeamLabel'):add(name, 'SeamName'):add(' → ', 'SeamLabel')
   types_view.typed(r, s and s.ret and tv.simple(s.ret) or gives or '?', known, {}, nil)
+end
+
+--- How the function `node` changed, for its line in Types with the diff
+--- on: its declaration's change when it is new or its signature changed and
+--- the range ends at the working tree, which the lines drawn are.
+---@param node table
+---@return seam.DeclChange|nil
+function M.fn_state(node)
+  local C = changes.get()
+  local d = C and not C.range.to and changes.decl(C, node.path, node.name)
+  return d and (d.state == 'new' or d.state == 'signature') and d or nil
+end
+
+--- Did the range change the type `name` declared in `path`, the range
+--- ending at the working tree?
+---@param path string
+---@param name string
+---@return boolean
+function M.type_changed(path, name)
+  local C = changes.get()
+  return C ~= nil and not C.range.to and changes.decl(C, path, name) ~= nil
+end
+
+--- A function's line as it was at the range's start, `-` on red: with
+--- `cols` in the Types view's shape and columns, what it takes, its name,
+--- what it gives; else as written, its parameters named. `gives` what it
+--- gives where that version does not write it.
+---@param node table
+---@param d seam.DeclChange
+---@param gives string|nil
+---@param cols? { pw: integer, nw: integer }
+---@return table
+function M.was_row(node, d, gives, cols)
+  local C = assert(changes.get())
+  local key = changes.key(C, node.path, 'from')
+  local r = row { at = { path = node.path, line = math.max(1, node.line) }, change = true }
+  r:add('-', 'SeamSignDelete'):add ' '
+  local s = cols and key and written.fn(key, d.from.line)
+  local sig = s and tv.sig(s, nil)
+  if sig then
+    local types_view = require 'seam.views.types'
+    local known = function(w)
+      return w:match '^%u' ~= nil
+    end
+    types_view.typed(r, tv.cut(tv.takes(sig), cols.pw), known, {}, nil)
+    r:to(2 + cols.pw):add(' → ', 'SeamLabel'):add(node.name, 'SeamName')
+    r:to(2 + cols.pw + 3 + cols.nw):add(' → ', 'SeamLabel')
+    types_view.typed(r, sig.ret and tv.gives(sig) or gives or '?', known, {}, nil)
+  else
+    was_line(r, key, d.from, node.name, gives)
+  end
+  r.bg = 'SeamDiffDelete'
+  return r
 end
 
 --- Used by on a function whose signature or body changed: its line as it
@@ -493,7 +490,7 @@ end
 
 ---------------------------------------------------------------- the view
 
---- The Changed view for row `x`, in `display`.
+--- Code with the diff for row `x`, in `display`.
 ---@param out table[]
 ---@param x seam.ORow
 ---@param m table
@@ -526,9 +523,6 @@ function M.draw(out, x, m, display, ctx)
   local path, name = subject(m, x)
   if not name then
     return file_rows(out, C, path, fold)
-  end
-  if x.kind == 'fn' then
-    fn_line(out, m, x, ctx)
   end
   local items, ka, kb, a0, b0 = M.decl_items(C, path, name, fold)
   if not items then

@@ -117,7 +117,9 @@ end
 ---@param s integer
 ---@param e integer
 ---@param nodes table[] the functions whose calls are underlined
-function M.lines(out, m, path, s, e, nodes)
+---@param diffed? boolean with the range's changes inline, when the diff is on
+function M.lines(out, m, path, s, e, nodes, diffed)
+  local first = #out + 1
   local refs = elsewhere(m, path, s, e, nodes)
   local hints = {}
   for _, h in ipairs(require('seam.codetypes').hints(m, path, s, e)) do
@@ -129,11 +131,12 @@ function M.lines(out, m, path, s, e, nodes)
     set[l] = true
   end
   -- the lines the range changed, their numbers in the signs' colours
-  local changed = require 'seam.views.changed'
-  local marks = changed.marks(path)
+  local cd = require 'seam.codediff'
+  local inline = diffed and cd.diff_of(path)
+  local marks = inline and {} or cd.marks(path)
   M.rows(out, path, set, {}, function(cr, start, src, l)
     if marks[l] then
-      cr.h[#cr.h + 1] = { 0, start, changed.MARK_HL[marks[l]], 160 }
+      cr.h[#cr.h + 1] = { 0, start, cd.MARK_HL[marks[l]], 160 }
     end
     cr.meta.stops = {}
     for _, r in ipairs(refs[l] or {}) do
@@ -150,6 +153,12 @@ function M.lines(out, m, path, s, e, nodes)
       cr.virt[#cr.virt + 1] = { start + h.col, h.text }
     end
   end)
+  if inline then
+    -- a function's own lines at the range's start, removed before its first line or after its last
+    local C = require('seam.changes').get()
+    local d = #nodes == 1 and s > 1 and C and require('seam.changes').decl(C, path, nodes[1].name)
+    cd.inline(out, first, inline, path, s, e, d and d.from)
+  end
 end
 
 ---@param out table[]

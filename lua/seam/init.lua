@@ -115,7 +115,7 @@ function M.here(how)
       local function used_by()
         if how == 'page' or how == 'called_by' then
           st.view = st.view or require('seam.views').new()
-          st.view.at = 'Used by'
+          st.view.aside = 'Used by'
         end
       end
       -- the tree on a function, and for calls its code screen over it
