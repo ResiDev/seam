@@ -232,7 +232,7 @@ time, is the bet. A guess until it's drawn on raf.
 
 ```
 run/
-  run.ts                                             3 exports  12 kept
+  run.ts
     createRun()          (RunOptions) → Run
       problemReporter()  (ProblemHandlers) → ReportProblem
       createQueue()      (string, ReportProblem) → Queue
@@ -242,7 +242,11 @@ run/
         …
 ```
 
-- **A file's rows** are its exports, then what it keeps to itself, dimmer.
+- **A file's rows are its functions in the file's order, all alike.** No
+  mark for what it keeps to itself. A function kept to its file is only
+  called from that file, so its calls are never underlined, and Used by
+  lists only that file. (Decided 2026-11-01; `mocks/tree-file-kept.png` was
+  not needed.)
 - **`l` on a function** opens what it calls, in the order they run. `h`
   closes it. Each call has all the views and opens with `l` again.
 - **Where a call lives: underlined.** Decided 2026-10-31 from six marks
@@ -406,7 +410,8 @@ or without the `if`, `case`, `later`, `return` they sit under. With or
 without the types and constants it uses, not only its calls.
 
 1e. **A file's rows.** Exports, then what it keeps, dimmer. Or exports
-only, what it keeps seen through `l`.
+only, what it keeps seen through `l`. **Neither:** its functions in the
+file's order, all alike (see The tree).
 
 Mocked on raf, createRun open and update.ts's 3 exports and 10 kept, with
 react's WaymarkRoot open for a call into another package (`src/tree/mock.py`):
@@ -424,9 +429,12 @@ marks, each the same in the tree and the code beside it, on update() (6
 calls in its own file, 11 in others) and react's useOwnedRun() (createRun
 from core): `mocks/where-{underline,dotted,italic,bold-here,glyph,file}-{core,react}.png`
 (`src/tree/where.py`). **Underline chosen**, see "Where a call lives" in The
-tree. B to D of section 1 were not liked; open again.
+tree. Then 1b: nothing beside a name. 1d: calls only, in run order. 1e:
+all functions alike. 1a was decided as layout A under Types.
 
 ### 2. Switching views
+
+**A chosen,** tabs in the pane's head (see Types: the higher view).
 
 - A. Tabs in the pane's head, `Code  Types  Built from  Used by  Map
   Changed`, the one shown lit, as the Calls pane does today.
@@ -436,6 +444,8 @@ tree. B to D of section 1 were not liked; open again.
   well.
 
 ### 3. The Types view
+
+**Decided,** see Types: the higher view.
 
 3a. **A folder, a file, a function, a type.** Four pictures in the one
 shape: takes → function → gives, the functions in one column.
@@ -453,6 +463,8 @@ a union of objects.
 
 ### 4. Opening a type
 
+**Decided:** `+` and `-`, one level a press (see Types open in place).
+
 - A. **By level,** as ts-expand-hover does: the whole type re-shown one
   level deeper each time.
 - B. **By field,** a tree: `l` on one field opens only its type under it.
@@ -461,6 +473,9 @@ a union of objects.
 A picture of `Queue` and of `Model`, each two levels open.
 
 ### 5. The Used by view
+
+**Decided:** by file, with by name and by user as its other displays
+(see Types: the higher view).
 
 - A. The list of call sites, each `file:line` and its line of code; the
   cursor on one shows the caller's code around it below.
