@@ -2,6 +2,7 @@
 -- displays it can be shown in, and how it draws. A later view is one more
 -- entry in the list. `st.view` holds the one chosen and each view's display.
 local code_view = require 'seam.views.code'
+local seams_view = require 'seam.views.seams'
 local types_view = require 'seam.views.types'
 local M = {}
 
@@ -10,6 +11,7 @@ local M = {}
 ---@field displays string[] the ways it can be shown, the first by default
 ---@field has fun(row: seam.ORow): boolean
 ---@field draw fun(out: table[], row: seam.ORow, m: table, display: string, ctx: seam.ViewCtx)
+---@field count fun(m: table, row: seam.ORow): string|nil what the pane's head says of the row in this view
 
 ---@class seam.ViewCtx
 ---@field open table<string, boolean> the types opened in place for the row, by key (seam.typesview)
@@ -45,6 +47,24 @@ M.list = {
     draw = function(out, row, m, _, ctx)
       types_view.draw(out, row, m, ctx)
     end,
+  },
+  {
+    name = 'Built from',
+    displays = seams_view.BUILT,
+    has = function()
+      return true
+    end,
+    draw = seams_view.built_from,
+    count = seams_view.built_count,
+  },
+  {
+    name = 'Used by',
+    displays = seams_view.USED,
+    has = function()
+      return true
+    end,
+    draw = seams_view.used_by,
+    count = seams_view.used_count,
   },
 }
 

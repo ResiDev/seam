@@ -186,19 +186,24 @@ end
 ---@param sv seam.ViewState
 function M.pane_head(buf, m, o, x, sv)
   local h = row():add ' '
+  local shown, display = views.shown(x, sv)
+  -- what the view counts of the row, in place of what the row says of itself
+  local count = shown and shown.count and shown.count(m, x)
   if x and x.kind == 'fn' then
     local node = m.graph.nodes[x.id]
     fn_name(h, node, 60)
     h.h[#h.h + 1] = { 1, h.b, 'SeamBold', 80 }
     h:add('   ' .. node.kind .. ' in ', 'SeamLabel')
     draw.path(h, node.path, math.max(1, node.line))
-    if WORDS[o.order] and x.depth == 0 then
+    if count then
+      h:add('   ' .. count, 'SeamLabel')
+    elseif WORDS[o.order] and x.depth == 0 then
       h:add(o.order == 'used' and ('   used by ' .. x.used) or ('   calls ' .. x.calls), 'SeamLabel')
     end
   elseif x and x.kind == 'file' then
     h:add(M.name(m, x), 'SeamBold'):add('   file in ', 'SeamLabel')
     draw.path(h, x.path:match '^(.*/)' or '')
-    h:add(', ' .. draw.plural(#outline.functions(m, x.path), 'function'), 'SeamLabel')
+    h:add(count and ('   ' .. count) or (', ' .. draw.plural(#outline.functions(m, x.path), 'function')), 'SeamLabel')
   elseif x and x.kind == 'type' then
     local s0 = h.b
     code.add_name(h, x.path, x.line, x.name, 'SeamTypeBold', 60)
@@ -207,15 +212,20 @@ function M.pane_head(buf, m, o, x, sv)
     h:add('   ' .. x.decl_kind .. ' in ', 'SeamLabel')
     draw.path(h, x.path, x.line)
     local f = m.flows and m.flows[x.name]
-    if f then
+    if count then
+      h:add('   ' .. count, 'SeamLabel')
+    elseif f then
       h:add(('   %s give one · %d take one'):format(draw.plural(#f.gives, 'function'), #require('seam.types').takers(f)), 'SeamLabel')
     end
+  elseif x and count then
+    h:add(M.name(m, x), 'SeamBold'):add('   folder in ', 'SeamLabel')
+    draw.path(h, outline.full(x.item) .. '/')
+    h:add('   ' .. count, 'SeamLabel')
   elseif x then
     h:add(M.name(m, x), 'SeamBold'):add('   folder, ' .. draw.plural(outline.files_under(m, outline.full(x.item)), 'file'), 'SeamLabel')
   end
   local t = row():add ' '
   local list = views.of(x)
-  local shown, display = views.shown(x, sv)
   draw.tabs(
     t,
     vim.tbl_map(function(v)
