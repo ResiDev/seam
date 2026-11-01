@@ -178,7 +178,9 @@ local function both_display(x, m, ctx, C)
   local s = M.state(x)
   local T = M.types_on() and m.sigs
   local left, right, centre = {}, {}, nil
-  local function fn_seg(id, side, dim)
+  -- a function as a side writes it: with T on, what goes in left of its
+  -- name and what comes out right of it; a caller with where it is
+  local function fn_seg(id, side, dim, where)
     local n = m.graph.nodes[id]
     local name = { data.label(n), dim and 'SeamLabel' or 'SeamMapFn', { kind = 'fn', id = id } }
     local takes, gives
@@ -189,32 +191,30 @@ local function both_display(x, m, ctx, C)
       if takes then
         return cat({ { '(', 'SeamPunct' } }, tsegs(tv.cut(takes, 30)), { { ') → ', 'SeamLabel' }, name })
       end
-      return { { data.short(m, n.path, x.path or n.path) .. '  ', 'SeamDim' }, name }
-    end
-    if gives then
+    elseif gives then
       return cat({ name, { ' → ', 'SeamLabel' } }, tsegs(tv.cut(gives, 24)))
+    end
+    if where then
+      return { { data.short(m, n.path, x.path or n.path) .. '  ', 'SeamDim' }, name }
     end
     return { name }
   end
   if x.kind == 'fn' then
     local callers, tests = data.callers(m, x.id)
-    for _, id in ipairs(callers) do
+    for _, id in ipairs(data.calls(m, x.id)) do
       left[#left + 1] = fn_seg(id, 'left')
     end
-    for _, id in ipairs(tests) do
-      left[#left + 1] = fn_seg(id, 'left', true)
+    for _, id in ipairs(callers) do
+      right[#right + 1] = fn_seg(id, 'right', false, true)
     end
-    for _, id in ipairs(data.calls(m, x.id)) do
-      right[#right + 1] = fn_seg(id, 'right')
+    for _, id in ipairs(tests) do
+      right[#right + 1] = fn_seg(id, 'right', true, true)
     end
     centre = { { data.label(m.graph.nodes[x.id]), 'SeamMapFnBold' } }
   elseif x.kind == 'type' then
     local makers, takers = data.flow(m, x.name)
     for _, id in ipairs(makers) do
       left[#left + 1] = fn_seg(id, 'left')
-      if not T then
-        left[#left] = { left[#left][2] }
-      end
     end
     for _, id in ipairs(takers) do
       right[#right + 1] = fn_seg(id, 'right')
@@ -224,11 +224,11 @@ local function both_display(x, m, ctx, C)
     local home = x.kind == 'dir' and dir_of(x) or x.path
     local into, outs = data.crossing(m, data.within(home))
     local hp = x.kind == 'dir' and (home .. '/x') or home
-    for _, f in ipairs(files_across(m, into, 'left')) do
+    for _, f in ipairs(files_across(m, outs, 'right')) do
       left[#left + 1] =
         { { draw.trunc(table.concat(f.names, ', '), 26) .. '  ', 'SeamLabel' }, { data.short(m, f.path, hp), 'SeamName', { kind = 'file', path = f.path } } }
     end
-    for _, f in ipairs(files_across(m, outs, 'right')) do
+    for _, f in ipairs(files_across(m, into, 'left')) do
       right[#right + 1] =
         { { data.short(m, f.path, hp), 'SeamName', { kind = 'file', path = f.path } }, { '  ' .. draw.trunc(table.concat(f.names, ', '), 40), 'SeamLabel' } }
     end
@@ -308,11 +308,14 @@ local function folders_display(x, m, ctx)
   if x.kind == 'dir' then
     return folder_graph(x, m, ctx)
   end
-  local o = { width = ctx.width - 2, left = {}, right = {}, word = { 'call', 'calls' }, heads = 'in' }
+  local o = { width = ctx.width - 2, top = {}, bottom = {}, word = { 'call', 'calls' }, flow = 'up' }
+  local function said(n, one, more)
+    return n .. ' ' .. (n == 1 and one or more)
+  end
   if x.kind == 'fn' then
     local n = m.graph.nodes[x.id]
     local callers, tests = data.callers(m, x.id)
-    o.left, o.right = as_cross(m, callers), as_cross(m, data.calls(m, x.id))
+    o.top, o.bottom = as_cross(m, data.calls(m, x.id)), as_cross(m, callers)
     local tf = {}
     for _, id in ipairs(tests) do
       tf[m.graph.nodes[id].path] = true
@@ -322,17 +325,17 @@ local function folders_display(x, m, ctx)
     o.sub = data.where(m, n.path, n.path)
   elseif x.kind == 'file' then
     local into, outs = data.crossing(m, data.within(x.path))
-    o.left = as_cross(
-      m,
-      vim.tbl_map(function(e)
-        return e.from
-      end, into)
-    )
-    o.right = as_cross(
+    o.top = as_cross(
       m,
       vim.tbl_map(function(e)
         return e.to
       end, outs)
+    )
+    o.bottom = as_cross(
+      m,
+      vim.tbl_map(function(e)
+        return e.from
+      end, into)
     )
     local tests, tf = 0, {}
     for _, id in ipairs(data.fns_in(m, x.path)) do
@@ -343,13 +346,18 @@ local function folders_display(x, m, ctx)
       end
     end
     o.tests, o.tfiles = tests, vim.tbl_count(tf)
-    o.centre, o.centre_hl, o.home, o.wrap, o.left_counts = x.path:match '[^/]+$', 'SeamBold', x.path, 26, true
+    o.centre, o.centre_hl, o.home = x.path:match '[^/]+$', 'SeamBold', x.path
     o.sub = data.where(m, x.path, x.path)
   else
     local makers, takers = data.flow(m, x.name)
-    o.left, o.right = as_cross(m, makers), as_cross(m, takers)
-    o.centre, o.centre_hl, o.home, o.wrap, o.left_counts = x.name, 'SeamTypeBold', x.path, 26, true
-    o.word, o.heads, o.sub = { 'function', 'functions' }, 'right', x.path:match '[^/]+$'
+    o.top, o.bottom = as_cross(m, makers), as_cross(m, takers)
+    o.centre, o.centre_hl, o.home = x.name, 'SeamTypeBold', x.path
+    o.word, o.flow, o.sub = { 'function', 'functions' }, 'down', x.path:match '[^/]+$'
+    o.top_says, o.bottom_says = 'made by ' .. said(#makers, 'function', 'functions'), 'taken by ' .. said(#takers, 'function', 'functions')
+  end
+  if x.kind ~= 'type' then
+    o.top_says = said(#o.top, 'call', 'calls')
+    o.bottom_says = 'called from ' .. said(#o.bottom, 'function', 'functions')
   end
   return require('seam.map.folders').draw(m, o)
 end

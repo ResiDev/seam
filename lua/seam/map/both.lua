@@ -1,7 +1,7 @@
--- The Map's both ways display: who uses the row on the left, what it uses
--- on the right, joined to it by lines; a function's callers and calls, a
--- folder's or a file's files across its edge with the names that cross, a
--- type's makers and takers. Pure: the items come as pieces, the rows go
+-- The Map's both ways display: what the row is built from on the left, who
+-- uses it on the right, the order of the tabs, joined to it by lines; a
+-- function's calls and callers, a folder's or a file's files across its
+-- edge with the names that cross, a type's makers and takers. Pure: the items come as pieces, the rows go
 -- out with what each name stands for in `meta.hits`.
 local canvas = require 'seam.map.canvas'
 local M = {}

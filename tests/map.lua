@@ -189,25 +189,45 @@ for i = 1, both.CAP + 2 do
 end
 eq(#both.cut(many, 'left'), both.CAP + 1, 'a side past its cap: ⋯ more last')
 
--- the folders' boxes: every arrow at the row
+-- the folders' boxes: what it is built from above, who uses it below
 local folders = require 'seam.map.folders'
 rows = folders.draw(m, {
   centre = 'run',
   centre_hl = 'SeamBold',
   sub = 'run/',
-  left = { { path = 'pa/src/run/up.ts', id = A1, name = 'a1' } },
-  right = { { path = 'pa/src/st/s.ts', id = B, name = 'b' }, { path = 'pa/src/st/s.ts', id = C, name = 'c' }, { path = 'pb/src/x.ts', id = E, name = 'e' } },
+  bottom = { { path = 'pa/src/run/up.ts', id = A1, name = 'a1' } },
+  top = { { path = 'pa/src/st/s.ts', id = B, name = 'b' }, { path = 'pa/src/st/s.ts', id = C, name = 'c' }, { path = 'pb/src/x.ts', id = E, name = 'e' } },
+  top_says = '3 calls',
+  bottom_says = 'called from 1 function',
   tests = 1,
   tfiles = 1,
   word = { 'call', 'calls' },
-  heads = 'in',
+  flow = 'up',
   home = RUN,
   width = 120,
 })
-expect(has(rows, '◀ 2 calls') and has(rows, '◀ 1 call'), 'the counts on the arrows, pointing at the row', texts(rows))
-expect(has(rows, 's.ts  b  c') and has(rows, '─ st/ ─'), 'a box a folder, its files and names', texts(rows))
+local function row_of(s)
+  for i, r in ipairs(rows) do
+    if r:text():find(s, 1, true) then
+      return i
+    end
+  end
+end
+expect(has(rows, 'st/  2 calls') and has(rows, 's.ts  b  c'), 'a box a folder, its count in its border, its files and names', texts(rows))
+expect(row_of 's.ts' < row_of '│ run │' and row_of '│ run │' < row_of 'up.ts', 'built from above the row, used by below', texts(rows))
+expect(has(rows, '3 calls') and has(rows, 'called from 1 function'), 'what each line stands for beside it', texts(rows))
+expect(has(rows, '▲'), 'the arrows point at what is used', texts(rows))
 expect(has(rows, '⋯ 1 in tests, 1 files'), 'tests folded to a count', texts(rows))
-expect(has(rows, '▶│ run'), 'the left arrow into the row', texts(rows))
+local long = {}
+for i = 1, 30 do
+  long[i] = { path = 'pa/src/st/s.ts', id = B, name = 'name' .. i }
+end
+rows = folders.draw(m, { centre = 'run', centre_hl = 'SeamBold', sub = '', top = long, bottom = {}, word = { 'call', 'calls' }, home = RUN, width = 60 })
+local cut = false
+for _, r in ipairs(rows) do
+  cut = cut or r:text():find('…', 1, true) ~= nil or r.w > 61
+end
+expect(not cut and has(rows, 'name30'), 'names wrap to the room, none cut', texts(rows))
 
 -- a folder's folders: ranks from what nothing calls, what calls nothing last
 local fgraph = require 'seam.map.fgraph'
