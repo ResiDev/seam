@@ -556,6 +556,146 @@ screen8("map8-type-files", "type, a type given from two files",
         "update's calls: Work comes from run/update.ts and from run/walkthroughs.ts, a line for each file, the type written once.",
         UP, by_type(UP) , "type", None)
 
+# ── round nine: C grouped, by type and by folder; a type's foot ─────────
+def decl_of(name):
+    """a type's declaration as written, from the source: its file, line, lines"""
+    for root, _, files in os.walk(SRCDIR):
+        for f in files:
+            if not f.endswith((".ts", ".tsx")) or ".test." in f: continue
+            path = os.path.join(root, f)
+            L = open(path).read().split("\n")
+            for k, l in enumerate(L):
+                if re.match(r"export (type|interface) " + name + r"\b", l):
+                    out, depth = [], 0
+                    for l2 in L[k:]:
+                        out.append(l2)
+                        depth += l2.count("{") - l2.count("}")
+                        if depth <= 0 and (l2.rstrip().endswith((";", "}", ">;", "}>;")) or depth == 0 and len(out) > 1): break
+                    return os.path.relpath(path, SRCDIR), k + 1, out
+    return None
+def type_flow(name):
+    gives = [i for i in N if sig(i) and re.search(r"\b" + name + r"\b", SIG[(N[i]["path"], N[i]["name"])].get("ret") or "") and not is_test(N[i]["path"])]
+    takes = [i for i in N if (N[i]["path"], N[i]["name"]) in SIG and any(re.search(r"\b" + name + r"\b", q.get("type") or "") for q in SIG[(N[i]["path"], N[i]["name"])]["params"]) and not is_test(N[i]["path"])]
+    return gives, takes
+def type_foot(name, cap=7):
+    path, line, lines = decl_of(name)
+    gives, takes = type_flow(name)
+    rows = [blank()[0], (s("d3", " " + "─" * PW), "")]
+    rows.append((s("", " ") + s("ty bold", name) + s("c", f"   type in {path}:{line}   made by {len(gives)}, taken by {len(takes)}"), ""))
+    src = re.sub(r"/\*.*?\*/\s*", "", "\n".join(lines), flags=re.S).split("\n")
+    src = [l for l in src if l.strip() and not l.strip().startswith("//")]
+    lines = src
+    for l in lines[:cap]:
+        rows.append((s("", " ") + ts(l), ""))
+    if len(lines) > cap:
+        rows.append((s("c", f" ⋯ {len(lines) - cap} more lines"), ""))
+    return rows
+
+def gflow(r, key, cursor=None):
+    """C grouped: what it calls above under a head, by the type each gives or
+    by folder; a line down the left through the heads into the row; the row
+    as what it takes → its name → what it gives; on from there to its
+    callers, grouped the same way, set off where its output ends"""
+    L, R = sides(r)
+    def tk(i, w=44):
+        x = sig(i, w)
+        return "(" + x[0] + ")" if x else ""
+    def gv(i):
+        x = sig(i, 44)
+        return cut(x[1], 26) if x else ""
+    def gkey(i):
+        if key == "type":
+            g = gv(i)
+            return "void" if g == "void" else (g or "?")
+        return where(N[i]["path"])
+    def head_segs(k):
+        if key == "type":
+            if k == "void": return s("c", "nothing")
+            if k == "?": return s("c", "?")
+            return tsegs(k)
+        return s("fg bold", k[:-6] if k.endswith(" files") else k)
+    def rank_type(k, n):
+        words = re.findall(r"[A-Za-z_$][\w$]*", k)
+        repo = any(w[0].isupper() and w not in BUILTIN for w in words)
+        return (0 if repo else 2 if k in ("void", "?") else 1, -n)
+    def groups(ids, order):
+        g = collections.OrderedDict()
+        for i in sorted(ids, key=order): g.setdefault(gkey(i), []).append(i)
+        if key == "type": return sorted(g.items(), key=lambda kv: rank_type(kv[0], len(kv[1])))
+        return sorted(g.items(), key=lambda kv: -len(kv[1]))
+    def place(i):
+        d = where(N[i]["path"]); d = d[:-6] if d.endswith(" files") else d
+        return d, base(N[i]["path"])
+    calls = groups(L, (lambda i: callee_line(r, i)) if key == "type" else (lambda i: (N[i]["path"], callee_line(r, i))))
+    allc = [i for _, v in calls for i in v]
+    nw = max(len(label(i)) for i in allc)
+    tkw = max(len(tk(i)) for i in allc)
+    gvw = max(len(gv(i)) for i in allc)
+    fw = max(len(base(N[i]["path"])) for i in allc)
+    pw = max(sum(map(len, place(i))) for i in allc)
+    rows = []
+    for gi, (k, ids) in enumerate(calls):
+        hd = head_segs(k)
+        lead = "┌─ " if gi == 0 else "├─ "
+        rows.append((s("", "     ") + s("c", lead) + hd, "sel" if k == cursor else ""))
+        prevf = None
+        for i in ids:
+            row = s("c", str(callee_line(r, i)).rjust(4) + " ") + s("c", "│    ")
+            if key == "folder":
+                f = base(N[i]["path"])
+                row += s("fd", (f if f != prevf else "").ljust(fw + 2)); prevf = f
+            row += s("b vis" if label(i) == cursor else "b", label(i).ljust(nw + 2))
+            tt = tsegs(tk(i), dim=True); row += tt + s("", " " * (tkw - tw(tt) + 2))
+            if key == "folder":
+                g = gv(i)
+                gg = (s("c", "→ ") + tsegs(g)) if g and g != "void" else s("c", "  nothing" if g == "void" else "")
+                row += gg
+            else:
+                d, f = place(i)
+                row += s("c", d) + s("fd", f)
+            rows.append((row, "sel" if label(i) == cursor else ""))
+    rows.append((s("c", "     │"), ""))
+    t_, g_ = sig(r, 60)
+    centre = s("c", str(N[r]["line"]).rjust(4) + " ") + s("c", "└──▶ ") + tsegs("(" + t_ + ")") + s("c", " → ") + s("b bold", N[r]["name"]) + s("c", " → ") + tsegs(g_) + s("c", " ──┐")
+    rows.append((centre, ""))
+    bx = tw(centre) - 1
+    cg = groups(R, lambda i: (N[i]["path"], callee_line(i, r)))
+    allr = [i for _, v in cg for i in v]
+    cnw = max([len(label(i)) for i in allr] + [0])
+    ctk = max([len(tk(i, 30)) for i in allr] + [0])
+    for gi, (k, ids) in enumerate(cg):
+        last = gi == len(cg) - 1
+        rows.append((s("", " " * bx) + s("c", "└─ " if last else "├─ ") + head_segs(k), "sel" if k == cursor else ""))
+        bar = "   " if last else "│  "
+        for i in ids:
+            row = s("", " " * bx) + s("c", bar + "  ")
+            row += s("b vis" if label(i) == cursor else "b", label(i).ljust(cnw + 2))
+            x = sig(i, 30)
+            tt = tsegs("(" + x[0] + ")", dim=True) if x else []
+            row += tt + s("", " " * (ctk - tw(tt) + 2))
+            if key == "folder" and x:
+                row += s("c", "→ ") + tsegs(cut(x[1], 16), dim=True) + s("", "  ")
+            row += s("fd", base(N[i]["path"])) + s("c", f":{callee_line(i, r)}")
+            rows.append((row, "sel" if label(i) == cursor else ""))
+    return rows
+
+O9 = ("folder", "type")
+screen8("map9-type", "C grouped by type: what each gives as the head, then its name, what it takes, where it lives",
+        "verifyOne's calls under the type each gives, the repo's types first; a line down the left through the types into verifyOne, written as what it takes → verifyOne → what it gives; its callers grouped by what they give, set off where its output ends. The cursor on a name: its signature and call at the foot.",
+        VO, gflow(VO, "type", "verified") + foot(VO, "verified"), "type", "verified", opts=O9)
+screen8("map9-type-cursor-type", "C grouped by type, the cursor on a type",
+        "The cursor on UserRecord: its declaration as written at the foot, where it is, how many make and take it.",
+        VO, gflow(VO, "type", "UserRecord") + type_foot("UserRecord"), "type", "UserRecord", opts=O9)
+screen8("map9-folder", "C grouped by folder: each folder the head, then file, name, takes, gives",
+        "The same flow by folder: each call's file, name, what it takes and what it gives, in columns.",
+        VO, gflow(VO, "folder", "verified") + foot(VO, "verified"), "folder", "verified", opts=O9)
+screen8("map9-type-big", "C grouped by type on update, 17 calls",
+        "Work given from two files, one head over both.",
+        UP, gflow(UP, "type"), "type", None, opts=O9)
+screen8("map9-folder-big", "C grouped by folder on createRun",
+        "The same by folder.",
+        CR, gflow(CR, "folder"), "folder", None, opts=O9)
+
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):
     G.append(f"<h2>{H.escape(title)}</h2><p class='cap'>{H.escape(cap)}</p>{body}")
