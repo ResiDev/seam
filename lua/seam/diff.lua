@@ -15,6 +15,8 @@ local M = {}
 
 -- `false` to leave codediff out, for the specs
 M.codediff = true
+-- how long codediff may take over one diff before it gives what it has
+M.CODEDIFF_MS = 150
 
 local function codediff()
   if not M.codediff then
@@ -135,7 +137,7 @@ end
 ---@param a string[]
 ---@param b string[]
 ---@return seam.Hunk[]
-function M.hunks(a, b)
+local function hunks(a, b)
   local out = {}
   -- one side empty: all of the other, which codediff does not say
   if #a == 0 or #b == 0 then
@@ -146,7 +148,8 @@ function M.hunks(a, b)
   end
   local cd = codediff()
   if cd then
-    local ok, r = pcall(cd.compute_diff, a, b, { max_computation_time_ms = 1000 })
+    -- past its time it says what it found so far, coarser; a cursor move waits on this
+    local ok, r = pcall(cd.compute_diff, a, b, { max_computation_time_ms = M.CODEDIFF_MS })
     if ok and r then
       for _, c in ipairs(r.changes) do
         local h = {
@@ -245,6 +248,28 @@ function M.layout(hunks, nb, opts)
   end
   same(nextb, nb, #hunks > 0, false, shift)
   return out
+end
+
+-- each pair of versions diffed once: moving the cursor back over a row asks for the
+-- same diff again, and codediff can take a good part of a second on a big file
+local memo, memo_n = {}, 0
+
+--- The hunks between lines `a` and `b`, from codediff when it is there, else
+--- Vim's own diff and a word pass; each pair of versions diffed once.
+---@param a string[]
+---@param b string[]
+---@return seam.Hunk[]
+function M.hunks(a, b)
+  local k = table.concat(a, '\n') .. '\0\0' .. table.concat(b, '\n')
+  local got = memo[k]
+  if not got then
+    if memo_n >= 256 then
+      memo, memo_n = {}, 0
+    end
+    got = hunks(a, b)
+    memo[k], memo_n = got, memo_n + 1
+  end
+  return vim.deepcopy(got)
 end
 
 --- Lines `a` and `b` laid out (seam.diff.layout), the hunks between them.
