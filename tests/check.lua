@@ -1259,6 +1259,17 @@ do
   end
 end
 
+-- what changed, git asked of a throwaway directory in /tmp (tests/check_changed.lua)
+dofile(root .. '/tests/check_changed.lua') {
+  key = key,
+  fail = fail,
+  where = function(w)
+    where = w
+  end,
+  st = st,
+  repo = st.root,
+}
+
 -- from your own code: a file of the repo in a tab of its own, the cursor on
 -- a contract's name, here() puts the tree's cursor on it, the page on it
 -- with its Used by; on a local function, calls puts it on the code screen
