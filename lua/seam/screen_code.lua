@@ -1,0 +1,652 @@
+-- The code screen: a function's or a file's code on the left, seam's copied
+-- lines with their numbers, each value's type after its name, the names
+-- from another file underlined, or its types; the pane on the right for the
+-- name under the cursor; the trail of J's in the head, K back along it.
+local api = vim.api
+local code = require 'seam.code'
+local code_view = require 'seam.views.code'
+local codetypes = require 'seam.codetypes'
+local draw = require 'seam.draw'
+local hints = require 'seam.hints'
+local index = require 'seam.index'
+local names = require 'seam.names'
+local opening = require 'seam.opening'
+local pane = require 'seam.pane'
+local st = require 'seam.state'
+local types_view = require 'seam.views.types'
+local views = require 'seam.views'
+local M = {}
+
+local row = draw.row
+local ns = api.nvim_create_namespace 'seam.uses'
+-- the code's widest and narrowest, and the least the pane keeps
+M.W, M.MIN, M.PANE = 112, 60, 50
+M.DISPLAYS = { 'code', 'types' }
+
+local function S()
+  return require 'seam.screen'
+end
+
+---@class seam.CodeAt one place on the trail
+---@field kind 'fn'|'file'
+---@field id string|nil a function's node
+---@field path string
+---@field cursor integer[]|nil where the cursor was in the code when it was left: line, col, top
+
+--- Are the code screen's five windows there?
+---@return boolean
+function M.valid()
+  local w = st.cwin
+  if not w then
+    return false
+  end
+  for _, k in ipairs { 'head', 'chead', 'code', 'phead', 'pane' } do
+    if not (w[k] and api.nvim_win_is_valid(w[k])) then
+      return false
+    end
+  end
+  return true
+end
+local valid = M.valid
+
+local function top()
+  return st.code and st.code.trail[#st.code.trail]
+end
+
+local function label(m, e)
+  if e.kind == 'fn' then
+    return draw.shape(m.graph.nodes[e.id])
+  end
+  return e.path:match '[^/]+$'
+end
+
+-- what the pane shows off a name: the function or file itself
+local function entry_row(e)
+  if e.kind == 'fn' then
+    return { kind = 'fn', id = e.id, path = e.path, key = 'f:' .. e.path .. '\n' .. e.id }
+  end
+  return { kind = 'file', path = e.path, key = 'f:' .. e.path }
+end
+
+local function type_row(d)
+  return { kind = 'type', key = 'type:' .. d.name, name = d.name, path = d.path, line = d.line, end_line = d.end_line, decl_kind = d.kind }
+end
+
+-- what the pane shows for a name in the code
+local function name_row(m, e, n)
+  if n.kind == 'call' then
+    local node = m.graph.nodes[n.id]
+    return { kind = 'fn', id = n.id, path = node.path, key = 'f:' .. node.path .. '\n' .. n.id, note = 'called at line ' .. n.line }
+  elseif n.kind == 'type' then
+    return type_row(n.decl)
+  elseif n.kind == 'file' then
+    return { kind = 'file', path = n.path, key = 'f:' .. n.path }
+  end
+  local at = n.at or n
+  return {
+    kind = 'name',
+    key = ('name:%s:%d:%d:%s'):format(e.path, at.line, at.col, n.name),
+    n = n,
+    from = e.path,
+    path = e.path,
+    as_type = n.decl and type_row(n.decl) or nil,
+  }
+end
+
+--- What the pane shows: the name under the cursor in the code, else the
+--- function or file shown.
+---@return seam.ORow|nil
+function M.subject()
+  local e = top()
+  return e and (st.code.subject or entry_row(e)) or nil
+end
+
+---------------------------------------------------------------- drawing
+
+-- the types display: the function's line, its values, the functions inside
+local function types_rows(out, m, e, width)
+  local node = e.kind == 'fn' and m.graph.nodes[e.id]
+  local list = node and codetypes.fn(m, e.path, node.line, node.name) or codetypes.file(m, e.path)
+  st.copens = st.copens or {}
+  st.copens[e.path .. (e.id or '')] = st.copens[e.path .. (e.id or '')] or {}
+  st.cctx = { open = st.copens[e.path .. (e.id or '')], width = width }
+  local C = types_view.context(m, st.cctx, e.path)
+  local col = 18
+  for _, r in ipairs(list) do
+    if r.kind == 'value' then
+      col = math.max(col, 3 + 2 * r.depth + api.nvim_strwidth(r.name) + 2)
+    end
+  end
+  local lines = code.file(e.path).lines
+  for _, r in ipairs(list) do
+    if r.kind == 'blank' then
+      out[#out + 1] = row()
+    else
+      local x = row { at = { path = e.path, line = r.line, name = r.name } }
+      local placed = {}
+      if r.kind == 'fn' then
+        x:add(string.rep(' ', 1 + 2 * r.depth))
+        types_view.typed(x, r.params, C.known, placed)
+        x:add(' → ', 'SeamLabel'):add(r.name, r.depth == 0 and 'SeamTitle' or '@function')
+        if r.ret then
+          x:add(' → ', 'SeamLabel')
+          types_view.typed(x, r.ret, C.known, placed)
+        end
+        if r.depth > 0 then
+          local at = (lines[r.line] or ''):find('%f[%w_$]' .. vim.pesc(r.name) .. '%f[^%w_$]')
+          x.meta.name = at and { line = r.line, col = at - 1 } or nil
+        end
+      elseif r.kind == 'value' then
+        x:add(string.rep(' ', 3 + 2 * r.depth)):add(r.name, 'SeamName'):to(col)
+        types_view.typed(x, r.type or '', C.known, placed)
+        x.meta.name = { line = r.line, col = r.col }
+      else
+        x:add(' '):add(r.name, 'SeamType'):to(col):add(r.type, 'SeamLabel')
+      end
+      x:to(width - 7):add((' %4d'):format(r.line), 'SeamGutter')
+      local key = 'ct:' .. r.line .. ':' .. r.name
+      x.meta.tv = { key = key, id = 'l', names = placed, chain = {} }
+      out[#out + 1] = x
+      local seen, line = {}, { id = 'l', names = {}, path = e.path }
+      for _, p in ipairs(placed) do
+        if not seen[p.name] then
+          seen[p.name] = true
+          line.names[#line.names + 1] = p.name
+        end
+      end
+      local items = types_view.lay(C, { line }, key, {}, {})
+      table.remove(items, 1)
+      types_view.render(out, C, items)
+    end
+  end
+end
+
+-- the code's rows for the display shown
+local function rows_of(m, e, display, width)
+  local path, s, l, nodes = code_view.span(entry_row(e), m)
+  st.code.s = s
+  local out = {}
+  if display == 'types' then
+    types_rows(out, m, e, width)
+  else
+    code_view.lines(out, m, path, s, l, nodes)
+  end
+  return out
+end
+
+-- the code's width: what its lines take with their types, between the narrowest and the widest
+local function width_of(rows)
+  local w = 0
+  for _, r in ipairs(rows) do
+    local x = r.w
+    for _, v in ipairs(r.virt or {}) do
+      x = x + api.nvim_strwidth(v[2])
+    end
+    w = math.max(w, x)
+  end
+  return math.max(M.MIN, math.min(w + 2, M.W, vim.o.columns - M.PANE))
+end
+
+local function heads(m, e)
+  local h = row():add(' Seams', 'SeamLabel')
+  for i, x in ipairs(st.code.trail) do
+    h:add(' › ', 'SeamLabel'):add(label(m, x), i == #st.code.trail and 'SeamBold' or 'SeamText')
+  end
+  draw.put(st.obuf.head, { h })
+  local c = row():add ' '
+  if e.kind == 'fn' then
+    local node = m.graph.nodes[e.id]
+    local s0 = c.b
+    code.add_name(c, node.path, node.line, node.name, 'SeamName', 60)
+    c:add('()', 'SeamPunct')
+    c.h[#c.h + 1] = { s0, c.b, 'SeamBold', 80 }
+    c:add('   ' .. node.kind .. ' in ', 'SeamLabel')
+    draw.path(c, node.path, math.max(1, node.line))
+  else
+    c:add(label(m, e), 'SeamBold'):add('   file in ', 'SeamLabel')
+    draw.path(c, e.path:match '^(.*/)' or '')
+  end
+  if st.code.display ~= 'code' then
+    c:add('   ' .. st.code.display, 'SeamText')
+  end
+  draw.put(st.cbuf.chead, { c })
+end
+
+---------------------------------------------------------------- the cursor
+
+-- the name under the code's cursor
+local function answer()
+  local e = top()
+  local cur = api.nvim_win_get_cursor(st.cwin.code)
+  local meta = draw.meta(st.cbuf.code, cur[1])
+  local m = index.model()
+  if st.code.display == 'types' then
+    return meta.name and names.at(m, e.path, meta.name.line, meta.name.col) or nil
+  end
+  if meta.kind ~= 'code' or not meta.start or cur[2] < meta.start then
+    return nil
+  end
+  return names.at(m, e.path, meta.lnum, cur[2] - meta.start)
+end
+
+-- the later uses of the value under the cursor lit, their lines and the names on them
+local function light(n)
+  local buf = st.cbuf.code
+  api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  if not (n and n.uses and #n.uses > 0) or st.code.display ~= 'code' then
+    return
+  end
+  local function mark(l, c, e)
+    local meta = draw.meta(buf, l - st.code.s + 1)
+    if meta.lnum ~= l then
+      return nil
+    end
+    pcall(api.nvim_buf_set_extmark, buf, ns, l - st.code.s, meta.start + c, { end_col = meta.start + e, hl_group = 'SeamUseName', priority = 330 })
+    return l - st.code.s
+  end
+  mark(n.line, n.col, n.e)
+  for _, u in ipairs(n.uses) do
+    local i = mark(u.line, u.col, u.e)
+    if i then
+      api.nvim_buf_set_extmark(buf, ns, i, 0, { line_hl_group = 'SeamUseLine', priority = 85 })
+    end
+  end
+end
+
+local function moved()
+  if st.screen ~= 'code' or st.drawing or not valid() or api.nvim_get_current_win() ~= st.cwin.code then
+    return
+  end
+  local e = top()
+  local n = answer()
+  local x = n and name_row(index.model(), e, n) or entry_row(e)
+  st.code.n = n
+  light(n)
+  local key = x.key .. (x.note or '')
+  if st.code.shown ~= key then
+    st.code.shown = key
+    st.code.subject = x
+    pane.show(x)
+    S().paint()
+  end
+  vim.cmd 'redrawstatus'
+end
+
+---------------------------------------------------------------- the screen
+
+local function layout()
+  if st.screen == 'code' and valid() then
+    return
+  end
+  local s = S()
+  st.screen, st.cwin = 'code', nil
+  local head = s.reset_tab()
+  api.nvim_win_set_buf(head, st.obuf.head)
+  local cw = s.split(st.cbuf.code, head, 'below', true)
+  local pw = s.split(st.obuf.pane, cw, 'right')
+  local chead = s.split(st.cbuf.chead, cw, 'above')
+  local phead = s.split(st.obuf.phead, pw, 'above')
+  for _, w in ipairs { head, chead, phead, pw } do
+    s.winopts(w)
+  end
+  s.winopts(cw, true)
+  s.wrap(pw)
+  -- a line too long for the code is cut with … at its edge
+  vim.wo[cw].list = true
+  vim.wo[cw].listchars = 'extends:…,precedes:…,tab:  '
+  vim.wo[pw].winfixwidth = false
+  vim.wo[phead].winfixwidth = false
+  for _, w in ipairs { head, chead, phead } do
+    vim.wo[w].winfixheight = true
+  end
+  for _, w in ipairs { head, chead, cw, phead, pw } do
+    vim.wo[w].fillchars = vim.wo[w].fillchars:gsub('horizdown:│', 'horizdown:─')
+  end
+  vim.wo[head].fillchars = vim.wo[head].fillchars:gsub('horiz: ', 'horiz:─')
+  api.nvim_win_set_height(head, 1)
+  api.nvim_win_set_height(chead, 1)
+  api.nvim_win_set_height(phead, 3)
+  st.cwin = { head = head, chead = chead, code = cw, phead = phead, pane = pw }
+  api.nvim_set_current_win(cw)
+end
+
+-- the code for the place on top of the trail, the cursor where it was
+-- left, else on the function's name
+local function show()
+  local m = index.model()
+  local e = top()
+  layout()
+  local width = width_of(rows_of(m, e, 'code', M.W))
+  local rows = st.code.display == 'code' and rows_of(m, e, 'code', width) or rows_of(m, e, st.code.display, width)
+  heads(m, e)
+  st.drawing = true
+  draw.put(st.cbuf.code, rows)
+  api.nvim_win_set_width(st.cwin.code, width)
+  local w = st.cwin.code
+  local c = e.cursor
+  if not c then
+    local node = e.kind == 'fn' and m.graph.nodes[e.id]
+    local l = node and math.max(1, node.line) - st.code.s + 1 or 1
+    local meta = draw.meta(st.cbuf.code, l)
+    local src = node and code.file(e.path).lines[node.line] or ''
+    local at = node and src:find('%f[%w_$]' .. vim.pesc(node.name) .. '%f[^%w_$]')
+    c = { l, meta.start and (meta.start + (at and at - 1 or #src:match '^%s*')) or 0, 1 }
+  end
+  local n = api.nvim_buf_line_count(st.cbuf.code)
+  api.nvim_win_call(w, function()
+    vim.fn.winrestview { topline = math.max(1, math.min(c[3] or 1, n)), lnum = math.min(c[1], n), col = c[2] }
+  end)
+  st.drawing = false
+  st.code.shown, st.code.subject = nil, nil
+  api.nvim_set_current_win(w)
+  moved()
+  S().paint()
+end
+
+-- where the cursor is in the code: line, col, top
+local function here()
+  local w = st.cwin.code
+  local cur = api.nvim_win_get_cursor(w)
+  return { cur[1], cur[2], api.nvim_win_call(w, function()
+    return vim.fn.line 'w0'
+  end) }
+end
+
+--- The code screen on `e` (a function `{ kind = 'fn', id }` or a file
+--- `{ kind = 'file', path }`), from the tree: a trail of one, `K` back to
+--- the tree's row.
+---@param e seam.CodeAt
+function M.open(e)
+  local m = index.model()
+  if e.kind == 'fn' then
+    e.path = m.graph.nodes[e.id].path
+  end
+  if not (st.cbuf and api.nvim_buf_is_valid(st.cbuf.code)) then
+    M.init()
+  end
+  st.code = { trail = { e }, display = st.code and st.code.display or 'code' }
+  show()
+end
+
+--- `J` on a name: its function or file on the code screen, on the trail.
+---@param e seam.CodeAt
+function M.go(e)
+  local m = index.model()
+  if e.kind == 'fn' then
+    e.path = m.graph.nodes[e.id].path
+  end
+  top().cursor = here()
+  table.insert(st.code.trail, e)
+  show()
+end
+
+--- `K`: back `count` places along the trail, to the very name left from;
+--- past the first, the tree on its row.
+---@param count integer
+function M.back(count)
+  if not st.code then
+    return
+  end
+  for _ = 1, count do
+    table.remove(st.code.trail)
+    if #st.code.trail == 0 then
+      st.code = { trail = {}, display = st.code.display }
+      return require('seam.screen_tree').show()
+    end
+  end
+  show()
+end
+
+--- The screen drawn again, the cursor kept.
+function M.redraw()
+  if st.screen ~= 'code' or not top() then
+    return
+  end
+  if valid() then
+    top().cursor = here()
+  end
+  show()
+end
+
+--- `<C-Tab>` `<C-S-Tab>` in the code: the code, or its types.
+---@param d integer
+function M.step_display(d)
+  local i = vim.fn.index(M.DISPLAYS, st.code.display) + 1
+  st.code.display = M.DISPLAYS[(i - 1 + d) % #M.DISPLAYS + 1]
+  top().cursor = nil
+  show()
+end
+
+-- the code's stops for n and N: each name from another file, in order
+local function stops()
+  local out = {}
+  if st.code.display ~= 'code' then
+    return out
+  end
+  for i = 1, api.nvim_buf_line_count(st.cbuf.code) do
+    for _, c in ipairs(draw.meta(st.cbuf.code, i).stops or {}) do
+      out[#out + 1] = { i, c }
+    end
+  end
+  return out
+end
+
+--- `n` `N`: the next import in the code, or the one before, round the ends.
+---@param d integer
+function M.next_import(d)
+  local list = stops()
+  if #list == 0 then
+    return
+  end
+  local cur = api.nvim_win_get_cursor(st.cwin.code)
+  local function after(s)
+    return s[1] > cur[1] or (s[1] == cur[1] and s[2] > cur[2])
+  end
+  local i
+  if d > 0 then
+    i = #list + 1
+    for k, s in ipairs(list) do
+      if after(s) then
+        i = k
+        break
+      end
+    end
+    i = i + vim.v.count1 - 1
+  else
+    i = 0
+    for k = #list, 1, -1 do
+      if not after(list[k]) and not (list[k][1] == cur[1] and list[k][2] == cur[2]) then
+        i = k
+        break
+      end
+    end
+    i = i - vim.v.count1 + 1
+  end
+  local s = list[(i - 1) % #list + 1]
+  api.nvim_win_set_cursor(st.cwin.code, s)
+end
+
+-- what J would go to from the name under the cursor
+local function j_target()
+  local n = st.code and st.code.n
+  if n and n.kind == 'call' then
+    return { kind = 'fn', id = n.id }
+  elseif n and n.kind == 'file' then
+    return { kind = 'file', path = n.path }
+  end
+end
+
+--- `<Esc>` in the pane: back to the code.
+function M.leave_pane()
+  M.to_code()
+end
+
+--- The cursor to the code.
+function M.to_code()
+  if valid() then
+    api.nvim_set_current_win(st.cwin.code)
+    vim.cmd 'redrawstatus'
+  end
+end
+
+--- Every key of the screen, grouped as KEYS.md is, for `?`.
+---@return seam.KeyGroup[]
+function M.all_keys()
+  if pane.inside() then
+    return pane.all_keys 'code'
+  end
+  return {
+    {
+      'The code',
+      {
+        { 'n N', 'the next and previous import: a name from another file' },
+        { 'J', 'the code screen on the function or file the name under the cursor is' },
+        { 'K', 'back to the very name you left from; 3K three back; from the first, the tree' },
+        { '+ -', 'in its types, open and close the type under the cursor' },
+        { '<C-Tab> <C-S-Tab>', 'the code, or its types' },
+      },
+    },
+    { 'The pane', { { '<Tab> <S-Tab>', 'next and previous view of the name under the cursor' } } },
+    {
+      'Seam',
+      {
+        { '/', 'search the names: a function or file on the code screen, a type in the pane' },
+        { 'gf gd', 'that place in your own code' },
+        { 'q', 'close seam' },
+      },
+    },
+  }
+end
+
+--- The status line on the code screen: what is shown, its display and the
+--- name under the cursor with its type, then the keys that act there.
+---@return string
+function M.status()
+  local m, e = index.model(), top()
+  if not e then
+    return ''
+  end
+  local left = label(m, e) .. '  ' .. st.code.display
+  local n = st.code.n
+  if n then
+    left = left .. '   ' .. (n.object and (n.object .. '.') or '') .. n.name .. (n.kind == 'call' and '()' or '') .. (n.type and (': ' .. n.type) or '')
+  end
+  local rules = st.lens and #st.lens.rules or 0
+  if pane.inside() then
+    return hints.status(left, { pane.hints 'code' }, rules)
+  end
+  local rg = {}
+  if #stops() > 0 then
+    rg[#rg + 1] = { 'n N', 'import' }
+  end
+  local o, c = opening.keys()
+  if o then
+    rg[#rg + 1] = '+'
+  end
+  if c then
+    rg[#rg + 1] = '-'
+  end
+  if j_target() then
+    rg[#rg + 1] = 'J'
+  end
+  rg[#rg + 1] = 'K'
+  local pg = {}
+  if #views.of(M.subject()) > 1 then
+    pg[#pg + 1] = '<Tab>'
+  end
+  pg[#pg + 1] = '<C-Tab>'
+  return hints.status(left, { rg, pg, { '/', 'q' } }, rules)
+end
+
+local function o(buf)
+  return { buffer = buf, nowait = true, silent = true }
+end
+
+local function code_keys(buf)
+  vim.keymap.set('n', 'J', function()
+    local t = j_target()
+    if t then
+      M.go(t)
+    end
+  end, o(buf))
+  vim.keymap.set('n', 'K', function()
+    M.back(vim.v.count1)
+  end, o(buf))
+  vim.keymap.set('n', 'n', function()
+    M.next_import(1)
+  end, o(buf))
+  vim.keymap.set('n', 'N', function()
+    M.next_import(-1)
+  end, o(buf))
+  for _, k in ipairs { { '<C-Tab>', 1 }, { '<C-S-Tab>', -1 } } do
+    vim.keymap.set('n', k[1], function()
+      M.step_display(k[2])
+    end, o(buf))
+  end
+  for _, k in ipairs { { '<Tab>', 1 }, { '<S-Tab>', -1 } } do
+    vim.keymap.set('n', k[1], pane.step(k[2]), o(buf))
+  end
+  vim.keymap.set('n', '+', function()
+    opening.plus(M.redraw)
+  end, o(buf))
+  vim.keymap.set('n', '-', function()
+    opening.minus(M.redraw)
+  end, o(buf))
+  vim.keymap.set('n', '/', function()
+    require('seam.screen_tree').search(nil, {
+      over = st.cwin.code,
+      pick = function(id)
+        local ty = id:match '^type:(.*)$'
+        local f = id:match '^file:(.*)$'
+        if ty then
+          local d = names.type_decl(index.model(), ty, top().path)
+          if d then
+            st.code.subject, st.code.shown = type_row(d), nil
+            pane.show(st.code.subject)
+            S().paint()
+          end
+        else
+          M.go(f and { kind = 'file', path = f } or { kind = 'fn', id = id })
+        end
+      end,
+    })
+  end, o(buf))
+  vim.keymap.set('n', '?', function()
+    hints.open(M.all_keys())
+  end, o(buf))
+  vim.keymap.set('n', 'q', function()
+    S().close()
+  end, o(buf))
+  S().goto_keys(buf)
+end
+
+--- The code screen's buffers, made once, with their keys.
+function M.init()
+  local s = S()
+  st.cbuf = { chead = draw.scratch 'code-head', code = draw.scratch 'code' }
+  code_keys(st.cbuf.code)
+  vim.keymap.set('n', 'q', function()
+    s.close()
+  end, o(st.cbuf.chead))
+  s.goto_keys(st.cbuf.chead)
+  api.nvim_create_autocmd('CursorMoved', { group = s.aug, buffer = st.cbuf.code, callback = moved })
+  api.nvim_create_autocmd('WinEnter', {
+    group = s.aug,
+    buffer = st.cbuf.code,
+    callback = function()
+      vim.cmd 'redrawstatus'
+    end,
+  })
+  -- nothing to do in the code's head: the cursor goes back to the code
+  api.nvim_create_autocmd('WinEnter', { group = s.aug, buffer = st.cbuf.chead, callback = M.to_code })
+  api.nvim_create_autocmd('VimResized', {
+    group = s.aug,
+    callback = function()
+      if st.screen == 'code' and api.nvim_get_current_tabpage() == st.tab then
+        M.redraw()
+      end
+    end,
+  })
+end
+
+return M

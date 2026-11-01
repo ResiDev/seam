@@ -197,6 +197,10 @@ local function render(out, C, items)
         local src = code.file(l.path).lines[l.id] or ''
         cols[d] = r.w + #src:match '^%s*'
         code.add(r, l.path, l.id)
+        local lit = C.lit_lines
+        if lit and lit.path == l.path and l.id >= lit.from and l.id <= lit.to then
+          r.line_hl = 'SeamLit'
+        end
         for _, n in ipairs(l.at) do
           names[#names + 1] = { s = start + n.s - 1, e = start + n.e - 1, name = n.name }
         end
@@ -505,6 +509,10 @@ M.columns = columns
 M.fn_rows = fn_rows
 --- Text coloured as a signature is.
 M.typed = typed
+--- The layout of lines in a block, the types open under them (seam.typesview).
+M.lay = lay
+--- The rows of laid-out items.
+M.render = render
 
 --- Why there are no types to show, said in one dim line.
 ---@return string

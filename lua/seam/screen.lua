@@ -95,6 +95,8 @@ function M.status()
   local left, right = '', ''
   if st.screen == 'tree' and not picker.is_open() then
     return tree_screen.status()
+  elseif st.screen == 'code' and not picker.is_open() then
+    return require('seam.screen_code').status()
   end
   if picker.is_open() then
     left, right = picker.status()
@@ -199,6 +201,11 @@ local function subject()
     local node = st.calls.anchor and index.model().graph.nodes[st.calls.anchor]
     return node and { path = node.path, line = math.max(1, node.line), name = node.kind ~= 'module' and node.name or nil }
   end
+  if st.screen == 'code' and st.code and st.code.trail[1] then
+    local e = st.code.trail[#st.code.trail]
+    local node = e.id and index.model().graph.nodes[e.id]
+    return node and { path = node.path, line = math.max(1, node.line), name = node.name } or { path = e.path, line = 1 }
+  end
   if st.screen == 'tree' then
     local x = tree_screen.at()
     local node = x and x.id and index.model().graph.nodes[x.id]
@@ -211,7 +218,7 @@ end
 
 -- the heads: what is not a row of its own goes to what the screen is about
 local function about_subject(buf)
-  return buf == (st.obuf and st.obuf.head) or buf == (st.obuf and st.obuf.phead) or buf == (st.cbuf and st.cbuf.head)
+  return buf == (st.obuf and st.obuf.head) or buf == (st.obuf and st.obuf.phead) or buf == (st.cbuf and (st.cbuf.head or st.cbuf.chead))
 end
 
 --- gf: that place in your own code, from the line under the cursor. A row
@@ -666,6 +673,8 @@ function M.types_landed()
     show_calls()
   elseif st.screen == 'tree' then
     tree_screen.redraw(true)
+  elseif st.screen == 'code' then
+    require('seam.screen_code').redraw()
   end
   vim.cmd 'redrawstatus'
 end
@@ -689,6 +698,8 @@ function M.lens_changed()
     show_calls()
   elseif st.screen == 'tree' then
     tree_screen.redraw(true)
+  elseif st.screen == 'code' then
+    require('seam.screen_code').redraw()
   end
 end
 

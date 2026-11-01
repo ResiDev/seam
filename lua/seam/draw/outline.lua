@@ -42,6 +42,8 @@ function M.name(m, x)
     return x.path:match '[^/]+$'
   elseif x.kind == 'type' then
     return x.name
+  elseif x.kind == 'name' then
+    return (x.n.object and (x.n.object .. '.') or '') .. x.n.name
   end
   return dir_name(x.item)
 end
@@ -177,6 +179,36 @@ function M.rows(buf, m, o, rows)
   draw.put(buf, out)
 end
 
+--- A name in the code as the pane's head says it: the name, a field's or
+--- method's with what it is read from, then what it is and where.
+---@param h table a row
+---@param n seam.Name
+function M.name_head(h, n)
+  local s0 = h.b
+  if n.object then
+    h:add(n.object, 'SeamName'):add('.', 'SeamPunct')
+    h:add(n.name, n.kind == 'method' and '@function.method.call' or '@property')
+  else
+    h:add(n.name, 'SeamName')
+  end
+  h.h[#h.h + 1] = { s0, h.b, 'SeamBold', 80 }
+  local function used()
+    if (n.count or 0) > 0 then
+      h:add('   used ' .. draw.plural(n.count, 'time'), 'SeamLabel')
+    end
+  end
+  if n.kind == 'value' then
+    h:add(n.made_by and ('   made by ' .. n.made_by.name .. ', line ' .. n.at.line) or ('   made at line ' .. n.at.line), 'SeamLabel')
+    used()
+  elseif n.kind == 'param' then
+    h:add('   parameter' .. (n.fn and (' of ' .. n.fn) or '') .. ', line ' .. n.at.line, 'SeamLabel')
+    used()
+  elseif n.member and n.member.decl then
+    h:add('   ' .. (n.kind == 'method' and 'member' or 'field') .. ' of ' .. n.member.decl.name .. ', ', 'SeamLabel')
+    draw.path(h, n.member.decl.path, n.member.line)
+  end
+end
+
 --- The pane's head: what the row is and where, then the tabs of the views
 --- that have something for it, the one shown lit.
 ---@param buf integer
@@ -195,6 +227,9 @@ function M.pane_head(buf, m, o, x, sv)
     h.h[#h.h + 1] = { 1, h.b, 'SeamBold', 80 }
     h:add('   ' .. node.kind .. ' in ', 'SeamLabel')
     draw.path(h, node.path, math.max(1, node.line))
+    if x.note then
+      h:add('   ' .. x.note, 'SeamLabel')
+    end
     if count then
       h:add('   ' .. count, 'SeamLabel')
     elseif WORDS[o.order] and x.depth == 0 then
@@ -217,6 +252,8 @@ function M.pane_head(buf, m, o, x, sv)
     elseif f then
       h:add(('   %s give one · %d take one'):format(draw.plural(#f.gives, 'function'), #require('seam.types').takers(f)), 'SeamLabel')
     end
+  elseif x and x.kind == 'name' then
+    M.name_head(h, x.n)
   elseif x and count then
     h:add(M.name(m, x), 'SeamBold'):add('   folder in ', 'SeamLabel')
     draw.path(h, outline.full(x.item) .. '/')
