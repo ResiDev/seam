@@ -77,6 +77,7 @@ local function split(s)
     return x ~= ''
   end, vim.tbl_map(vim.trim, out))
 end
+M.split = split
 
 --- The index of the bracket closing the one opening at `i`.
 local function closing(s, i)
@@ -84,6 +85,7 @@ local function closing(s, i)
     return false
   end)
 end
+M.closing = closing
 
 local function param(p)
   local colon = scan(p, 1, function(_, c)
