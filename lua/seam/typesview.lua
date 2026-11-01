@@ -324,7 +324,7 @@ end
 
 --- The rows of `lines`, the lines of block `key`, each followed by the
 --- types opened under it, one block a type, nested as they were opened.
---- `ctx.resolve(name)` gives a block `{ lines = seam.TLine[] }` or nil; a
+--- `ctx.resolve(name, line, key)` gives a block `{ lines = seam.TLine[] }` or nil; a
 --- type already open around a line does not open again under it.
 ---@param lines seam.TLine[]
 ---@param key string
@@ -343,7 +343,7 @@ function M.layout(lines, key, ctx, depth, chain, seen, out)
       local k = M.child(key, l.id, name)
       if not done[name] and not seen[name] and M.is_open(ctx.open, ctx.defaults, k) then
         done[name] = true
-        local b = ctx.resolve(name)
+        local b = ctx.resolve(name, l, k)
         if b then
           local inner = vim.list_extend(vim.list_slice(chain), { k })
           out[#out + 1] = { head = b, name = name, key = k, depth = depth + 1, chain = inner }

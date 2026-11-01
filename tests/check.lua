@@ -243,12 +243,19 @@ local function check_tree()
   if x and not (head[1] or ''):find(name, 1, true) then
     fail('the pane head does not name ' .. name .. ': ' .. (head[1] or ''))
   end
-  local tabs, want = vim.trim(head[3] or ''), x and x.kind ~= 'dir' and 'Code' or ''
+  local tabs, want = vim.trim(head[3] or ''), x and (x.kind ~= 'dir' and 'Code     Types' or 'Types') or ''
   if tabs ~= want then
     fail(('the tabs are %q, not %q'):format(tabs, want))
   end
   local body = lines(st.obuf.pane)
-  if x and x.kind == 'fn' then
+  local shown = require('seam.views').shown(x, st.view)
+  if shown and shown.name == 'Types' then
+    -- a title, a function's line, or why there are no types
+    local first = body[1] or ''
+    if x and not (first:match '^ %S' or first:find(' → ', 1, true)) then
+      fail('the Types view does not start with a title or a line: ' .. first)
+    end
+  elseif x and x.kind == 'fn' then
     local node = m.graph.nodes[x.id]
     local s, e = code.doc_start(node.path, node.line), math.max(node.end_line or node.line, node.line)
     if tonumber((body[1] or ''):match '^%s*(%d+)') ~= s or #body ~= e - s + 1 then
@@ -266,8 +273,8 @@ local function check_tree()
     if #body ~= math.max(1, #code.file(x.path).lines) then
       fail(('the code of %s is %d lines, not the file'):format(x.path, #body))
     end
-  elseif x and (#body > 1 or body[1] ~= '') then
-    fail 'a folder shows a view'
+  elseif x and x.kind == 'dir' then
+    fail 'a folder shows its code'
   end
   return x
 end
@@ -408,13 +415,20 @@ do
     if st.outline.order ~= 'tree' or st.outline.cursor ~= fk then
       fail 's a third time did not come back to the tree on the same row'
     end
-    -- one view and one display: the keys change nothing
+    -- two views, one display each: <Tab> Types and back, <C-Tab> nothing
     where = 'tree <Tab>'
     local before = lines(st.obuf.pane)
-    for _, k in ipairs { '<Tab>', '<S-Tab>', '<C-Tab>', '<C-S-Tab>' } do
+    key '<Tab>'
+    check_tree()
+    if st.view.at ~= 'Types' or vim.deep_equal(lines(st.obuf.pane), before) then
+      fail '<Tab> did not show the Types view'
+    end
+    key '<S-Tab>'
+    check_tree()
+    for _, k in ipairs { '<C-Tab>', '<C-S-Tab>' } do
       key(k)
       if st.view.at ~= 'Code' or not vim.deep_equal(lines(st.obuf.pane), before) then
-        fail(k .. ' changed the pane with one view')
+        fail(k .. ' changed the pane with one display')
       end
     end
     -- gf on the row: its declaration; in the code beside it: that line

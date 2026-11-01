@@ -148,6 +148,14 @@ function M.put(buf, rows)
   code.track(buf, codes)
 end
 
+--- The meta row `lnum` of `buf` was drawn with.
+---@param buf integer
+---@param lnum integer 1-based
+---@return table
+function M.meta(buf, lnum)
+  return (metas[buf] or {})[lnum] or {}
+end
+
 ---@class seam.Place
 ---@field path string relative to the repo root
 ---@field line integer
