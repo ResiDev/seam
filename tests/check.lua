@@ -1041,10 +1041,10 @@ for ci, c in ipairs(contracts) do
         if not fb then
           fail(('no foot on the name at row %d'):format(h.row))
         else
-          local fl = lines(fb)
+          local fl = table.concat(lines(fb), '\n')
           local src = vim.trim(code.file(h.at.path).lines[h.at.line] or '')
-          if not (fl[3] or ''):find(src:sub(1, 12), 1, true) then
-            fail(('the foot does not show %s:%d, %q: %s'):format(h.at.path, h.at.line, src:sub(1, 30), fl[3] or ''))
+          if not fl:find(src:sub(1, 12), 1, true) then
+            fail(('the foot does not show %s:%d, %q: %s'):format(h.at.path, h.at.line, src:sub(1, 30), fl))
           end
         end
         key '<Esc>'

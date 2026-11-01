@@ -663,6 +663,14 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   steps the display, `<Tab>` the tabs, and the code screen's code or
   types moved to `gs`.
 
+- **The foot is code** (2026-11-01, the user: "not readable", "a lack of
+  syntax highlighting"). One wrapped line of the hover's signature read
+  as a wall, and the copied code was never painted. Now the foot is the
+  signature as the file writes it, in its own colours (comments left out,
+  a destructured parameter's names on one line), with what it gives from
+  the server, an object a field a line, only where the file does not
+  write it; an empty row over and under, at most half the pane.
+
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
   tree repeated the Built from tab a level at a time, and folders drew the
