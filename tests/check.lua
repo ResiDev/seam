@@ -1264,6 +1264,16 @@ do
   end
 end
 
+-- the Map on a function, its file, its folder and a type (tests/check_map.lua)
+dofile(root .. '/tests/check_map.lua') {
+  key = key,
+  fail = fail,
+  where = function(w)
+    where = w
+  end,
+  st = st,
+}
+
 -- what changed, git asked of a throwaway directory in /tmp (tests/check_changed.lua)
 dofile(root .. '/tests/check_changed.lua') {
   key = key,
