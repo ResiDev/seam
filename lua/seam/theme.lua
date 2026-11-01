@@ -61,18 +61,6 @@ function M.setup()
   s('SeamUnderGrey', { underline = true, sp = '#737aa2' })
   s('SeamHueNeutral', { fg = '#c0caf5', bold = true })
   s('SeamBarNeutral', { fg = '#a9b1d6' })
-  -- the diagram is drawn by thread's renderer, whose setup has not run here
-  s('ThreadDiagramBox', { fg = '#737aa2' })
-  s('ThreadDiagramEdge', { fg = '#565f89' })
-  s('ThreadDiagramNode', { fg = '#c0caf5' })
-  s('ThreadDiagramText', { fg = '#a9b1d6' })
-  s('ThreadDiagramLabel', { fg = '#737aa2', italic = true })
-  s('ThreadDiagramHint', { fg = '#565f89' })
-  s('ThreadDiagramHere', { fg = '#c0caf5', bold = true })
-  s('ThreadBroken', { fg = '#f7768e' })
-  s('SeamDiagDim', { fg = '#3b4261' })
-  s('SeamDiagDimText', { fg = '#545c7e' })
-  s('SeamEdgeLabel', { fg = '#9aa5ce', italic = true })
 end
 
 --- Give each package of `m` its hue, from `file` when it was stored there,

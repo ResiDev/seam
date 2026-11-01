@@ -8,8 +8,6 @@ local M = {}
 
 M.st = st
 M.index = index.index
-M.find = screen.find
-M.on_move = screen.on_move
 M.open_page = screen.open_page
 M.open_calls = screen.open_calls
 M.overview = screen.overview
@@ -75,11 +73,12 @@ local WAYS = { overview = true, page = true, calls = true, called_by = true, typ
 M.ways = { 'overview', 'page', 'calls', 'called_by', 'types' }
 
 --- From your own code: seam on what the word under the cursor names. `how`:
---- 'overview' (the explorer on that contract), 'page' (its page), 'calls' or
---- 'called_by' (the call tree anchored on that function, down or up), or
---- 'types' (the flow of the type it names). A function that is no contract
---- opens its calls; several by that name, the `/` picker holding the word;
---- nothing, the explorer's search holding it, or for types the types' `/`.
+--- 'overview' (the tree on that function or contract, where it lives),
+--- 'page' (its page), 'calls' or 'called_by' (the call tree anchored on that
+--- function, down or up), or 'types' (the flow of the type it names). For a
+--- page, a function that is no contract opens its calls; several by that
+--- name, or nothing, the `/` picker holding the word: the tree's, the
+--- page's, the call tree's or the types'.
 ---@param how? 'overview'|'page'|'calls'|'called_by'|'types'
 function M.here(how)
   how = how or 'overview'
@@ -118,16 +117,14 @@ function M.here(how)
       end
       -- several, or nothing: the / picker holding the word
       local function pick(nodes)
-        if (calls or nodes) and m.graph then
-          screen.show()
+        screen.show()
+        if calls and m.graph then
           screen.open_calls(nil)
           screen.calls_pick(word, dir)
-        elseif how == 'page' then
-          screen.show()
+        elseif how == 'page' and not nodes then
           screen.page_pick(word)
         else
-          screen.show()
-          screen.search(word)
+          require('seam.screen_tree').search(word)
         end
       end
       local function anchor(node)
@@ -151,6 +148,9 @@ function M.here(how)
           screen.open_page(c)
         end
       elseif r.node then
+        if how == 'overview' and not r.node.test then
+          return screen.show(r.node.id)
+        end
         if not calls then
           say(r.node.name .. ' is not a contract: its calls')
         end

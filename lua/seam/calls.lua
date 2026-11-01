@@ -783,7 +783,7 @@ end
 
 --- What a key does to the view, the cursor on row `i` of `r`. Says what the
 --- screen does next: draw the rows again, move the cursor to `view.cursor`,
---- draw the code beside the tree again, or go back to the explorer.
+--- draw the code beside the tree again, or go back to seam's tree.
 ---@param g seam.Graph
 ---@param view seam.CallsView
 ---@param r seam.CallRows
@@ -791,7 +791,7 @@ end
 ---@param k string
 ---@param height integer
 ---@param m? table
----@return 'redraw'|'move'|'explorer'|'pane'|nil
+---@return 'redraw'|'move'|'tree'|'pane'|nil
 function M.key(g, view, r, i, k, height, m)
   local row = r.rows[i]
   local function go(j)
@@ -811,7 +811,7 @@ function M.key(g, view, r, i, k, height, m)
   elseif k == '<BS>' or k == 'K' then
     local s = table.remove(view.back)
     if not s then
-      return 'explorer'
+      return 'tree'
     end
     restore(view, s)
     return 'redraw'
