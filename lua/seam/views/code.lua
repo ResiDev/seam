@@ -128,7 +128,13 @@ function M.lines(out, m, path, s, e, nodes)
   for l = s, e do
     set[l] = true
   end
+  -- the lines the range changed, their numbers in the signs' colours
+  local changed = require 'seam.views.changed'
+  local marks = changed.marks(path)
   M.rows(out, path, set, {}, function(cr, start, src, l)
+    if marks[l] then
+      cr.h[#cr.h + 1] = { 0, start, changed.MARK_HL[marks[l]], 160 }
+    end
     cr.meta.stops = {}
     for _, r in ipairs(refs[l] or {}) do
       local before = #cr.h
