@@ -2,8 +2,7 @@
 
 What seam is, how each screen behaves, where each fact comes from and how it
 is built. The screens are the mocks named here, in `design/mocks/`; the keys
-are in `KEYS.md`. Built a slice at a time (Building): what a slice has not
-replaced yet still runs as `design/calls.md` locks it.
+are in `KEYS.md`. Built a slice at a time (Building).
 
 The idea behind all of it: seam stays beside the code. It never replaces
 reading the code. It makes three things one key away while you read: what a
@@ -51,7 +50,7 @@ against its mocks, its tests, and KEYS.md in step:
    is drawn so far (landed 2026-11-01). Replaces the Types screens.
 3. **Used by and Built from,** by file, with their other displays
    (landed 2026-11-01). Replaces the contract page.
-4. **The code screen.** `J` `K` and the trail, every name answering in the
+4. **The code screen** (landed 2026-11-01). `J` `K` and the trail, every name answering in the
    pane, a value's type after its name, `n` `N` the imports, `<C-Tab>`
    code or types, later uses lit. Replaces Calls.
 5. **Changed.** The range in the lens, the git signs, `gc`, `]c` `[c`, the
@@ -482,7 +481,7 @@ all functions alike. 1a was decided as layout A under Types.
 **A chosen,** tabs in the pane's head (see Types: the higher view).
 
 - A. Tabs in the pane's head, `Code  Types  Built from  Used by  Map
-  Changed`, the one shown lit, as the Calls pane does today.
+  Changed`, the one shown lit.
 - B. Only the view's name in the head, the others in the status line's key
   hints.
 - C. Each view on its own key (`c`, `t`, `b`, `u`, `m`, `d`) and `<Tab>` as
@@ -897,8 +896,8 @@ background (guess). The spike measures it.
 The screens are locked in the design docs. The code must keep these rules:
 
 - **Layout.** The tree is 46 wide, the pane the rest, under a head line
-  across the top. Calls is two: the tree 86, its code the rest. All need
-  150 columns. Narrower than that is not
+  across the top. The code screen is two: the code as wide as it needs,
+  60 to 112, the pane the rest. All need 150 columns. Narrower than that is not
   designed. v1 says so and opens anyway.
 - **Trees.** Every tree is built by one module, `tree.lua`, from paths. Two
   spaces a level. Directories end in `/`. A chain of lone directories shares
@@ -932,8 +931,9 @@ The screens are locked in the design docs. The code must keep these rules:
 ## From your code
 
 `require('seam').here(how)`, `:SeamHere [overview|page|calls|called_by|types]`,
-opens seam (`overview` is the tree, on the row; `page` the same with the
-pane on Used by, a type's in the pane) on what the word under the cursor names in a buffer of the repo.
+opens seam (`overview` is the tree, on the row; `page` and `called_by` the
+same with the pane on Used by, a type's in the pane; `calls` the code screen
+on the function, the tree on its row under it) on what the word under the cursor names in a buffer of the repo.
 `seam.here.resolve` is pure: the word, the file relative to the root and the
 cursor line, against the model. A contract (an export with a use, the lens's
 `all_uses` counted) declared in this file, the one holding the cursor if
@@ -970,8 +970,13 @@ lua/seam/
   opening.lua       + and - in the pane: the type or function line under the cursor opened or closed in place, a group's places past four shown or hidden
   seams.lua         Used by and Built from as data, from the index: the places, what each sits in, by file, by name, by user, by first use
   views/seams.lua   the Used by and Built from views: by file, by name, by user, as signatures
-  calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does, what / lists
-  draw/calls.lua    the Calls screen: its head, the column titles, the tree, the call and the body, what each function takes and gives
+  graph.lua         the call graph read through the lens: what each way shows, a function's calls one level on
+  scope.lua         a file's bindings from treesitter: what each name resolves to in its function, the uses of a binding
+  names.lua         what a name in the code is: a repo function, a type, an import's file, a value, a parameter, a field or method, its type and later uses
+  codetypes.lua     the types the code does not write: after a value's name, after a function's parameters; the code's types display
+  pane.lua          the pane beside the tree and the code: drawing it, its keys, its places
+  screen_code.lua   the code screen: the trail, the code or its types, the name under the cursor answered in the pane, J K n N
+  views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
   lens_panel.lua    the lens float and its keys
   picker.lua        the / float on every screen: a prompt, a list of picks, fuzzy matching
@@ -980,8 +985,8 @@ scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
   types.lua         types.json: the TypeScript server's hover of each callable, in a headless nvim of its own
 tests/
-  calls.lua         the call tree's and the picker's specs, on a graph written by hand
-  outline.lua       the tree's specs, on a graph written by hand
+  names.lua         names in the code: each kind, its type, its later uses, the types after names and the types display, on files written by hand
+  outline.lua       the tree's, the graph's and the picker's specs, on a graph written by hand
   here.lua          here's resolution specs, on a model written by hand
   types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
   typesview.lua     a function's line, the names that are types, the types opened in place laid out

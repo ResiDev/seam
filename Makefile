@@ -1,4 +1,4 @@
-# make check: the formatting, the call tree's, here's, the types', the Types view's, the outline's, Used by and Built from's and the names' specs,
+# make check: the formatting, here's, the types', the Types view's, the outline's, Used by and Built from's and the names' specs,
 # then every screen driven through its keys on a real repo (SEAM_REPO, the
 # lab's excalidraw copy by default).
 STYLUA ?= $(HOME)/.local/share/nvim/mason/bin/stylua
@@ -13,7 +13,6 @@ lint:
 	$(STYLUA) --check lua plugin tests scripts
 
 spec:
-	nvim --headless --clean -l tests/calls.lua
 	nvim --headless --clean -l tests/here.lua
 	nvim --headless --clean -l tests/types.lua
 	nvim --headless --clean -l tests/typesview.lua

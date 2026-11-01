@@ -178,5 +178,83 @@ eq(
   'the lens hides c.ts, its package kept'
 )
 
+-- the call graph one level on (seam.graph): as written, a call made twice
+-- one kid; going up, tests apart; the lens's column each way
+do
+  local graph = require 'seam.graph'
+  local g = m.graph
+  local kids = graph.kids(g, A1, 'down')
+  eq(
+    vim.tbl_map(function(x)
+      return x.id
+    end, kids),
+    { A2, B1, C1 },
+    'a1 calls a2 b1 c1, in the order first written'
+  )
+  eq({ kids[1].n, kids[1].lines }, { 2, { 31, 34 } }, 'a2 called twice by a1: at 31 and 34')
+  local up, tests = graph.kids(g, B1, 'up')
+  eq(
+    vim.tbl_map(function(x)
+      return x.id
+    end, up),
+    { A1, D1 },
+    'b1 called by a1 and d1, by path'
+  )
+  eq(
+    vim.tbl_map(function(x)
+      return x.id
+    end, tests),
+    { TEST, T1 },
+    "the test and the test's function that call b1, apart"
+  )
+  local seen = {}
+  graph.visible({
+    visible = function(path, col)
+      seen[#seen + 1] = col
+      return path ~= 'pb/c.ts'
+    end,
+  }, 'down') 'pb/c.ts'
+  eq(seen, { 'built' }, 'calls follow built from')
+  eq(graph.visible(nil, 'up') 'x', true, 'no lens: everything')
+end
+
+-- tests: by name, or in a test folder
+for path, want in pairs {
+  ['src/a.test.ts'] = true,
+  ['src/a.spec.tsx'] = true,
+  ['src/__tests__/a.ts'] = true,
+  ['packages/core/src/test/helpers.ts'] = true,
+  ['packages/core/tests/a.ts'] = true,
+  ['test/a.ts'] = true,
+  ['src/testing.ts'] = false,
+  ['src/attest/a.ts'] = false,
+} do
+  eq(index.is_test(path), want, 'is_test ' .. path)
+end
+
+-- the picker: the most used first; typing narrows by name, the best match first
+do
+  local picker = require 'seam.picker'
+  local nodes = {}
+  local all = {}
+  for _, x in ipairs { { 'start', 4 }, { 'startRun', 2 }, { 'Box', 1 }, { 'stash', 0 }, { 'Store', 0 } } do
+    local id = 'src/p.ts:' .. (#all + 1) .. ':' .. x[1]
+    nodes[id] = { name = x[1], path = 'src/p.ts', line = #all + 1, kind = 'function' }
+    all[#all + 1] = { id = id, name = x[1], used_by = x[2] }
+  end
+  local function ids(list)
+    return vim.tbl_map(function(p)
+      return p.name .. ' ' .. p.used_by
+    end, list)
+  end
+  picker.sort(all, nodes)
+  eq(ids(all), { 'start 4', 'startRun 2', 'Box 1', 'Store 0', 'stash 0' }, 'by used by, then name')
+  eq(picker.fuzzy(all, '  '), all, 'an empty query keeps them all, in order')
+  local got = picker.fuzzy(all, 'sta')
+  eq(ids(got), { 'start 4', 'stash 0', 'startRun 2' }, 'sta: the best match first, used by between equals')
+  eq(got[1].pos, { 0, 1, 2 }, 'the letters matched')
+  eq(ids(picker.fuzzy(all, 'zzz')), {}, 'nothing matches')
+end
+
 io.stdout:write(('outline: %d checks, %d failures\n'):format(checks, #failures))
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')

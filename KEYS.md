@@ -14,17 +14,16 @@ Every key seam maps, in the buffers it owns. Keep this in step with the code.
 
 ## From your code
 
-In any buffer of the repo, on a name. Seam opens on its repo (indexing it first when it has no index or an old one), or comes to its tab, and `gf` there goes back to the buffer. The word names a contract declared in the file, else one the file uses, else the only one of that name; for calls, a function, component or class the same way, local ones too, else the function the cursor is in.
+In any buffer of the repo, on a name. Seam opens on its repo (indexing it first when it has no index or an old one), or comes to its tab, and `gf` there goes back to the buffer. The word names a contract declared in the file, else one the file uses, else the only one of that name; for calls and called_by, a function, component or class the same way, local ones too, else the function the cursor is in.
 
 | Command | Suggested key | Does |
 |---|---|---|
 | `:SeamHere` `:SeamHere overview` | `<leader>kk` | the tree, its cursor on that function or contract where it lives (a contract that is no function, its file), the folders and file down to it opened. Several of that name and none here, or nothing: the tree's `/` holding the word. One the lens hides says so, and searches |
 | `:SeamHere page` | `<leader>kp` | as `overview`, the pane on its Used by; a repo type, its Used by in the pane, the tree's cursor on its file. Several or nothing: the tree's `/` holding the word |
-| `:SeamHere calls` | `<leader>kc` | the call tree anchored on that function, down; several, the tree's `/` holding the word |
-| `:SeamHere called_by` | `<leader>kC` | the same, up |
+| `:SeamHere calls` | `<leader>kc` | the code screen on that function, the tree on its row under it; several, the tree's `/` holding the word |
+| `:SeamHere called_by` | `<leader>kC` | the tree on that function's row, the pane on its Used by; several, the tree's `/` holding the word |
 | `:SeamHere types` | | the tree, its pane on the Types view of the repo type that word names, the tree's cursor on the file you asked from; otherwise the tree's `/` holding the word |
 | `:Seam` | `<leader>ko` | seam on the repo, as it was when it is open |
-| `require('seam').from_top()` | `<leader>kt` | the call tree from where the code starts |
 | `:Seam!` | `<leader>kr` | index the repo again |
 
 The keys are not mapped by seam; the suggested ones are in the author's config.
@@ -47,8 +46,8 @@ The status line says where you are on the left, and on the right only the keys t
 | `<C-d>` `<C-u>` | scroll the pane half a screen, the cursor staying in the tree |
 | `<C-e>` `<C-y>` | scroll the pane a line |
 | `/` | search the names: a float over the tree of every function, file and repo type it holds, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` shows the one picked where it lives, its folders and file opened; a type, its Types view in the pane, the tree's cursor where it was, until it moves; `<Esc>` `<C-c>` close it, nothing changed |
-| `c` | the Calls screen on the row's function; `K` back to the tree. Until the code screen |
-| `L` | the lens: what the tree shows. Files it hides from contracts leave the tree; calls follow built from |
+| `J` | the code screen on the row's function or file; `K` there comes back to this row |
+| `L` | the lens: what the tree shows. Files it hides from contracts leave the tree; a function's calls follow built from |
 | `S` | the next source, when there are several |
 | `R` | read the index again |
 | `gf` `gd` | in your own code: on a function's row, its declaration; on a file's, its first line; on a folder, nothing; on the head or the pane's head, the row's |
@@ -69,7 +68,8 @@ Seam maps no key to go into the pane: Vim's own window keys do.
 
 | Key | Does |
 |---|---|
-| `<Esc>` | back to the tree |
+| `<Esc>` | back to the tree, or to the code on the code screen |
+| `K` | on the code screen, back as there |
 | `+` | in the Types view, on a type's name (and on the pane's head when it names one, and in the signature lines of Used by and Built from): its declaration as written, under the line it is named on, a bar down its left and its file and line at its top; on a name inside that, the next one nested under it, one level a press. On a function's line, off a name: the function as written, a part a line, the type parameters as written. On `⋯ N more` in Used by: the rest of that group's places. Hinted only where it acts |
 | `-` | close the type the cursor is in, and what was opened inside it, the cursor back on the line naming it; on a function opened as written, close it; on a place `+` showed, hide them again, the cursor on `⋯ N more`. What is open stays for the row as long as seam is open |
 | `n` `N` | in Used by and Built from: the next or previous place, round the ends; a count skips. The line under the cursor is lit |
@@ -78,38 +78,31 @@ Seam maps no key to go into the pane: Vim's own window keys do.
 | `?` | every key here |
 | `q` | close seam |
 
-## Calls
+## The code
 
-The call tree of a function, component or class: what it calls all the way down, or what calls it all the way up, or everything from where the code starts.
+`J` on a function's or a file's row: its code on the left, as wide as it needs up to 112 columns, a longer line cut with `…` at its edge; the pane on the right as beside the tree. The head is the trail, `Seams › createRun() › createQueue()`; the code's own head says what it is and where, and its display. Each line its number and the source as written, its colours from treesitter; a name from another file underlined where it lives, as in the tree; after a value's name with no type written, its type, dim, from the declared return of the call that made it (nothing when that is not written), and after a function's parameters its return the same way.
+
+The name under the cursor answers in the pane: a call its function (`called at line N`), a type its views, an imported value its file, a value, a parameter, a field or a method its Types view, headed with where it was made (`queue  made by createQueue, line 37  used 12 times`), what it is a parameter of, or the type it is in and its file. A field or method shows the type it is in with its lines lit, then each repo type it names written out under `is`, `takes` or `gives`. A value's or a call's later uses in the code are lit, the name and its line. The status line says the name under the cursor and its type.
 
 | Key | Does |
 |---|---|
-| `j` `k` | the next or previous row |
-| `l` | open the row one level, a `tests` row too; on an open row, its first child; on an `↑ also` row, where it is open |
-| `h` | fold an open row, a folder or file too; on a folded or empty one, its parent |
-| `O` | open everything under the row until the budget runs out |
-| `H` | fold back to what the budget opened |
-| `]` `[` | the next or previous sibling |
-| `<CR>` | anchor on the row |
-| `/` | anchor on any function: a float lists every one the lens lets through in contracts, the most used first; typing narrows it, fuzzily. `<C-n>` `<C-p>` `<Down>` `<Up>` move, `<CR>` anchors on it, the direction kept (from the top, calls), and `K` comes back; `<Esc>` `<C-c>` close it, nothing changed |
-| `~` | flip: calls, called by |
-| `T` | the tree's columns: what each function takes and gives (`takes → gives`), or below, used by, file and line. Types once the repo has them; the choice stays |
-| `K` `<BS>` | back: the previous anchor; from the first, seam's tree |
-| `-` | straight to seam's tree, on the anchor |
-| `C` | from the top |
-| `L` | the lens: calls follow its built from column, callers its used by, the starts its contracts; what it hides has no row, the head counts it after the tabs (from the top, on its first line), `+12 hidden  L lens` |
-| `<Tab>` | the code beside the tree: the types the row's function takes and gives, each its declaration (once the repo has types, and first); where it is called; or itself. The choice stays as the cursor moves, across anchors and back; what nothing calls shows its types or itself |
-| `n` `N` | Called at: the next or previous place it is called, round the ends. Itself: the next or previous line that calls something, lit. A count skips. In the code beside it, `]]` `[[` |
-| `gf` `gd` | in your own code: on a row, its function's declaration, or a file's first line; in the code beside, the line under the cursor |
-| `q` | close |
+| `j` `k` and Vim's motions | move; the pane follows the name under the cursor |
+| `n` `N` | the next or previous import: a name from another file, round the ends |
+| `J` | on a call or an imported name, the code screen on its function or file, on top of the trail |
+| `K` | back: the previous on the trail, the cursor on the very name you left from; a count goes back more (`3K`); from the first, the tree on its row |
+| `<C-Tab>` `<C-S-Tab>` | the code, or its types: the function's line, then its values in the order made, `name  Type`, each function inside under its own line, indented; a file, its declarations |
+| `+` `-` | in its types, open or close the type under the cursor, as in the pane |
+| `<Tab>` `<S-Tab>` | the pane's next and previous view of the name under the cursor |
+| `/` | search the names, as in the tree: a function or a file goes on to its code screen, a type shows in the pane |
+| `gf` `gd` | in your own code: the line under the cursor; on the head, what the code is |
+| `?` | every key here |
+| `q` | close seam |
 
-`]` and `[` wait for a second `]` or `[` before going to the sibling.
-
-The head gives the cursor back to the tree. The code beside it keeps it, to scroll and search; there `<Esc>` goes back to the tree, `<Tab>` does as in the tree, `]]` `[[` as `n` `N` do there, with the cursor on the line lit, and `K` `<BS>` `-` `q` do as in the tree; `gf` goes to the line under the cursor in your own code.
+The code's head gives the cursor back to the code. In the pane, the pane's keys; `<Esc>` and `K` as above.
 
 ## The lens
 
-A float over the tree or the call tree. One row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
+A float over the tree. One row a rule: a folder or file picked, or a pattern typed. In each of contracts, built from and used by, a rule shows `only` what it holds, `hide`s it, or leaves the column be (`·`). It is kept in `.seams/lens.json` at the root of the repository. Each column it hides something from says how many on a line it already has, `+3 hidden  L lens`; nothing hidden gets a row.
 
 | Key | Does |
 |---|---|
