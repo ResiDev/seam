@@ -58,6 +58,10 @@ against its mocks, its tests, and KEYS.md in step:
    lines.
 6. **The Map** (landed 2026-11-01). Its displays on each kind of row, `T`, `>` `<`, and the
    arrows as chosen.
+7. **Two tabs and the diff.** The pane's tabs only Code and Types, `<Tab>`
+   between them; Used by, Built from and the Map aside on `gu` `gb` `gm`.
+   The Changed tab goes: `D` turns the diff on and off, on the code and the
+   types, on both sides of the code screen.
 
 ## The primitives
 
@@ -88,8 +92,12 @@ raf's `Readonly<{…}>` aliases, so it gives the shape, never the name.
 ## The views
 
 Every row in the tree, and every name in the code, has the same views on the
-right. `<Tab>` and `<S-Tab>` step through them, and the one chosen stays as
-the cursor moves.
+right. Two are tabs, **Code** and **Types**, what you read most; `<Tab>`
+flips between them. **Used by**, **Built from** and the **Map** are aside,
+each on its own key, `gu` `gb` `gm`, the same on the tree, the code screen
+and in the pane; the same key again, or `<Tab>`, goes back to the tab you
+were on. The one chosen stays as the cursor moves. What changed is not a
+view: `D` turns the diff on in Code and Types (What changed, below).
 
 | View | A folder | A file | A function | A type |
 |---|---|---|---|---|
@@ -98,8 +106,14 @@ the cursor moves.
 | **Built from** | what it draws on, by file | what the file draws on, by file | what it draws on, by file | the types its fields are made of |
 | **Used by** | who imports from it | the files that import it, each line | each place that calls it: the file, the line, and the code there | who takes it and who gives it |
 | **Map** | four displays on `<C-Tab>`: tree, both ways, folders, size (section 6) | the same four | the same four | the same four; its tree is types as boxes, functions on the arrows |
-| **Changed** | its files' diffs | the file's diff | its diff since the base | its declaration's diff |
 
+- **Two tabs, the others aside** (decided 2026-11-01, `design/mocks/tabs-aside.png`).
+  The pane's head has the two tabs, the one shown lit. An aside view shown
+  is named after them, lit, a gap between, and the two tabs both dim; its
+  display after it. The status line's pane group has `gu` `gb` `gm` only
+  where the row has that view. A row with neither Code nor Types shows the
+  first aside view it has, named in the head; every row has one or the
+  other (a folder has Types, a row gone has Code), so this is a fallback.
 - **Used by is where it's called.** The cursor on a use shows the caller's
   code around that line, so "used by" and "called at" are one view.
 - **Types open in place.** `+` on a type's name opens its declaration, as
@@ -108,8 +122,8 @@ the cursor moves.
   under it: one level a press. `-` closes the one the cursor is in. `l`
   stays the calls; `+` and `-` are only types. It works on a type's name
   wherever one is drawn: the pane's head line, the Types view, the Code view's types
-  display, Built from and Used by as signature lines, the Map with `T` on,
-  and Changed, where an opened type carries its own `+`/`-` lines, so a
+  display, Built from and Used by as signature lines, the Map with `T` on.
+  With the diff on, an opened type carries its own `+`/`-` lines, so a
   signature that reads the same but takes a changed type shows what changed
   in it. Mocks: `design/mocks/open-type-a.png` (StoredRecord opened in
   RunOptions), `open-type-b.png` (WalkthroughProgress opened inside it),
@@ -138,7 +152,8 @@ Decided 2026-10-31, from the mocks `design/mocks/types-view-*.png`:
   type's declaration with its doc comment, open by default.
 - **One view at a time, over the full right side** (layout A,
   `design/mocks/types-view-layout-a.png`). Tabs in the pane's head name them, the
-  one shown lit; `<Tab>` and `<S-Tab>` step through them. Two views side by
+  one shown lit; `<Tab>` and `<S-Tab>` step through them (since 2026-11-01
+  two tabs, the rest aside: see The views). Two views side by
   side (B) cut the signatures; a band over today's trees (C) breaks the
   blank line between functions. Built from and Used by become single views
   in the same pane, redesigned to fit it.
@@ -182,7 +197,8 @@ Decided 2026-10-31, from the mocks `design/mocks/types-view-*.png`:
   left with the views on the right, where the cursor on a name fills them
   (`design/mocks/code-cursor-field.png`).
 - **A folder has the views a file has where they make sense:** Types, Built
-  from, Used by and Changed. It has no Code.
+  from, Used by and the Map. It has no Code, but with the diff on its Code
+  is its changed files one after another.
 
 
 The Types view is the high-level picture at every level of the tree, with
@@ -343,6 +359,14 @@ createQueue()`.
   what it takes, each value it makes with its type in the order made, and
   what it gives, every line `name  Type`. For a file, its declarations'
   signatures.
+- **The diff on the left too** (`design/mocks/diff-code.png`). With `D` the
+  code on the left is drawn with the range's changes inline, as the pane's
+  Code shows them: removed lines where they were, unnumbered on red, added
+  numbered on green, the words changed lit stronger; the whole of it, no
+  folds. Its types display shows a function's line as it was, on red, over
+  the line as it is, on green, when its signature changed, and a type
+  opened there carries its own `+`/`-` lines. The cursor on a removed line
+  answers with the function or file. `]c` `[c` go from change to change.
 
 Open:
 - ~~`n`/`N`: every name, or only the imports as today?~~ Only the imports,
@@ -376,20 +400,37 @@ tree: what isn't committed yet. Then:
   folders and files above them (`design/mocks/changed-signs-only.png`). It works
   on the tree whatever view is shown, and `gc` again shows everything.
 - **`]c` and `[c`** go to the next and previous change: in the tree, the
-  next changed row; in the pane, the next change in its diff. Your
-  gitsigns keys.
-- **The Changed view is CodeDiff's inline diff,** drawn into the pane:
-  codediff.nvim's `compute_diff` and `render_inline_diff`, which draw into
-  any buffer. Without codediff, Vim's own `vim.text.diff` and seam's
-  drawing in the same shape. Removed lines show where they were, unnumbered
-  on red; added on green; the words that changed in each lit stronger.
-- **Its displays:** changes only, the default, every run of unchanged lines
-  folded to `⋯ 12 lines unchanged` with three lines kept around each change
+  next changed row; in the pane and on the code screen, the next change in
+  the diff shown. Your gitsigns keys.
+- **The diff is a toggle, `D`, not a view** (decided 2026-11-01,
+  `design/mocks/diff-code.png`, `diff-types.png`; it was the Changed tab).
+  Off when seam opens; on or off for the whole session, for both sides at
+  once: the code screen's left, its code and its types, and the pane's
+  Code and Types, beside the tree too. The status line starts `diff on`
+  while it is. It diffs the lens's range. A row or file the range left
+  alone shows as it is.
+- **Code with the diff is CodeDiff's inline diff,** drawn into the pane:
+  codediff.nvim's `compute_diff`, which works on any lines. Without
+  codediff, Vim's own `vim.text.diff` and seam's drawing in the same shape.
+  Removed lines show where they were, unnumbered on red; added on green;
+  the words that changed in each lit stronger.
+- **Its displays,** on `<C-Tab>` while the diff is on and the row changed:
+  changes only, the default, every run of unchanged lines folded to
+  `⋯ 12 lines unchanged` with three lines kept around each change
   (`design/mocks/changed-signs.png`); and the whole file
   (`design/mocks/changed-whole.png`). codediff has no folding (its roadmap lists
   it), so the folds are seam's.
-- **On a function or type,** the Changed view is its lines alone; on a
-  file, the file; on a folder, its changed files one after another.
+- **On a function or type,** Code with the diff is its lines alone; on a
+  file, the file; on a folder, its changed files one after another; on a
+  row gone, its lines as they were, all removed, diff or not (a row gone
+  has only Code).
+- **Types with the diff** (`design/mocks/diff-types.png`) is what changed
+  about the types: a function whose signature changed has its line as it
+  was, `-` on red, over its line as it is, `+` on green; a new one, its
+  line `+`; each type written out or opened under it carries its own `+`
+  and `-` lines and `~ changed` by its name. A type's declaration the same.
+  The pane's head says new, signature or body changed, and the types it
+  names that changed.
 - **Used by on a changed function** lists who uses it now, then who used
   it at `from`. storageFailed lost its first parameter: five places in
   three files called it before, two in a new file now
@@ -478,7 +519,10 @@ all functions alike. 1a was decided as layout A under Types.
 
 ### 2. Switching views
 
-**A chosen,** tabs in the pane's head (see Types: the higher view).
+**A chosen,** tabs in the pane's head (see Types: the higher view). Then,
+2026-11-01, the tabs were cut to Code and Types and the rest went aside on
+their own keys, a mix of A and C: `design/mocks/tabs-aside.png`
+(`design/mocks/src/tabsdiff/mock.py`).
 
 - A. Tabs in the pane's head, `Code  Types  Built from  Used by  Map
   Changed`, the one shown lit.
@@ -662,6 +706,12 @@ written parameters or return differ, else its body. Used by on a changed
 signature lists who uses it now and who used it at the base: storageFailed
 lost its first parameter, five places in three files called it at the
 base, two in a new file call it now.
+
+Then, 2026-11-01, the Changed view became the diff on `D`, on the code and
+the types, on the code screen's left as in the pane:
+`design/mocks/diff-code.png` (problems.ts on the left, storageFailed's
+lines in the pane) and `diff-types.png` (storageFailed's line as it was and
+is, and WaymarkProblem, which it gives, with its own lines).
 
 ### 9. Boundaries
 
@@ -985,7 +1035,7 @@ lua/seam/
   diff.lua          two versions of some lines compared: the hunks, the words changed, laid out with removed lines where they were and unchanged runs folded
   signs.lua         the range's signs on the tree's rows, the rows gone kept struck through, gc and ]c [c
   refs.lua          the refs a range can be from or to and the picker over them, f t x in the lens
-  views/changed.lua the Changed view: a function's, a type's, a file's or a folder's changes; Used by now and at from; the code's changed lines and ]c [c
+  views/changed.lua the diff on D: Code with the diff on a function, a type, a file or a folder; a type's own lines; a function's line as it was; Used by now and at from; the code's changed lines and ]c [c
   views/map.lua     the Map view: its four displays on a function, a folder, a file and a type, T's columns, a box's declaration opened under it, its head's count
   map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows
   map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
@@ -1009,7 +1059,7 @@ tests/
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
   map.lua           the Map's layouts on graphs written by hand: the facts, the tree, the ranks, both ways, folders, size, a type's boxes
   check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, > <, l h, T, + - on a box
-  check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, the Changed view, Used by at from, the lens's range
+  check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, Used by at from, the lens's range
   check.lua         every screen through its keys on a real repo
 ```
 
