@@ -132,6 +132,10 @@ function M.put(buf, rows)
     if r.line_hl then
       api.nvim_buf_set_extmark(buf, M.ns, row0, 0, { line_hl_group = r.line_hl, priority = 90 })
     end
+    -- a background to the window's edge that marks on the row draw over, as a diff's lines want
+    if r.bg then
+      api.nvim_buf_set_extmark(buf, M.ns, row0, 0, { end_row = row0 + 1, end_col = 0, hl_group = r.bg, hl_eol = true, priority = 90 })
+    end
     if r.code then
       codes[row0] = r.code
     end

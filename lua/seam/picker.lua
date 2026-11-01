@@ -96,6 +96,8 @@ local ABOVE, BELOW = 2, 2
 ---@field items seam.Pick[] the list under the prompt: these, narrowed fuzzily
 ---@field node fun(id: string): table a pick's name, kind, path and line
 ---@field column? string the title over the count at a row's end
+---@field row? fun(p: seam.Pick, width: integer): table a pick's row drawn another way than a name's
+---@field zindex? integer over another float
 ---@field pick fun(p: seam.Pick|nil, query: string) <CR>
 ---@field closed? fun() it closed, picked or not
 
@@ -173,7 +175,7 @@ local function draw_rows()
   local col = spec.column or ''
   rows[2] = draw.row():to(W - 1 - api.nvim_strwidth(col)):add(col, 'SeamLabel')
   for j = P.top, math.min(#list, P.top + n - 1) do
-    local r = pick_row(list[j], W)
+    local r = spec.row and spec.row(list[j], W) or pick_row(list[j], W)
     if j == P.sel then
       r.line_hl = 'CursorLine'
     end
@@ -284,7 +286,8 @@ function M.open(spec)
   local W = spec.width
   P.buf = draw.scratch 'picker'
   vim.bo[P.buf].bufhidden = 'wipe'
-  local cfg = { relative = 'win', win = spec.over, row = 0, col = spec.col or 0, width = W, height = 1, zindex = 50 }
+  local z = spec.zindex or 50
+  local cfg = { relative = 'win', win = spec.over, row = 0, col = spec.col or 0, width = W, height = 1, zindex = z }
   P.win = api.nvim_open_win(
     P.buf,
     false,
@@ -303,7 +306,8 @@ function M.open(spec)
   vim.b[b].completion = false
   api.nvim_buf_set_lines(b, 0, -1, false, { q })
   local widest = api.nvim_strwidth(count_text(P.total))
-  P.iwin = api.nvim_open_win(b, true, { relative = 'win', win = P.win, row = 0, col = 0, width = W - widest - 3, height = 1, style = 'minimal', zindex = 60 })
+  P.iwin =
+    api.nvim_open_win(b, true, { relative = 'win', win = P.win, row = 0, col = 0, width = W - widest - 3, height = 1, style = 'minimal', zindex = z + 10 })
   local iwo = vim.wo[P.iwin]
   iwo.winhighlight = 'NormalFloat:Normal'
   iwo.statusline = "%!v:lua.require'seam.screen'.status()"

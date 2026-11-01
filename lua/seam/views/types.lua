@@ -89,6 +89,10 @@ local function block(C, d, doc)
     lines[#lines + 1] = { id = 'more', names = {}, kind = 'more', n = e - s - DECL_MAX + 1 }
   end
   local b = { decl = d, lines = lines }
+  -- in the Changed view, its own lines as the range changed them
+  if C.diff then
+    b.lines, b.changed = C.diff(d, lines)
+  end
   C.blocks[key] = b
   return b
 end
@@ -182,6 +186,9 @@ local function render(out, C, items)
       end
       r:add(dc.name, 'SeamTypeBold'):add('   ' .. dc.kind .. ' in ', 'SeamLabel')
       draw.path(r, dc.path, dc.line)
+      if x.head.changed then
+        r:add('   '):add('~', 'SeamSignChange'):add(' changed', 'SeamLabel')
+      end
       r.meta.tv = { key = x.key, chain = x.chain, names = {} }
       out[#out + 1] = r
     else
@@ -191,7 +198,15 @@ local function render(out, C, items)
         bar(r, bars[d])
       end
       local names = {}
-      if l.kind == 'src' then
+      if C.diff and (l.kind == 'src' or l.kind == 'del') then
+        -- the sign after the bar: + an added line, - a removed one
+        local sign = l.kind == 'del' and '-' or l.mark
+        r:add(sign or ' ', sign == '-' and 'SeamSignDelete' or sign and 'SeamSignAdd' or nil)
+        r.bg = sign == '-' and 'SeamDiffDelete' or sign and 'SeamDiffAdd' or nil
+      end
+      if l.kind == 'del' then
+        r:add('      '):add(l.text, 'SeamDiffDeleteFg')
+      elseif l.kind == 'src' then
         r:add(string.format('%4d  ', l.id), 'SeamGutter')
         local start = r.b
         local src = code.file(l.path).lines[l.id] or ''

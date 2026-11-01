@@ -17,4 +17,9 @@ if vim.env.COLORS then
     vim.cmd.colorscheme(vim.env.COLORS)
   end
 end
+-- codediff.nvim, when lazy.nvim installed it, for the Changed view's diff
+local codediff = vim.fn.stdpath 'data' .. '/lazy/codediff.nvim'
+if vim.fn.isdirectory(codediff) == 1 then
+  vim.opt.runtimepath:append(codediff)
+end
 vim.cmd 'runtime plugin/seam.lua'
