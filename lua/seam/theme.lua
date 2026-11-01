@@ -68,6 +68,14 @@ function M.setup()
   local ty = api.nvim_get_hl(0, { name = '@type', link = false }).fg
   s('SeamTypeBold', { fg = ty, bold = true })
   s('SeamTypeLit', { fg = ty, bold = true, underline = true })
+  -- the Map: a function's name as declared, a count on an arrow, a size's bar, its lines and boxes
+  s('SeamMapFn', { link = '@function' })
+  local fn = api.nvim_get_hl(0, { name = '@function', link = false }).fg
+  s('SeamMapFnBold', { fg = fn, bold = true })
+  s('SeamMapCount', { fg = '#ff9e64' })
+  s('SeamMapBar', { bg = '#3d59a1' })
+  s('SeamMapLine', { link = 'SeamLabel' })
+  s('SeamMapBox', { link = 'SeamSep' })
   for i, h in ipairs(HUES) do
     s('SeamHue' .. i, { fg = h, bold = true })
     s('SeamBar' .. i, { fg = h })

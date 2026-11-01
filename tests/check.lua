@@ -181,7 +181,12 @@ local function check_tree()
   end
   local shown, display = require('seam.views').shown(x, st.view)
   local want = x and ((x.kind ~= 'dir' and 'Code     ' or '') .. 'Types     Built from     Used by') or ''
-  if shown and #shown.displays > 1 then
+  if x and require('seam.views.map').has(m, x) then
+    want = want .. '     Map'
+  end
+  if shown and shown.list then
+    want = want .. '    ' .. table.concat(shown.displays, ' · ')
+  elseif shown and #shown.displays > 1 then
     want = want .. '    ' .. display
   end
   local tabs = vim.trim(head[3] or '')

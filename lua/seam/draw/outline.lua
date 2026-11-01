@@ -302,7 +302,15 @@ function M.pane_head(buf, m, o, x, sv)
     end, list),
     shown and shown.name
   )
-  if shown and #shown.displays > 1 then
+  if shown and shown.list then
+    t:add '   '
+    for i, d in ipairs(shown.displays) do
+      if i > 1 then
+        t:add(' · ', 'SeamDim')
+      end
+      t:add(d, d == display and 'SeamBold' or 'SeamLabel')
+    end
+  elseif shown and #shown.displays > 1 then
     t:add('   ' .. display, 'SeamLabel')
   end
   draw.put(buf, { h, row(), t })
