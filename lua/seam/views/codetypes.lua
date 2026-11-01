@@ -35,6 +35,9 @@ function M.draw(out, m, e, width)
       col = math.max(col, 3 + 2 * r.depth + api.nvim_strwidth(r.name) + 2)
     end
   end
+  -- with the diff on, the sign column two wide, a space after the sign
+  local o = C.diff and ' ' or ''
+  col = col + #o
   local lines = code.file(e.path).lines
   for _, r in ipairs(list) do
     if r.kind == 'blank' then
@@ -48,7 +51,7 @@ function M.draw(out, m, e, width)
         out[#out + 1] = changed.was_row({ path = e.path, name = r.name, line = r.line }, d, r.ret)
       end
       local sign = d and '+' or (C.diff and r.kind == 'type' and changed.type_changed(e.path, r.name) and '~') or ' '
-      x:add(sign, SIGN_HL[sign])
+      x:add(sign, SIGN_HL[sign]):add(o)
       if d then
         x.bg = 'SeamDiffAdd'
         x.meta.change = d.state == 'new' or nil
