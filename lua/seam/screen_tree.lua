@@ -379,6 +379,9 @@ function M.status()
   if ma.T then
     pgroup[#pgroup + 1] = 'T'
   end
+  if pane.can_scroll() then
+    pgroup[#pgroup + 1] = '<M-j> <M-k>'
+  end
   if pane.can_diff() then
     pgroup[#pgroup + 1] = 'D'
   end

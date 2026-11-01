@@ -526,7 +526,9 @@ function M.status()
   rg[#rg + 1] = 'K'
   rg[#rg + 1] = '<S-Tab>'
   local pg = pane.view_hints(M.subject())
-  pg[#pg + 1] = '<M-j> <M-k>'
+  if pane.can_scroll() then
+    pg[#pg + 1] = '<M-j> <M-k>'
+  end
   return hints.status(left, { rg, pg, { '/', 'q' } }, rules)
 end
 

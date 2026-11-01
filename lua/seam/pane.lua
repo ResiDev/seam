@@ -127,6 +127,16 @@ end
 
 --- Does `D` act: has the range changes, or is the diff on to turn off?
 ---@return boolean
+--- Whether the pane holds more than it shows, for `<M-j>` `<M-k>`'s hint.
+---@return boolean
+function M.can_scroll()
+  local w = M.wins()
+  if not w or not api.nvim_win_is_valid(w.pane) then
+    return false
+  end
+  return api.nvim_win_text_height(w.pane, {}).all > api.nvim_win_get_height(w.pane)
+end
+
 function M.can_diff()
   return st.diff == true or require('seam.changes').any()
 end
