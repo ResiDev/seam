@@ -56,11 +56,11 @@ def by_file(ids):
 
 # ── the screen ──────────────────────────────────────────────────────────
 TABS = ["Code", "Types", "Built from", "Used by", "Map"]
-def phead(title, rest, cur="both ways", tabs=TABS):
+def phead(title, rest, cur="both ways", tabs=TABS, opts=("both ways", "size")):
     r = s("", " ")
     for t in tabs: r += s("tab bold" if t == "Map" else "c", f" {t} ") + s("", "  ")
     r += s("", " ")
-    for j, o in enumerate(["both ways", "size"]):
+    for j, o in enumerate(opts):
         if j: r += s("d3", " · ")
         r += s("fg bold" if o == cur else "c", o)
     return [(s("", " ") + title + s("c", "   " + rest), ""), blank()[0], (r, ""), blank()[0]]
@@ -414,6 +414,142 @@ screen("maps-c-columns-big", "C on createRun",
        "The same, on a function with many calls.",
        phead(t, rest) + columns(CR),
        "createRun()  map · both ways", "createRun()", "createRun()")
+
+# ── round eight: Built from, Used by and size go; the Map has folder and type
+TABS8 = ["Code", "Types", "Map"]
+OPTS8 = ("folder", "type")
+def phead8(r, cur, opts=OPTS8):
+    a, b = fhead(r)
+    return phead(a, b, cur, tabs=TABS8, opts=opts)
+
+# type: each side gathered by the type its functions give, the repo's types
+# first; a line for each file under a type, its folder and file, then its
+# names; a line from each into the row. The row's own signature under it.
+def by_type(r, cursor=None):
+    L, R = sides(r)
+    def lines(ids):
+        g = collections.OrderedDict()
+        for i in ids:
+            x = sig(i, 30)
+            k = x[1] if x else "?"
+            g.setdefault(k, collections.OrderedDict()).setdefault(N[i]["path"], []).append(i)
+        def rank(k):
+            words = re.findall(r"[A-Za-z_$][\w$]*", k)
+            repo = any(w[0].isupper() and w not in BUILTIN for w in words)
+            return (0 if repo else 2 if k in ("void", "?") else 1, -sum(len(v) for v in g[k].values()))
+        out = []
+        for k, files in sorted(g.items(), key=lambda kv: rank(kv[0])):
+            for j, (p, fs) in enumerate(files.items()):
+                ty = [] if j else (s("c", "nothing") if k == "void" else s("c", "?") if k == "?" else tsegs(cut(k, 24)))
+                d = where(p)
+                d = d[:-6] if d.endswith(" files") else d
+                out.append((ty, s("c", d) + s("fd", base(p)), fs))
+        return out
+    def render(lines_):
+        kw = max(tw(a) for a, _, _ in lines_)
+        pw = max(tw(b) for _, b, _ in lines_)
+        rows = []
+        for a, b, fs in lines_:
+            row = a + s("", " " * (kw + 2 - tw(a))) + b + s("", " " * (pw + 2 - tw(b)))
+            for j, i in enumerate(fs):
+                if j: row += s("", "  ")
+                row += s("b vis" if label(i) == cursor else "b", label(i))
+            rows.append(row)
+        return rows
+    lL, lR = render(lines(L)), render(lines(R))
+    lw = max(tw(x) for x in lL)
+    n = max(len(lL), len(lR) * 2 + 2, 3); mid = n // 2
+    cv = Canvas(PW, n)
+    l0 = mid - len(lL) // 2
+    bus = lw + 2; ys = []
+    for j, x in enumerate(lL):
+        e = cv.seg(x, 0, l0 + j); cv.h(e + 1, bus, l0 + j); ys.append(l0 + j)
+    cv.v(bus, min(ys + [mid]), max(ys + [mid])); cv.h(bus, bus + 3, mid)
+    cx = bus + 4; nm = N[r]["name"]
+    cv.put(cx, mid, nm, "b bold")
+    t_, g_ = sig(r, 40)
+    cv.seg(tsegs("(" + t_ + ") → " + g_, dim=True), cx, mid + 1)
+    bx = cx + len(nm) + 1; ys = []
+    r0 = mid - len(lR) + (1 if len(lR) > 1 else 0) - (1 if len(lR) > 2 else 0)
+    r0 = min(r0, mid)
+    for j, x in enumerate(lR):
+        y = r0 + j
+        if y == mid + 1: y = r0 + j  # the row's signature sits under it, left of here
+        cv.h(bx + 3, bx + 5, y); ys.append(y); cv.seg(x, bx + 6, y)
+    cv.h(bx, bx + 3, mid); cv.v(bx + 3, min(ys + [mid]), max(ys + [mid]))
+    return cv.rows()
+
+# C as a map: calls above, flowing down a line into the row; the row
+# writing what it takes, its name, what it gives; what it gives flowing on
+# to its callers below, set off to the right where its output ends. Each
+# call's line in the gutter, each name's signature in columns.
+def flow(r, cursor=None):
+    L, R = sides(r)
+    def tk(i, w=44):
+        x = sig(i, w)
+        return "(" + x[0] + ")" if x else ""
+    def gv(i):
+        x = sig(i, 44)
+        return cut(x[1], 26) if x else ""
+    calls = sorted(L, key=lambda i: callee_line(r, i))
+    nw = max(len(label(i)) for i in calls)
+    tkw = max(len(tk(i)) for i in calls)
+    gvw = max(len(gv(i)) for i in calls)
+    fw = max(len(base(N[i]["path"])) for i in calls)
+    rows = []
+    G0 = 5  # the gutter
+    for k, i in enumerate(calls):
+        lead = "┌╴ " if k == 0 else "├╴ "
+        row = s("c", str(callee_line(r, i)).rjust(4) + " ") + s("c", lead)
+        row += s("b vis" if label(i) == cursor else "b", label(i).ljust(nw + 2))
+        tt = tsegs(tk(i), dim=True); row += tt + s("", " " * (tkw - tw(tt) + 2))
+        g = gv(i)
+        gg = (s("c", "→ ") + tsegs(g)) if g and g != "void" else s("c", "  nothing" if g == "void" else "")
+        row += gg + s("", " " * (gvw + 4 - tw(gg))) + s("fd", base(N[i]["path"]))
+        rows.append((row, "sel" if label(i) == cursor else ""))
+    rows.append((s("c", " " * G0 + "│"), ""))
+    t_, g_ = sig(r, 60)
+    centre = s("c", str(N[r]["line"]).rjust(4) + " ") + s("c", "└──▶ ") + tsegs("(" + t_ + ")") + s("c", " → ") + s("b bold", N[r]["name"]) + s("c", " → ") + tsegs(g_) + s("c", " ──┐")
+    rows.append((centre, ""))
+    bx = tw(centre) - 1
+    callers = [i for _, files in by_file(R) for fs in files.values() for i in fs]
+    cnw = max([len(label(i)) for i in callers] + [0])
+    ctk = max([len(tk(i, 30)) for i in callers] + [0])
+    cgw = max([len(cut(sig(i, 30)[1], 16)) for i in callers if sig(i, 30)] + [0])
+    for k, i in enumerate(callers):
+        last = k == len(callers) - 1
+        row = s("", " " * bx) + s("c", "└──▶ " if last else "├──▶ ")
+        row += s("b vis" if label(i) == cursor else "b", label(i).ljust(cnw + 2))
+        x = sig(i, 30)
+        if x:
+            tt = tsegs("(" + x[0] + ")", dim=True)
+            row += tt + s("", " " * (ctk - tw(tt) + 2)) + s("c", "→ ") + tsegs(cut(x[1], 16), dim=True) + s("", " " * (cgw + 2 - len(cut(x[1], 16))))
+        else:
+            row += s("", " " * (ctk + cgw + 6))
+        row += s("fd", base(N[i]["path"])) + s("c", f":{callee_line(i, r)}")
+        rows.append((row, "sel" if label(i) == cursor else ""))
+    return rows
+
+r8 = []
+def screen8(name, title, cap, r, body, cur, cursor, opts=OPTS8):
+    nm = N[r]["name"] + "()"
+    screen(name, title, cap, phead8(r, cur, opts) + body, f"{nm}  map · {cur}", nm, nm, keys="l show   J code   <Tab> view   <C-Tab> display")
+    r8.append(name)
+screen8("map8-folder", "folder: today's both ways, the cursor's signature and call at the foot",
+        "The Map as it is, by folder and file. The name under the cursor told at the foot: its signature with the parameter names, then the line that calls it, and what that line sits in.",
+        VO, today(VO, "verified"), "folder", "verified")
+screen8("map8-type", "type: gathered by what each gives, with its folder and file",
+        "Each side gathered by the type its functions give, the repo's types first. A line for each file under a type: the type, the folder and file, the names. The cursor's signature and call at the foot.",
+        VO, by_type(VO, "verified") + foot(VO, "verified"), "type", "verified")
+screen8("map8-type-big", "type on createRun, 17 calls",
+        "Where every call gives a type of its own, a line a call: the type, where it lives, its name.",
+        CR, by_type(CR, "update") + foot(CR, "update"), "type", "update")
+screen8("map8-flow", "C as a map: what it calls flowing into it, what it gives flowing on",
+        "The calls above in the order the body makes them, a line down from them into verifyOne, written as what it takes → verifyOne → what it gives; from there on to its callers, set off to the right where its output ends. Each signature in full, in columns.",
+        VO, flow(VO, "verified") + foot(VO, "verified"), "flow", "verified", opts=("folder", "type", "flow"))
+screen8("map8-flow-big", "C as a map on createRun",
+        "The same with 17 calls.",
+        CR, flow(CR), "flow", None, opts=("folder", "type", "flow"))
 
 G = []
 for k, (name, title, cap, body) in enumerate(SHOTS, 1):
