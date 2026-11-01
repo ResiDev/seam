@@ -3,7 +3,6 @@
 -- through, the most used first, narrowed as you type with Neovim's own
 -- fuzzy match.
 local api = vim.api
-local calls_draw = require 'seam.draw.calls'
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local M = {}
@@ -79,7 +78,7 @@ end
 ---------------------------------------------------------------- the float
 
 -- a list's width, where a row's path starts, and the room for its name
-M.W = calls_draw.LW - 4
+M.W = 82
 local PATH_AT, NAME_ROOM = 30, 26
 -- the rows above and below the list: the prompt, the column title; a gap, the keys
 local ABOVE, BELOW = 2, 2
@@ -106,6 +105,21 @@ local function base(path)
   return path:match '[^/]+$' or path
 end
 
+-- a node's name in the shape of its kind, coloured as its declaration is
+local function name(r, node, hl, room)
+  if node.kind == 'module' then
+    return r:add(draw.trunc(base(node.path), room), hl)
+  end
+  local s = draw.shape(node)
+  local pre, post = s:match('^(.-)' .. vim.pesc(node.name) .. '(.*)$')
+  if not pre or api.nvim_strwidth(s) > room then
+    return r:add(draw.trunc(s, room), hl)
+  end
+  r:add(pre, hl)
+  code.add_name(r, node.path, node.line, node.name, hl, room)
+  return r:add(post, hl)
+end
+
 -- a path's folder, cut from the left to `w`
 local function folder(path, w)
   local dir = path:match '^(.*/)' or ''
@@ -130,7 +144,7 @@ local function pick_row(p, W)
   local r = draw.row()
   r:add '  '
   local at = r.b + (node.kind == 'component' and 1 or 0)
-  calls_draw.name(r, node, 'SeamName', NAME_ROOM)
+  name(r, node, 'SeamName', NAME_ROOM)
   for _, c in ipairs(p.pos or {}) do
     local b = at + vim.fn.byteidx(node.name, c)
     if b < r.b then

@@ -2,7 +2,7 @@
 -- the file's order, and what each function calls, opened a level at a time
 -- in the order first written; or every function, the most used or the most
 -- calling first. The state is `st.outline`.
-local calls = require 'seam.calls'
+local graph = require 'seam.graph'
 local index = require 'seam.index'
 local tree = require 'seam.tree'
 local M = {}
@@ -72,7 +72,7 @@ end
 ---@param m table
 ---@return table<string, true>
 local function files(m)
-  local top = calls.visible(m, 'top')
+  local top = graph.visible(m, 'top')
   local out = {}
   local function add(path)
     if not out[path] and not index.is_test(path) and top(path) then
@@ -155,7 +155,7 @@ local function fn_rows(out, m, o, key, id, depth, under, chain)
       row.where = 'file'
     end
   end
-  local kids = not row.seen and calls.kids(g, id, 'down', calls.visible(m, 'down')) or {}
+  local kids = not row.seen and graph.kids(g, id, 'down', graph.visible(m, 'down')) or {}
   row.can_open = #kids > 0
   row.open = row.can_open and o.open[key] == true
   out[#out + 1] = row
@@ -192,11 +192,11 @@ local function sorted(m, o)
   if not g then
     return {}
   end
-  local top, up, down = calls.visible(m, 'top'), calls.visible(m, 'up'), calls.visible(m, 'down')
+  local top, up, down = graph.visible(m, 'top'), graph.visible(m, 'up'), graph.visible(m, 'down')
   local list = {}
   for id, n in pairs(g.nodes) do
     if n.kind ~= 'module' and not n.test and top(n.path) then
-      list[#list + 1] = { n = n, used = M.used_by(g, id, up), calls = #calls.kids(g, id, 'down', down) }
+      list[#list + 1] = { n = n, used = M.used_by(g, id, up), calls = #graph.kids(g, id, 'down', down) }
     end
   end
   local by = o.order
