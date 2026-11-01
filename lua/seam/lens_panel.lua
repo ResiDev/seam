@@ -11,6 +11,8 @@ local ns = api.nvim_create_namespace 'seam.lens'
 ---@field model fun(): table
 ---@field root fun(): string  -- the repo, for previewing its files
 ---@field changed fun()   -- the lens changed; filter and redraw behind the panel
+---@field range fun(): seam.Range  -- the range of changes, on its first row
+---@field set_range fun(r: seam.Range)  -- picked with f, t or x
 
 -- plain for only and the muted red of what the lens hides for hide: green
 -- and bright red would read as package hues
@@ -21,7 +23,7 @@ api.nvim_set_hl(0, 'SeamLensAction', { default = true, link = 'Function' })
 api.nvim_set_hl(0, 'SeamLensPattern', { default = true, link = 'Special' })
 api.nvim_set_hl(0, 'SeamLensHead', { default = true, link = 'Title' })
 
-local W = 86
+local W = 100
 local COUNT_END, MARK = 50, { contracts = 57, built = 68, used = 79 }
 local MAX_MATCHES = 10
 
@@ -81,6 +83,18 @@ local function rows()
     out[#out + 1] = l
   end
   push(line())
+  -- the range of changes, above the rules
+  local g = P.host.range()
+  push(
+    line()
+      .at(1, 'changes', 'SeamBold')
+      .add('   from  ', 'SeamLensOff')
+      .add(g.from, 'SeamRange')
+      .add('   to  ', 'SeamLensOff')
+      .add(g.to or 'working tree', 'SeamRange')
+      .add('      what the signs and ]c [c follow', 'SeamLensOff')
+  )
+  push(line())
   push(
     line()
       .at(COUNT_END - 5, 'files', 'SeamLensOff')
@@ -128,7 +142,11 @@ local function rows()
   end
   push(line())
   local keys = P.typing and { '⏎ done   esc cancel' }
-    or { 'c b u  turn a column: only, hide, neither   ␣  all three together', 'C B U  clear a column   X  clear all   a add   e edit   d delete   q close' }
+    or {
+      'c b u  turn a column: only, hide, neither   ␣  all three together',
+      'C B U  clear a column   X  clear all   a add   e edit   d delete   q close',
+      'on changes: f from   t to   a branch, a tag, a hash, HEAD~3;   x back to HEAD → working tree',
+    }
   for _, k in ipairs(keys) do
     push(line().at(1, k, 'SeamLensOff'))
   end
@@ -453,6 +471,22 @@ local function pick()
   }
 end
 
+-- `f` `t` `x` (seam.refs.lens), the panel drawn again after
+local function range(which)
+  local at = P.cursor
+  P.picking = which ~= 'reset' or nil
+  require('seam.refs').lens(P.host, which, P.win, function()
+    if P then
+      P.picking = nil
+      if api.nvim_win_is_valid(P.win) then
+        api.nvim_set_current_win(P.win)
+      end
+      draw()
+      place(at)
+    end
+  end)
+end
+
 function M.close()
   if not P then
     return
@@ -483,6 +517,7 @@ function M.open(host, at)
   )
   local wo = vim.wo[P.win]
   wo.cursorline, wo.wrap, wo.number, wo.relativenumber, wo.signcolumn = true, false, false, false, 'no'
+  wo.statusline = "%!v:lua.require'seam.screen'.status()"
   wo.winhighlight = 'NormalFloat:Normal,FloatBorder:SeamLensAction'
   local o = { buffer = buf, nowait = true, silent = true }
   local map = function(lhs, fn)
@@ -543,6 +578,11 @@ function M.open(host, at)
   end)
   map('X', clear)
   map('d', delete)
+  for k, which in pairs { f = 'from', t = 'to', x = 'reset' } do
+    map(k, function()
+      range(which)
+    end)
+  end
   for _, k in ipairs { 'q', '<Esc>', 'L' } do
     map(k, M.close)
   end
@@ -550,7 +590,7 @@ function M.open(host, at)
     buffer = buf,
     callback = function()
       vim.schedule(function()
-        if P and P.buf == buf and not P.typing and api.nvim_win_is_valid(P.win) and api.nvim_get_current_win() ~= P.win then
+        if P and P.buf == buf and not P.typing and not P.picking and api.nvim_win_is_valid(P.win) and api.nvim_get_current_win() ~= P.win then
           M.close()
         end
       end)
@@ -568,6 +608,12 @@ end
 
 function M.is_open()
   return P ~= nil
+end
+
+--- Is the cursor in the panel?
+---@return boolean
+function M.focused()
+  return P ~= nil and api.nvim_get_current_win() == P.win
 end
 
 return M

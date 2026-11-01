@@ -111,15 +111,17 @@ function M.scroll(k)
   end
 end
 
---- The pane's stops for n and N: the places Used by and Built from show.
+--- The pane's stops for n and N: the places Used by and Built from show;
+--- with `what` 'change', the changes the Changed view shows, for ]c [c.
+---@param what? 'place'|'change'
 ---@return integer[]
-function M.stops()
+function M.stops(what)
   local out = {}
   if not M.wins() then
     return out
   end
   for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
-    if draw.meta(st.obuf.pane, i).place then
+    if draw.meta(st.obuf.pane, i)[what or 'place'] then
       out[#out + 1] = i
     end
   end
@@ -127,10 +129,12 @@ function M.stops()
 end
 
 --- `n` `N`: the cursor to the next place in the pane, or the one before,
---- round the ends; from the left, into the pane.
+--- round the ends; from the left, into the pane. With `what` 'change',
+--- `]c` `[c` in the pane: the next change in its diff.
 ---@param d integer
-function M.next_place(d)
-  local list = M.stops()
+---@param what? 'place'|'change'
+function M.next_place(d, what)
+  local list = M.stops(what)
   if #list == 0 then
     return
   end
@@ -190,6 +194,9 @@ function M.hints(back)
   if M.has_places() then
     row[#row + 1] = 'n N'
   end
+  if #M.stops 'change' > 0 then
+    row[#row + 1] = ']c [c'
+  end
   local v = views.shown(x, st.view)
   if #views.of(x) > 1 then
     pane[#pane + 1] = '<Tab>'
@@ -221,6 +228,7 @@ function M.all_keys(back)
         { '+', 'open the type under the cursor, or a function as written; on ⋯ N more, the rest' },
         { '-', 'close the one the cursor is in; on a place it showed, hide the rest again' },
         { 'n N', 'the next and previous place, in Used by and Built from' },
+        { ']c [c', 'the next and previous change, in Changed' },
         { '<Tab> <S-Tab>', 'next and previous view' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
       },
@@ -253,6 +261,12 @@ function M.keys(buf)
   end, o(buf))
   vim.keymap.set('n', 'N', function()
     M.next_place(-1)
+  end, o(buf))
+  vim.keymap.set('n', ']c', function()
+    M.next_place(1, 'change')
+  end, o(buf))
+  vim.keymap.set('n', '[c', function()
+    M.next_place(-1, 'change')
   end, o(buf))
   vim.keymap.set('n', '<Esc>', function()
     screen().leave_pane()

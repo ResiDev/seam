@@ -1,7 +1,9 @@
 -- The pane's views, a tab each: which rows each has something for, the
 -- displays it can be shown in, and how it draws. A later view is one more
 -- entry in the list. `st.view` holds the one chosen and each view's display.
+local changed_view = require 'seam.views.changed'
 local code_view = require 'seam.views.code'
+local index = require 'seam.index'
 local names_view = require 'seam.views.names'
 local seams_view = require 'seam.views.seams'
 local types_view = require 'seam.views.types'
@@ -83,6 +85,18 @@ M.list = {
     draw = through(seams_view.used_by),
     count = function(m, row)
       return seams_view.used_count(m, as_type(row))
+    end,
+  },
+  {
+    name = 'Changed',
+    displays = changed_view.DISPLAYS,
+    gone = true,
+    has = function(row)
+      return changed_view.has(index.model(), as_type(row))
+    end,
+    draw = through(changed_view.draw),
+    count = function(m, row)
+      return changed_view.count(m, as_type(row))
     end,
   },
 }
