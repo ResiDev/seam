@@ -1,11 +1,13 @@
--- The pane's views: two tabs, Code and Types, what is read most; and Used
--- by, Built from and the Map aside, each on its own key. Which rows each
+-- The pane's views: beside the tree every view is a tab; on the code screen
+-- two, Code and Types, what is read most there, and Used by, Built from and
+-- the Map aside, each on its own key (on both screens). Which rows each
 -- has something for, the displays it can be shown in, and how it draws.
 -- `st.view` holds the tab chosen, the view aside shown, and each view's
 -- display. The diff (D) is no view: Code and Types draw what changed.
 local changed_view = require 'seam.views.changed'
 local code_view = require 'seam.views.code'
 local index = require 'seam.index'
+local st = require 'seam.state'
 local map_view = require 'seam.views.map'
 local names_view = require 'seam.views.names'
 local seams_view = require 'seam.views.seams'
@@ -14,7 +16,7 @@ local M = {}
 
 ---@class seam.View
 ---@field name string its tab, or its name in the head when aside
----@field tab boolean|nil one of the two tabs; else aside, on its key
+---@field tab boolean|nil a tab on every screen; else a tab beside the tree only, aside on its key on the code screen
 ---@field key string|nil the key that shows it aside
 ---@field displays string[] the ways it can be shown, the first by default
 ---@field displays_of fun(row: seam.ORow): string[]|nil the ways it can be shown for this row, when they depend on it
@@ -175,18 +177,30 @@ local function find(list, name)
   end
 end
 
+--- Is `v` a tab on the screen shown: every view beside the tree, Code and
+--- Types on the code screen.
+---@param v seam.View
+---@return boolean
+function M.is_tab(v)
+  return v.tab == true or st.screen ~= 'code'
+end
+
 --- The view shown for `row` and its display: the view aside when the row
---- has it, else the tab chosen, else the other tab, else the first view
---- aside the row has.
+--- has it, else the tab chosen when it is a tab here, else the first tab,
+--- else the first view aside the row has.
 ---@param row seam.ORow|nil
 ---@param sv seam.ViewState
 ---@return seam.View|nil, string|nil
 function M.shown(row, sv)
   local list = M.of(row)
-  local v = sv.aside and find(list, sv.aside) or find(list, sv.at)
+  local v = sv.aside and find(list, sv.aside)
+  if not v then
+    local at = find(list, sv.at)
+    v = at and M.is_tab(at) and at or nil
+  end
   if not v then
     for _, x in ipairs(list) do
-      if x.tab then
+      if M.is_tab(x) then
         v = x
         break
       end
@@ -201,43 +215,49 @@ function M.shown(row, sv)
   return v, vim.tbl_contains(ds, d) and d or ds[1]
 end
 
---- The tabs `row` has, Code and Types or one of them.
+--- The tabs `row` has on the screen shown.
 ---@param row seam.ORow|nil
 ---@return seam.View[]
 function M.tabs(row)
-  return vim.tbl_filter(function(v)
-    return v.tab
-  end, M.of(row))
+  return vim.tbl_filter(M.is_tab, M.of(row))
 end
 
---- Does `<Tab>` act: a view aside shown, or two tabs to flip between?
+--- Does `<Tab>` act: a view aside shown, or more than one tab?
 ---@param row seam.ORow|nil
 ---@param sv seam.ViewState
 ---@return boolean
 function M.can_step(row, sv)
   local v = M.shown(row, sv)
-  return v ~= nil and ((not v.tab and #M.tabs(row) > 0) or #M.tabs(row) > 1)
+  return v ~= nil and ((not M.is_tab(v) and #M.tabs(row) > 0) or #M.tabs(row) > 1)
 end
 
---- `<Tab>`: from a view aside back to the tab chosen; on a tab, the other
---- one. False when nothing changed.
+--- `<Tab>` `<S-Tab>`: from a view aside back to the tab chosen; on a tab,
+--- the next one, or with `d` -1 the one before, round the ends. False when
+--- nothing changed.
 ---@param row seam.ORow|nil
 ---@param sv seam.ViewState
+---@param d? integer
 ---@return boolean
-function M.step(row, sv)
+function M.step(row, sv, d)
   local v = M.shown(row, sv)
   if not v then
     return false
   end
   sv.aside = nil
-  if not v.tab then
+  if not M.is_tab(v) then
     return M.shown(row, sv) ~= v
   end
   local tabs = M.tabs(row)
   if #tabs < 2 then
     return false
   end
-  sv.at = tabs[1] == v and tabs[2].name or tabs[1].name
+  local i = 1
+  for k, t in ipairs(tabs) do
+    if t == v then
+      i = k
+    end
+  end
+  sv.at = tabs[(i - 1 + (d or 1)) % #tabs + 1].name
   return true
 end
 

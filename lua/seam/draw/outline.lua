@@ -292,7 +292,7 @@ function M.pane_head(buf, m, o, x, sv)
   elseif x then
     h:add(M.name(m, x), 'SeamBold'):add('   folder, ' .. draw.plural(outline.files_under(m, outline.full(x.item)), 'file'), 'SeamLabel')
   end
-  -- the two tabs, the one shown lit; a view aside after them, lit, the tabs dim
+  -- the tabs, the one shown lit; a view aside after them, lit, the tabs dim
   local t = row():add ' '
   local tabs = views.tabs(x)
   draw.tabs(
@@ -300,9 +300,9 @@ function M.pane_head(buf, m, o, x, sv)
     vim.tbl_map(function(v)
       return v.name
     end, tabs),
-    shown and shown.tab and shown.name
+    shown and views.is_tab(shown) and shown.name
   )
-  if shown and not shown.tab then
+  if shown and not views.is_tab(shown) then
     t:add(#tabs > 0 and '      ' or ''):add(' ' .. shown.name .. ' ', 'SeamTab')
   end
   local ds = shown and views.displays(shown, x) or {}

@@ -314,8 +314,8 @@ function M.all_keys()
     {
       'The pane',
       {
-        { '<Tab> <S-Tab>', 'Code or Types; from a view aside, back' },
-        { 'gu gb gm', 'Used by, Built from, the Map, and back' },
+        { '<Tab> <S-Tab>', 'the next and previous tab: Code, Types, Built from, Used by, Map' },
+        { 'gu gb gm', 'straight to Used by, Built from, the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
         { 'D', 'the diff on or off, here and on the code screen, for the session' },
         { 'n N', 'into it, on the next and previous place, in Used by and Built from' },

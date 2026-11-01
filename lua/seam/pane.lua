@@ -135,7 +135,7 @@ function M.step(d, display)
     if display then
       ok = views.step_display(x, st.view, d)
     else
-      ok = views.step(x, st.view)
+      ok = views.step(x, st.view, d)
     end
     if ok then
       shown_again(x)
@@ -190,7 +190,8 @@ function M.can_diff()
 end
 
 --- The keys for the pane's views where they act on `x`: `<Tab>`, `gu` `gb`
---- `gm` each where the row has its view, `<C-Tab>` with more than one display.
+--- `gm` each where the row has its view on the code screen (beside the tree
+--- they are tabs, the keys in `?`), `<C-Tab>` with more than one display.
 ---@param x seam.ORow|nil
 ---@return string[]
 function M.view_hints(x)
@@ -198,7 +199,7 @@ function M.view_hints(x)
   if views.can_step(x, st.view) then
     out[#out + 1] = '<Tab>'
   end
-  for _, k in ipairs(M.ASIDE_KEYS) do
+  for _, k in ipairs(st.screen == 'code' and M.ASIDE_KEYS or {}) do
     if views.has(x, M.ASIDE[k]) then
       out[#out + 1] = k
     end
@@ -378,7 +379,7 @@ function M.all_keys(back)
         { '-', 'close the one the cursor is in; on a place it showed, hide the rest again' },
         { 'n N', 'the next and previous place, in Used by and Built from' },
         { ']c [c', 'the next and previous change, with the diff on' },
-        { '<Tab> <S-Tab>', 'Code or Types; from a view aside, back' },
+        { '<Tab> <S-Tab>', st.screen == 'code' and 'Code or Types; from a view aside, back' or 'the next and previous tab' },
         { 'gu gb gm', 'Used by, Built from, the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
         { 'D', 'the diff on or off, both sides, for the session' },
