@@ -257,6 +257,21 @@ function M.hidden(r, n, what, gap)
   return r
 end
 
+--- Tabs on row `r`: each name, the one shown lit.
+---@param r table
+---@param names string[]
+---@param lit string|nil
+---@return table r
+function M.tabs(r, names, lit)
+  for i, n in ipairs(names) do
+    if i > 1 then
+      r:add '   '
+    end
+    r:add(' ' .. n .. ' ', n == lit and 'SeamTab' or 'SeamLabel')
+  end
+  return r
+end
+
 ---@param text string
 ---@param rest string
 ---@return table
