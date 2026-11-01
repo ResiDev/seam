@@ -75,10 +75,10 @@ M.ways = { 'overview', 'page', 'calls', 'called_by', 'types' }
 --- From your own code: seam on what the word under the cursor names. `how`:
 --- 'overview' (the tree on that function or contract, where it lives),
 --- 'page' (its page), 'calls' or 'called_by' (the call tree anchored on that
---- function, down or up), or 'types' (the flow of the type it names). For a
---- page, a function that is no contract opens its calls; several by that
---- name, or nothing, the `/` picker holding the word: the tree's, the
---- page's, the call tree's or the types'.
+--- function, down or up), or 'types' (the Types view of the type it names,
+--- in the tree's pane). For a page, a function that is no contract opens its
+--- calls; several by that name, or nothing, the `/` picker holding the word:
+--- the tree's, the page's or the call tree's.
 ---@param how? 'overview'|'page'|'calls'|'called_by'|'types'
 function M.here(how)
   how = how or 'overview'
@@ -99,13 +99,9 @@ function M.here(how)
     after = function()
       local m = index.model()
       if how == 'types' then
-        screen.show()
-        if m.flows and m.flows[word] and m.flows[word].n > 0 then
-          return screen.open_types(word)
-        end
-        screen.open_types(nil)
-        if st.screen == 'types' then
-          screen.types_pick(st.twin.list, nil, word)
+        screen.show(path)
+        if not require('seam.screen_tree').show_type(word) then
+          require('seam.screen_tree').search(word)
         end
         return
       end

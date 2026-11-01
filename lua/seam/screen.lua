@@ -1,5 +1,5 @@
 -- The tab page seam lives in: the tree's windows (seam.screen_tree), a
--- page's, the call tree's and the types', the keys in each, the status
+-- page's and the call tree's, the keys in each, the status
 -- line, and moving between them, the cursor redrawing what it lands on.
 local api = vim.api
 local calls = require 'seam.calls'
@@ -14,8 +14,6 @@ local picker = require 'seam.picker'
 local st = require 'seam.state'
 local tree_screen = require 'seam.screen_tree'
 local theme = require 'seam.theme'
-local types = require 'seam.types'
-local types_draw = require 'seam.draw.types'
 local M = {}
 
 local aug = api.nvim_create_augroup('seam', { clear = true })
@@ -163,9 +161,6 @@ function M.status()
       hints[#hints + 1] = panes == 'seam' and 's both' or ('s ' .. seam)
     end
     hints[#hints + 1] = '<Tab> ' .. (p.tab == 'built' and 'used by' or 'built from')
-    if M.flow_of(p.c) then
-      hints[#hints + 1] = 't its flow'
-    end
     if #st.stack > 0 then
       hints[#hints + 1] = 'K ' .. draw.trail(st.stack[#st.stack])
     end
@@ -173,10 +168,8 @@ function M.status()
     right = table.concat(hints, '   ')
   elseif st.screen == 'calls' and st.calls then
     left, right = M.calls_status()
-  elseif st.screen == 'types' and st.types then
-    left, right = M.types_status()
   end
-  if srcs ~= '' and st.screen ~= 'calls' and st.screen ~= 'types' and not picker.is_open() then
+  if srcs ~= '' and st.screen ~= 'calls' and not picker.is_open() then
     right = right .. '   ' .. srcs
   end
   -- a lens on is said in the same place on every screen, the far right, in its red
@@ -222,7 +215,7 @@ local function selected(p)
   vim.cmd 'redrawstatus'
 end
 
-local show_page, show_calls, show_types
+local show_page, show_calls
 
 --- Is the page showing Built from as code, the contract read top to bottom?
 ---@param p table
@@ -329,9 +322,6 @@ local function page_keys(buf)
   vim.keymap.set('n', '-', M.overview, o)
   vim.keymap.set('n', 'L', M.open_lens, o)
   vim.keymap.set('n', '/', M.page_pick, o)
-  vim.keymap.set('n', 't', function()
-    M.contract_flow(st.page.c)
-  end, o)
   vim.keymap.set('n', 'q', M.close, o)
   vim.keymap.set('n', 'S', M.switch, o)
   goto_keys(buf)
@@ -627,13 +617,10 @@ end
 --- Back: the previous page or Calls screen, or the tree.
 function M.back()
   local e = table.remove(st.stack)
-  st.page, st.types = nil, nil
+  st.page = nil
   if e and e.kind == 'calls' then
     st.calls, st.calls_top = e.calls, e.top
     show_calls()
-  elseif e and e.kind == 'types' then
-    st.types = e
-    show_types()
   elseif e then
     st.page = e
     show_page()
@@ -651,7 +638,7 @@ end
 --- Straight to the tree from any depth, on the contract you were reading.
 function M.overview()
   local c = st.page and st.page.c
-  st.stack, st.page, st.types, st.calls, st.calls_rows = {}, nil, nil, nil, nil
+  st.stack, st.page, st.calls, st.calls_rows = {}, nil, nil, nil
   tree_screen.show(target_of(c))
 end
 
@@ -723,13 +710,6 @@ end
 
 -- what the screen shown is about: the contract, the page's, the anchor
 local function subject()
-  if st.screen == 'types' and st.types then
-    local f = st.types.flow and index.model().flows[st.types.flow]
-    local x = not f and st.types_rows and st.twin and api.nvim_win_is_valid(st.twin.list) and st.types_rows.rows[api.nvim_win_get_cursor(st.twin.list)[1]]
-    f = f or (x and x.flow)
-    local e = f and f.decls[1]
-    return e and { path = e.path, line = e.line, name = e.name }
-  end
   if st.screen == 'calls' and st.calls then
     local node = st.calls.anchor and index.model().graph.nodes[st.calls.anchor]
     return node and { path = node.path, line = math.max(1, node.line), name = node.kind ~= 'module' and node.name or nil }
@@ -752,7 +732,6 @@ local function about_subject(buf)
     or buf == (st.obuf and st.obuf.phead)
     or buf == (st.page and st.page.buf and st.page.buf.head)
     or buf == (st.cbuf and st.cbuf.head)
-    or buf == (st.tbuf and st.tbuf.head)
 end
 
 --- gf: that place in your own code, from the line under the cursor. A row
@@ -887,7 +866,7 @@ function M.calls_status()
   end
   local hints = vim.list_extend(swap, { 'j/k row' })
   if index.model().sigs then
-    vim.list_extend(hints, { 't its types', calls_draw.typed(index.model()) and 'T counts' or 'T types' })
+    hints[#hints + 1] = calls_draw.typed(index.model()) and 'T counts' or 'T types'
   end
   vim.list_extend(hints, { 'h fold', 'l open', 'J page', 'K back' })
   if v.anchor then
@@ -986,7 +965,7 @@ end
 
 local function calls_leave()
   st.calls, st.calls_rows = nil, nil
-  -- the screen the tree was opened from, a type's flow say
+  -- the screen the tree was opened from, a page say
   if #st.stack > 0 then
     return M.back()
   end
@@ -1111,10 +1090,6 @@ local function calls_keys(buf)
       show_calls()
     end
   end, o)
-  vim.keymap.set('n', 't', function()
-    local x = st.calls_rows and st.calls_rows.rows[calls_at()]
-    M.its_types(x and x.id, nil, st.cwin.list)
-  end, o)
   goto_keys(buf)
   vim.keymap.set('n', 'q', M.close, o)
 end
@@ -1213,16 +1188,11 @@ end
 --- else its file), a node id or a path; nothing under it for K.
 ---@param c? table|string
 function M.show(c)
-  st.stack, st.page, st.calls, st.calls_rows, st.types = {}, nil, nil, nil, nil
+  st.stack, st.page, st.calls, st.calls_rows = {}, nil, nil, nil
   tree_screen.show(type(c) == 'table' and target_of(c) or c)
 end
 
 ---------------------------------------------------------------- types
-
-local function types_valid()
-  local w = st.twin
-  return w and api.nvim_win_is_valid(w.head) and api.nvim_win_is_valid(w.list) and api.nvim_win_is_valid(w.code)
-end
 
 local function say(msg)
   api.nvim_echo({ { msg, 'SeamLabel' } }, false, {})
@@ -1248,330 +1218,6 @@ function M.typed_model()
   end
 end
 
---- The flow of contract `c`, when it is a type some function takes or makes.
----@param c table|nil
----@return seam.Flow|nil
-function M.flow_of(c)
-  local m = index.model()
-  local f = c and m and m.flows and m.flows[c.name]
-  return f and f.n > 0 and vim.tbl_contains(f.decls, c) and f or nil
-end
-
--- the row under the list's cursor, and its index
-local function types_at()
-  if not (types_valid() and st.types_rows) then
-    return nil
-  end
-  local i = api.nvim_win_get_cursor(st.twin.list)[1]
-  return st.types_rows.rows[i], i
-end
-
---- The status line on the Types screen: the type, and the row under the
---- cursor among the rest; then the keys.
----@return string left, string right
-function M.types_status()
-  local v, rs = st.types, st.types_rows
-  local x, i = types_at()
-  if not v.flow then
-    local left = 'types'
-    if x then
-      left = left .. ('  %s  %d of %d'):format(x.key, i, #rs.rows)
-    end
-    return left, table.concat({ 'j/k row', 'l its flow', '/ a type', 'K back', '- tree', 'q close' }, '   ')
-  end
-  local left = v.flow
-  if x and x.section then
-    left = left .. '  ' .. (x.section == 'gives' and 'made by' or 'taken by')
-    local at
-    for _, s in ipairs(rs.sections) do
-      at = s <= i and s or at
-    end
-    if x.kind == 'fn' and at then
-      left = left .. ('  %d of %d'):format(i - at, rs.rows[at].n)
-    end
-  end
-  return left, table.concat({ 'j/k row', 't its types', '<CR> its calls', '<Tab> next section', '/ a type', 'K back', '- tree' }, '   ')
-end
-
-local function types_layout()
-  if st.screen == 'types' and types_valid() then
-    return
-  end
-  st.screen, st.twin = 'types', nil
-  local head = reset_tab()
-  api.nvim_win_set_buf(head, st.tbuf.head)
-  local list = split(st.tbuf.list, head, 'below', true)
-  local pane = split(st.tbuf.code, list, 'right')
-  for _, w in ipairs { head, pane } do
-    winopts(w)
-  end
-  winopts(list, true)
-  wrap(pane)
-  vim.wo[pane].winfixwidth = false
-  vim.wo[head].winfixheight = true
-  api.nvim_win_set_width(list, types_draw.LW)
-  vim.wo[list].winhighlight = vim.wo[list].winhighlight .. ',WinBar:SeamLabel,WinBarNC:SeamLabel'
-  st.twin = { head = head, list = list, code = pane }
-  api.nvim_set_current_win(list)
-end
-
--- what is beside the list, when the cursor moved to another row
-local function types_moved()
-  if st.screen ~= 'types' or st.drawing or not (types_valid() and st.types_rows) then
-    return
-  end
-  local x = types_at()
-  st.types.cursor = x and x.key or st.types.cursor
-  draw.cursor_line(st.twin.list)
-  if st.types_shown ~= (x and x.key or '') then
-    st.types_shown = x and x.key or ''
-    types_draw.pane(st.tbuf.code, st.twin.code, index.model(), st.types, x)
-    paint()
-  end
-  vim.cmd 'redrawstatus'
-end
-
-show_types = function()
-  local m = index.model()
-  local v = st.types
-  types_layout()
-  api.nvim_win_set_height(st.twin.head, types_draw.head(st.tbuf.head, m, v))
-  vim.wo[st.twin.list].winbar = types_draw.titles(v)
-  local rs = types_draw.rows(m, v)
-  st.types_rows = rs
-  -- back on the row it was on; a flow opens on its first function
-  local target
-  for i, x in ipairs(rs.rows) do
-    if x.key == v.cursor then
-      target = i
-    end
-    if not target and not v.cursor and x.kind == (v.flow and 'fn' or 'type') then
-      target = i
-    end
-  end
-  target = target or rs.stops[1] or 1
-  st.drawing = true
-  types_draw.list(st.tbuf.list, m, v, rs)
-  api.nvim_win_call(st.twin.list, function()
-    vim.fn.winrestview { topline = v.top or 1, lnum = target, col = 0 }
-  end)
-  v.top = nil
-  st.drawing = false
-  st.types_shown = nil
-  types_moved()
-  paint()
-end
-
--- the Types screen as it is, for K to come back to
-local function types_entry()
-  local v = st.types
-  local w = st.twin and st.twin.list
-  v.top = w and api.nvim_win_is_valid(w) and api.nvim_win_call(w, function()
-    return vim.fn.line 'w0'
-  end) or nil
-  v.label = v.flow and ('flow of ' .. v.flow) or 'types'
-  return v
-end
-
-local types_keys
-
---- The Types screen: the flow of type `name`, or every type the most
---- travelled first; over the screen shown, which K comes back to.
----@param name string|nil
-function M.open_types(name)
-  if not M.typed_model() then
-    return
-  end
-  if st.screen == 'types' and st.types then
-    st.stack[#st.stack + 1] = types_entry()
-  elseif st.screen == 'calls' and st.calls then
-    st.stack[#st.stack + 1] = calls_entry()
-    st.calls, st.calls_rows = nil, nil
-  elseif st.screen == 'page' and st.page then
-    st.stack[#st.stack + 1] = st.page
-    st.page = nil
-  end
-  if not (st.tbuf and api.nvim_buf_is_valid(st.tbuf.list)) then
-    st.tbuf = { head = draw.scratch 'types-head', list = draw.scratch 'types', code = draw.scratch 'types-code' }
-    types_keys(st.tbuf)
-  end
-  st.types = { kind = 'types', flow = name }
-  show_types()
-end
-
---- `t` on contract `c`: its flow, when it is a type a function takes or makes.
----@param c table|nil
-function M.contract_flow(c)
-  if not (c and M.typed_model()) then
-    return
-  end
-  if not M.flow_of(c) then
-    return say(shape(c) .. ' is not a type that flows through a function')
-  end
-  M.open_types(c.name)
-end
-
---- `/` on the Types screen, or `t` naming several: a float over `over` of
---- the types in `names` (all of them when nil), the most travelled first;
---- `<CR>` follows one. `query` is typed already.
----@param over integer
----@param names? string[]
----@param query? string
-function M.types_pick(over, names, query)
-  local m = M.typed_model()
-  if not (m and over and api.nvim_win_is_valid(over)) then
-    return
-  end
-  local items = {}
-  for _, f in ipairs(m.flowlist) do
-    if not names or vim.tbl_contains(names, f.name) then
-      items[#items + 1] = { id = f.name, name = f.name, used_by = f.n }
-    end
-  end
-  picker.open {
-    title = 'types',
-    noun = 'types',
-    keys = '<CR> its flow   <C-n>/<C-p> next   <Esc> back',
-    over = over,
-    focus = over,
-    col = 1,
-    width = picker.W,
-    rows = api.nvim_win_get_height(over) + 1,
-    items = items,
-    query = type(query) == 'string' and query or nil,
-    node = function(id)
-      return m.flows[id].decls[1]
-    end,
-    column = 'functions',
-    pick = function(x)
-      if x then
-        M.open_types(x.id)
-      end
-    end,
-  }
-end
-
---- `t` on a function: the repo types it takes and gives, but `except`; one,
---- its flow, several the `/` float over `over` holding them.
----@param id string|nil
----@param except string|nil
----@param over integer
-function M.its_types(id, except, over)
-  local m = M.typed_model()
-  if not (m and id) then
-    return
-  end
-  local node = m.graph.nodes[id]
-  local sig = m.sigs[id]
-  local names = vim.tbl_filter(function(n)
-    return n ~= except
-  end, sig and types.named(sig, m.flows) or {})
-  if #names == 0 then
-    local what = node.kind == 'module' and 'the top of the file' or shape(node)
-    return say(what .. (except and ' takes and gives no other type of the repo' or ' takes and gives no type of the repo'))
-  elseif #names == 1 then
-    return M.open_types(names[1])
-  end
-  M.types_pick(over, names)
-end
-
-types_keys = function(b)
-  local function o(buf)
-    return { buffer = buf, nowait = true, silent = true }
-  end
-  local function move(n)
-    return function()
-      if st.types_rows then
-        step(st.twin.list, st.types_rows.stops, n * vim.v.count1)
-      end
-    end
-  end
-  local function follow()
-    local x = types_at()
-    if x and x.kind == 'type' then
-      M.open_types(x.flow.name)
-    elseif x and x.kind == 'fn' then
-      st.stack[#st.stack + 1] = types_entry()
-      st.types = nil
-      M.open_calls(x.id)
-    end
-  end
-  local lo = o(b.list)
-  vim.keymap.set('n', 'j', move(1), lo)
-  vim.keymap.set('n', 'k', move(-1), lo)
-  vim.keymap.set('n', '<Down>', move(1), lo)
-  vim.keymap.set('n', '<Up>', move(-1), lo)
-  vim.keymap.set('n', '<CR>', follow, lo)
-  vim.keymap.set('n', 'l', function()
-    local x = types_at()
-    if x and x.kind == 'type' then
-      follow()
-    end
-  end, lo)
-  vim.keymap.set('n', 't', function()
-    local x = types_at()
-    if x and x.kind == 'fn' then
-      M.its_types(x.id, st.types.flow, st.twin.list)
-    end
-  end, lo)
-  vim.keymap.set('n', '<Tab>', function()
-    local rs = st.types_rows
-    if not (rs and #rs.sections > 0) then
-      return
-    end
-    local cur = api.nvim_win_get_cursor(st.twin.list)[1]
-    local to = rs.sections[1]
-    for _, s in ipairs(rs.sections) do
-      if s > cur then
-        to = s
-        break
-      end
-    end
-    api.nvim_win_set_cursor(st.twin.list, { to, 0 })
-  end, lo)
-  vim.keymap.set('n', '/', function()
-    M.types_pick(st.twin.list)
-  end, lo)
-  api.nvim_create_autocmd('CursorMoved', { group = aug, buffer = b.list, callback = types_moved })
-  for _, buf in ipairs { b.list, b.code, b.head } do
-    vim.keymap.set('n', 'K', M.back, o(buf))
-    vim.keymap.set('n', '<BS>', M.back, o(buf))
-    vim.keymap.set('n', '-', M.overview, o(buf))
-    vim.keymap.set('n', 'q', M.close, o(buf))
-    goto_keys(buf)
-  end
-  -- the code beside keeps the cursor to scroll and search; <Esc> gives it back
-  vim.keymap.set('n', '<Esc>', function()
-    if types_valid() then
-      api.nvim_set_current_win(st.twin.list)
-    end
-  end, o(b.code))
-  api.nvim_create_autocmd('WinEnter', {
-    group = aug,
-    buffer = b.head,
-    callback = function()
-      if st.screen == 'types' and types_valid() then
-        api.nvim_set_current_win(st.twin.list)
-      end
-    end,
-  })
-  api.nvim_create_autocmd('WinEnter', {
-    group = aug,
-    buffer = b.code,
-    callback = function()
-      vim.cmd 'redrawstatus'
-    end,
-  })
-  api.nvim_create_autocmd('VimResized', {
-    group = aug,
-    callback = function()
-      if st.screen == 'types' and st.types and api.nvim_get_current_tabpage() == st.tab then
-        show_types()
-      end
-    end,
-  })
-end
-
 --- The types landed while seam was open: the screen shown drawn again with them.
 function M.types_landed()
   if not (st.tab and api.nvim_tabpage_is_valid(st.tab)) then
@@ -1579,8 +1225,6 @@ function M.types_landed()
   end
   if st.screen == 'calls' and st.calls and calls_valid() then
     show_calls()
-  elseif st.screen == 'types' and st.types and types_valid() then
-    show_types()
   elseif st.screen == 'tree' then
     tree_screen.redraw(true)
   end
@@ -1676,7 +1320,7 @@ function M.open(root)
   local dir = index.dir(root)
   st.lens = lens.load(root)
   if st.loaded_root ~= root then
-    st.models, st.names, st.hues, st.cur, st.outline, st.view = {}, {}, nil, nil, nil, nil
+    st.models, st.names, st.hues, st.cur, st.outline, st.view, st.opens, st.ptype = {}, {}, nil, nil, nil, nil, nil, nil
     st.loaded_root = root
   end
   code.root = root

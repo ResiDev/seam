@@ -3,14 +3,13 @@
 -- each, the status line's hints, and `?`. The windows and helpers it shares
 -- are seam.screen's.
 local api = vim.api
-local draw = require 'seam.draw'
 local hints = require 'seam.hints'
 local index = require 'seam.index'
 local odraw = require 'seam.draw.outline'
+local opening = require 'seam.opening'
 local outline = require 'seam.outline'
 local picker = require 'seam.picker'
 local st = require 'seam.state'
-local tv = require 'seam.typesview'
 local views = require 'seam.views'
 local M = {}
 
@@ -338,56 +337,6 @@ local function contract_of(x)
   return c and (c.nusers or 0) > 0 and c or nil
 end
 
--- the Types view's row under the cursor in the pane or its head, and the
--- type named under the cursor
-local function pane_tv()
-  local w = api.nvim_get_current_win()
-  if not (in_pane() and st.pctx) then
-    return nil
-  end
-  local cur = api.nvim_win_get_cursor(w)
-  local t = draw.meta(api.nvim_win_get_buf(w), cur[1]).tv
-  return t, t and tv.at(t.names, cur[2]), w == st.owin.phead
-end
-
--- the block `-` closes where the cursor is: the innermost open around it,
--- or the function opened on its line, or the type the head opened
-local function to_close(t, head)
-  local open = st.pctx.open
-  if head then
-    for k, v in pairs(open) do
-      if v and k:match '^head|' and not k:match '^head|.*|' then
-        return k
-      end
-    end
-  elseif #t.chain > 0 then
-    return t.chain[#t.chain]
-  elseif t.fn and tv.is_open(open, nil, t.fn) then
-    return t.fn
-  end
-end
-
--- what `+` opens where the cursor is: the type named under it, or the
--- function on its line as written
-local function to_open(t, n)
-  local open = st.pctx.open
-  if n then
-    local k = tv.child(t.key, t.id, n.name)
-    return not tv.is_open(open, st.pctx.defaults, k) and k or nil
-  elseif t.fn and not tv.is_open(open, nil, t.fn) then
-    return t.fn
-  end
-end
-
--- `+` and `-`, and whether each acts where the cursor is
-local function type_keys()
-  local t, n, head = pane_tv()
-  if not t then
-    return nil, nil
-  end
-  return to_open(t, n), to_close(t, head)
-end
-
 local function redraw_pane()
   show_pane(subject(), true)
   S().paint()
@@ -395,43 +344,11 @@ local function redraw_pane()
 end
 
 local function plus()
-  local _, _, head = pane_tv()
-  local k = type_keys()
-  if not k then
-    return
-  end
-  st.pctx.open[k] = true
-  redraw_pane()
-  if head then
-    api.nvim_set_current_win(st.owin.pane)
-    api.nvim_win_set_cursor(st.owin.pane, { 1, 0 })
-  end
+  opening.plus(redraw_pane)
 end
 
--- `-`: the block closed, the cursor on the line that named it
 local function minus()
-  local _, k = type_keys()
-  if not k then
-    return
-  end
-  tv.close(st.pctx.open, k)
-  redraw_pane()
-  local parent, id = k:match '^(.*)|([^|]*)$'
-  local name = id:match ':(.*)$'
-  id = id:match '^(.-):' or 'l'
-  local w = st.owin.pane
-  for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
-    local t = draw.meta(st.obuf.pane, i).tv
-    if t and t.key == parent and tostring(t.id) == id then
-      local col = 0
-      for _, x in ipairs(t.names) do
-        col = x.name == name and x.s or col
-      end
-      api.nvim_set_current_win(w)
-      api.nvim_win_set_cursor(w, { i, col })
-      return
-    end
-  end
+  opening.minus(redraw_pane)
 end
 
 -- every key of the screen, grouped as KEYS.md is, for `?`
@@ -464,7 +381,6 @@ local function all_keys()
         { 'h', 'close it, or up a level' },
         { '<CR>', 'its page, until the views hold it' },
         { 'c', 'its calls, on the Calls screen' },
-        { 't', 'its types, on the Types screen' },
       },
     },
     {
@@ -505,12 +421,13 @@ function M.status()
     pane[#pane + 1] = '<C-Tab>'
   end
   if in_pane() then
-    local o, c = type_keys()
-    row = { o and '+' or nil, c and '-' or nil }
-    row = vim.tbl_values(row)
-    table.sort(row, function(a, b)
-      return a == '+' and b ~= '+'
-    end)
+    local o, c = opening.keys()
+    if o then
+      row[#row + 1] = '+'
+    end
+    if c then
+      row[#row + 1] = '-'
+    end
     seam = { '<Esc>', 'q' }
   elseif x then
     if x.can_open and not x.open then
@@ -525,7 +442,6 @@ function M.status()
     if x.kind == 'fn' then
       row[#row + 1] = 'c'
     end
-    row[#row + 1] = 't'
     seam = { 's', '/', 'L', 'q' }
   else
     seam = { 's', '/', 'L', 'q' }
@@ -580,14 +496,6 @@ local function tree_keys(buf)
     local x = M.at()
     if x and x.kind == 'fn' then
       S().open_calls(x.id)
-    end
-  end, o(buf))
-  vim.keymap.set('n', 't', function()
-    local x = M.at()
-    if x and x.kind == 'fn' then
-      S().its_types(x.id, nil, st.owin.tree)
-    else
-      S().open_types(nil)
     end
   end, o(buf))
   -- nothing above the tree, and no hover from another plugin's K; J waits for the code screen

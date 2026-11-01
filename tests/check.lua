@@ -1419,214 +1419,216 @@ do
   end
 end
 
--- the types: t on a folder in the tree lists every type the most travelled first,
--- its declaration beside it; l its flow, made by then taken by; <CR> on a
--- function the call tree on it and K back to the flow; t on a function its
--- other types; / another type; t from the call tree and from a type's
--- contract; T in the call tree its columns; K back each time
+-- the Types view: <Tab> on a function's row, its line and its types written
+-- out under it; + on a type named in one opens it under its line, hinted
+-- where it acts, - closes the one the cursor is in, the cursor back on the
+-- line naming it; + on the function's line opens it as written; a folder,
+-- what is used outside it; / a type, its Types view in the pane until the
+-- tree's cursor moves; T in the call tree its columns
 do
   local m = st.models[st.cur]
+  local tv = require 'seam.typesview'
+  local draw = require 'seam.draw'
   local cdraw = require 'seam.draw.calls'
-  local function lines(buf)
-    return api.nvim_buf_get_lines(buf, 0, -1, false)
+  -- the rows of the pane with their Types view meta
+  local function tv_rows()
+    local out = {}
+    for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
+      out[i] = draw.meta(st.obuf.pane, i).tv or {}
+    end
+    return out
   end
-  -- the Types screen, on the flow of `name` (nil: the list), its rows drawn
-  local function check_types(name)
-    if st.screen ~= 'types' or not st.types then
-      return fail 'not on the Types screen'
-    end
-    if st.types.flow ~= name then
-      return fail(('the flow of %s, not %s'):format(tostring(st.types.flow), tostring(name)))
-    end
-    local w = st.twin
-    for _, k in ipairs { 'head', 'list', 'code' } do
-      if not valid(w[k]) or api.nvim_win_get_buf(w[k]) ~= st.tbuf[k] then
-        return fail('the ' .. k .. ' window is not there with its buffer')
-      end
-    end
-    if #api.nvim_tabpage_list_wins(st.tab) ~= 3 then
-      fail(('%d windows on the Types screen, not 3'):format(#api.nvim_tabpage_list_wins(st.tab)))
-    end
-    local rs = st.types_rows
-    if #lines(st.tbuf.list) ~= math.max(1, #rs.rows) then
-      fail 'the list is not its rows'
-    end
-    local head = lines(st.tbuf.head)
-    local x = rs.rows[api.nvim_win_get_cursor(w.list)[1]]
-    local pane = table.concat(lines(st.tbuf.code), '\n')
-    if not name then
-      if #rs.rows ~= #m.flowlist or not head[1]:find(#m.flowlist .. ' types of the repo', 1, true) then
-        fail('the list is not every type that flows: ' .. head[1])
-      end
-      if x and not pane:find(' ' .. x.flow.name .. '   ' .. x.flow.decls[1].kind .. ' in ', 1, true) then
-        fail('the declaration beside is not ' .. x.flow.name .. "'s")
-      end
-      return x
-    end
-    local f = m.flows[name]
-    if not head[1]:match('^ Types › ' .. vim.pesc(name)) then
-      fail('the head is not the type: ' .. head[1])
-    end
-    local takers = require('seam.types').takers(f)
-    if not head[2]:find(('made by %d  ·  taken by %d'):format(#f.gives, #takers), 1, true) then
-      fail('the head does not count its flow: ' .. head[2])
-    end
-    if #rs.sections ~= 2 or #rs.rows ~= #f.gives + #takers + 3 then
-      fail(('%d rows for %d made by and %d taken by'):format(#rs.rows, #f.gives, #takers))
-    end
-    if x and x.kind == 'fn' then
-      local node = m.graph.nodes[x.id]
-      if not pane:find(node.name, 1, true) then
-        fail('the code beside is not ' .. node.name)
-      end
-      if m.sigs[x.id] and m.sigs[x.id].params and not pane:find(' gives ', 1, true) then
-        fail('the code beside does not say what ' .. node.name .. ' gives')
-      end
-    end
-    return x
+  local function hinted(k)
+    return screen.status():find('%%#SeamStatusKey#' .. vim.pesc(k) .. '%%#SeamStatusKeyWord#') ~= nil
   end
-  if not m.flows then
-    io.stdout:write 'no types.json: the types are not checked\n'
+  -- a repo type whose declaration names another
+  local function names_another(f)
+    local e = f.decls[1]
+    local ls = vim.fn.readfile(st.root .. '/' .. e.path)
+    local inside = false
+    for l = e.line + 1, math.min(e.end_line or e.line, #ls) do
+      local src
+      src, inside = tv.code_part(ls[l], inside)
+      for _, n in
+        ipairs(tv.names(src, function(x)
+          return x ~= f.name and m.flows[x] ~= nil
+        end))
+      do
+        return n.name
+      end
+    end
+  end
+  if not m.sigs then
+    io.stdout:write 'no types.json: the Types view is not checked\n'
   else
-    where = 'types'
-    screen.show()
-    key 'gg'
-    key 't'
-    check_types(nil)
-    key 'j'
-    key 'j'
-    local x = check_types(nil)
-    where = 'types gf'
-    if x then
-      local e = x.flow.decls[1]
-      key 'gf'
-      went('gf on ' .. x.flow.name, e.path, e.line, st.twin.list)
+    -- a function of the tree taking a type that names another, the first by id
+    local fx, ty, inner
+    for id, sig in pairs(m.sigs) do
+      local node = m.graph.nodes[id]
+      if node.kind ~= 'module' and node.kind ~= 'class' and not node.test and not require('seam.index').is_test(node.path) and (not fx or id < fx) then
+        for _, p in ipairs(sig.params or {}) do
+          local n = m.flows[p.type]
+          local other = n and names_another(n)
+          if other then
+            fx, ty, inner = id, p.type, other
+          end
+        end
+      end
     end
-    -- the flow of the third, and the walk from it
-    where = 'types l'
-    key 'l'
-    local name = x and x.flow.name
-    local fx = check_types(name)
-    if not (fx and fx.kind == 'fn') then
-      fail 'a flow does not open on its first function'
-    end
-    key 'j'
-    check_types(name)
-    where = 'types <Tab>'
-    key '<Tab>'
-    local tx = check_types(name)
-    if not (tx and tx.kind == 'section' and tx.section == 'takes') then
-      fail '<Tab> did not go to taken by'
-    end
-    key '<Tab>'
-    tx = check_types(name)
-    if not (tx and tx.kind == 'section' and tx.section == 'gives') then
-      fail '<Tab> did not come round to made by'
-    end
-    key 'j'
-    fx = check_types(name)
-    where = 'types <CR>'
-    if fx and fx.kind == 'fn' then
-      local node = m.graph.nodes[fx.id]
-      key 'gf'
-      went('gf on ' .. node.name, node.path, math.max(1, node.line), st.twin.list)
-      key '<CR>'
-      if st.screen ~= 'calls' or not st.calls or st.calls.anchor ~= fx.id then
-        fail('<CR> did not anchor the call tree on ' .. fx.id)
+    if not fx then
+      io.stdout:write 'no function takes a type naming another: + is not checked\n'
+    else
+      where = 'types view ' .. fx
+      screen.show(fx)
+      if (tree_screen.at() or {}).id ~= fx then
+        fail('the tree is not on ' .. fx)
+      end
+      key '<Tab>'
+      check_tree()
+      local node = m.graph.nodes[fx]
+      local body = lines(st.obuf.pane)
+      if st.view.at ~= 'Types' or not (body[1] or ''):find(' → ' .. node.name, 1, true) then
+        fail('the Types view of ' .. node.name .. ' does not start with its line: ' .. (body[1] or ''))
+      end
+      local key_ = 'f:' .. fx
+      local tkey = tv.child(key_, 'l', ty)
+      local head
+      for i, l in ipairs(body) do
+        head = head or (l:match('^ takes ' .. vim.pesc(ty) .. '   ') or l:match('^ takes and gives ' .. vim.pesc(ty) .. '   ')) and i
+      end
+      if not head then
+        fail(ty .. ', what ' .. node.name .. ' takes, is not written out under its line')
+      end
+      key '<C-w>l'
+      key '<C-w>j'
+      if api.nvim_get_current_win() ~= st.owin.pane then
+        fail 'the pane did not take the cursor'
+      end
+      -- + on the type named inside it: under that line, a bar and its file and line
+      where = 'types view +'
+      local at
+      for i, t in ipairs(tv_rows()) do
+        for _, n in ipairs(t.names or {}) do
+          if not at and t.key == tkey and n.name == inner then
+            at = { i, n.s, t }
+          end
+        end
+      end
+      if not at then
+        fail(inner .. ' is not a name to open in ' .. ty)
       else
-        check_calls(true)
-        key 'K'
-        local back = check_types(name)
-        if not (back and back.key == fx.key) then
-          fail 'K from the call tree did not come back to the flow on its row'
+        api.nvim_win_set_cursor(st.owin.pane, { at[1], at[2] })
+        if not hinted '+' then
+          fail '+ is not hinted on a closed type'
+        end
+        key '+'
+        local ikey = tv.child(tkey, at[3].id, inner)
+        local opened = lines(st.obuf.pane)[at[1] + 1] or ''
+        if not st.pctx.open[ikey] or not opened:find('│ ' .. inner .. '   ', 1, true) then
+          fail(('+ did not open %s under its line: %s'):format(inner, opened))
+        end
+        if hinted '+' or not hinted '-' then
+          fail 'on an opened type, + is hinted or - is not'
+        end
+        -- - inside the type it sits in: that one closes, the cursor on the line naming it
+        where = 'types view -'
+        key '-'
+        local t = draw.meta(st.obuf.pane, api.nvim_win_get_cursor(st.owin.pane)[1]).tv or {}
+        if st.pctx.open[tkey] ~= false or st.pctx.open[ikey] ~= nil then
+          fail('- did not close ' .. ty .. ' and what it held')
+        elseif t.id ~= 'l' then
+          fail('- did not put the cursor on the line naming ' .. ty)
+        end
+        key '+'
+        if not tv.is_open(st.pctx.open, st.pctx.defaults, tkey) then
+          fail('+ on the line did not open ' .. ty .. ' again')
         end
       end
-      -- t: its other types, one straight to its flow, several in the float
-      where = 'types t'
-      local others = vim.tbl_filter(function(n)
-        return n ~= name
-      end, m.sigs[fx.id] and require('seam.types').named(m.sigs[fx.id], m.flows) or {})
-      key 't'
-      if #others == 1 then
-        check_types(others[1])
-        key 'K'
-      elseif #others > 1 then
-        local ps = picker.state()
-        if not (ps and #ps.ids == #others) then
-          fail(('t on %s: not a float of its %d other types'):format(fx.id, #others))
-        end
-        key '<Esc>'
+      -- + on the function's line, off a name: it as written
+      where = 'types view + line'
+      api.nvim_win_set_cursor(st.owin.pane, { 1, 0 })
+      key '+'
+      if not st.pctx.open[key_ .. '|w'] or not (lines(st.obuf.pane)[1] or ''):match '^ [({]' then
+        fail(node.name .. "'s line did not open as written")
       end
-      check_types(name)
+      key '-'
+      if st.pctx.open[key_ .. '|w'] ~= false then
+        fail(node.name .. "'s line did not close")
+      end
+      -- kept for the row as the cursor goes elsewhere and back
+      key '<Esc>'
+      key 'k'
+      key 'j'
+      check_tree()
+      if st.opens['f:' .. node.path .. '\n' .. fx] == nil then
+        fail 'what was opened for the row was not kept'
+      end
+      -- its folder: what is used outside it
+      where = 'types view folder'
+      local dir
+      for _ = 1, 10 do
+        local x = tree_screen.at()
+        if x and x.kind == 'dir' then
+          dir = x
+          break
+        end
+        key 'h'
+      end
+      if dir then
+        check_tree()
+        local first = lines(st.obuf.pane)[1] or ''
+        if not (first:find('used outside', 1, true) or first:find('nothing in it', 1, true)) then
+          fail('a folder does not say what is used outside it: ' .. first)
+        end
+      end
+      -- / a type: its Types view in the pane, the tree where it was
+      where = 'types /'
+      local before = st.outline.cursor
+      key('/' .. ty .. '<CR>')
+      local ph = lines(st.obuf.phead)[1] or ''
+      if not (st.ptype and st.ptype.row.name == ty) or not ph:find(ty .. '   ', 1, true) or st.outline.cursor ~= before then
+        fail('/ ' .. ty .. ' did not show its Types view in the pane: ' .. ph)
+      end
+      local tb = lines(st.obuf.pane)
+      if
+        m.flows[ty].n > 0
+        and not table.concat(tb, '\n'):find(' a' .. 'n? ' .. ty)
+        and not table.concat(tb, '\n'):find('a ' .. ty, 1, true)
+        and not table.concat(tb, '\n'):find('an ' .. ty, 1, true)
+      then
+        fail(ty .. "'s Types view does not say who gives or takes it")
+      end
+      key 'j'
+      if st.ptype then
+        fail 'the tree moved and the pane still shows the type'
+      end
+      key '<S-Tab>'
     end
-    where = 'types /'
-    key('/' .. m.flowlist[1].name .. '<CR>')
-    check_types(m.flowlist[1].name)
-    key 'K'
-    check_types(name)
-    key 'K'
-    check_types(nil)
-    key '<BS>'
-    if st.screen ~= 'tree' then
-      fail('K from the types did not come back to the tree: ' .. tostring(st.screen))
-    end
-    -- the call tree: t on a function naming one repo type, its flow; T the counts
+    -- the call tree: T the counts and back
     where = 'types calls'
     local one
-    for id, sig in pairs(m.sigs) do
-      if #require('seam.types').named(sig, m.flows) == 1 and m.graph.nodes[id].kind ~= 'module' and (not one or id < one) then
+    for id in pairs(m.sigs) do
+      if m.graph.nodes[id].kind ~= 'module' and m.graph.up[id] and (not one or id < one) then
         one = id
       end
     end
-    local up = one and m.graph.up[one] and m.graph.up[one][1]
+    local up = one and m.graph.up[one][1]
     if up then
       seam.open_calls(up.from)
-      local row
-      for i, y in ipairs(st.calls_rows.rows) do
-        row = row or (y.id == one and i or nil)
+      key 'T'
+      check_calls(false)
+      if cdraw.typed(m) then
+        fail 'T did not swap to the counts'
       end
-      if row then
-        api.nvim_win_set_cursor(st.cwin.list, { row, 0 })
-        key 'j'
-        key 'k'
-        local titles = vim.wo[st.cwin.list].winbar:gsub('%%#%w+#', '')
-        if not titles:match '^%s+takes → gives$' then
-          fail('the titles are not takes → gives: ' .. titles)
-        end
-        key 't'
-        check_types(require('seam.types').named(m.sigs[one], m.flows)[1])
-        key 'K'
-        if st.screen ~= 'calls' or st.calls.anchor ~= up.from then
-          fail 'K from the flow did not come back to the call tree'
-        end
-        key 'T'
-        check_calls(false)
-        if cdraw.typed(m) then
-          fail 'T did not swap to the counts'
-        end
-        key 'T'
-        check_calls(false)
-        if not cdraw.typed(m) then
-          fail 'T again did not swap back to the types'
-        end
+      key 'T'
+      check_calls(false)
+      if not cdraw.typed(m) then
+        fail 'T again did not swap back to the types'
       end
       key '-'
     end
     if st.screen ~= 'tree' then
       fail '- did not go to the tree'
-    end
-    -- t on a function's row in the tree: its flow, K back to the row
-    where = 'types t tree'
-    if one and not m.graph.nodes[one].test then
-      screen.show(one)
-      if (tree_screen.at() or {}).id == one then
-        key 't'
-        check_types(require('seam.types').named(m.sigs[one], m.flows)[1])
-        key 'K'
-        if (tree_screen.at() or {}).id ~= one then
-          fail('K from the flow did not come back to the tree on ' .. one)
-        end
-      end
     end
   end
 end
@@ -1716,14 +1718,14 @@ do
     end
     key '<BS>'
   end
-  -- a type's name: its flow
+  -- a type's name: its Types view in the tree's pane
   local ty = m.flowlist and m.flowlist[1] and m.flowlist[1].decls[1]
   if ty and name_col(ty.path, ty.line, ty.name) then
     where = 'here types ' .. ty.id
     local from = on(ty.path, ty.line, name_col(ty.path, ty.line, ty.name))
     seam.here 'types'
-    if api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'types' or not st.types or st.types.flow ~= ty.name then
-      fail('here types did not open the flow of ' .. ty.name)
+    if api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'tree' or not st.ptype or st.ptype.row.name ~= ty.name then
+      fail('here types did not show the Types view of ' .. ty.name)
     end
     api.nvim_set_current_tabpage(from)
     vim.cmd 'tabclose'

@@ -3,8 +3,7 @@
 What seam is, how each screen behaves, where each fact comes from and how it
 is built. The screens are the mocks named here, in `design/mocks/`; the keys
 are in `KEYS.md`. Built a slice at a time (Building): what a slice has not
-replaced yet still runs as `design/contract.md`, `calls.md` and `types.md`
-lock it.
+replaced yet still runs as `design/contract.md` and `calls.md` lock it.
 
 The idea behind all of it: seam stays beside the code. It never replaces
 reading the code. It makes three things one key away while you read: what a
@@ -49,7 +48,7 @@ against its mocks, its tests, and KEYS.md in step:
    the pane from the tree, the hint line and `?`. The lens kept. Replaces
    the explorer.
 2. **The Types view,** and `+` `-` opening a type in place wherever a type
-   is drawn so far. Replaces the Types screens.
+   is drawn so far (landed 2026-11-01). Replaces the Types screens.
 3. **Used by and Built from,** by file, with their other displays.
    Replaces the contract page.
 4. **The code screen.** `J` `K` and the trail, every name answering in the
@@ -831,8 +830,10 @@ flow for each repo type (an exported interface, type alias, class or enum,
 by name): the functions whose return names it or that `new` it make it, the
 ones with a parameter naming it take it. The model holds `sigs` by node id,
 `flows` by name and `flowlist`, the most travelled first. The call tree shows
-what each row takes and gives; the Types screen lists the types and follows
-one. `design/types.md` says how they look.
+what each row takes and gives; the Types view (The views) shows them on
+every row of the tree, a function's line from its written signature
+(treesitter) where it says, the hover where it does not, and opens a type
+in place, its declaration from treesitter.
 
 ## The swappable part
 
@@ -900,8 +901,8 @@ The screens are locked in the design docs. The code must keep these rules:
 
 - **Layout.** The tree is 46 wide, the pane the rest, under a head line
   across the top. The page is three columns: the list 40, the contract 46,
-  the seam the rest. Calls is two: the tree 86, its code the rest; Types the
-  same, the list 86. All need 150 columns. Narrower than that is not
+  the seam the rest. Calls is two: the tree 86, its code the rest. All need
+  150 columns. Narrower than that is not
   designed. v1 says so and opens anyway.
 - **Trees.** Every tree is built by one module, `tree.lua`, from paths. Two
   spaces a level. Directories end in `/`. A chain of lone directories shares
@@ -946,9 +947,9 @@ cursor line, against the model. A contract (an export with a use, the lens's
 several; else one this file uses; else the only one of that name. For calls
 and called by a graph node first the same way (declared here, else one this
 file's nodes call, else the only one), then a contract, then the innermost
-node holding the cursor. For types, the flow of the repo type of that name.
-Several and none here: the `/` picker of the screen asked for, holding the
-word. `:Seam` on a repo seam is open on comes to its
+node holding the cursor. For types, the repo type of that name, its Types
+view in the tree's pane. Several and none here: the `/` picker of the
+screen asked for, holding the word. `:Seam` on a repo seam is open on comes to its
 tab as it was; another repo closes it first.
 
 ## Code layout
@@ -966,14 +967,18 @@ lua/seam/
   draw/init.lua     rows, putting them in a buffer, the pieces both screens share
   outline.lua       the tree as data: folders, files, functions, the calls under each, the orders, reveal
   views.lua         the pane's views, a registry: which rows each has, its displays, how it draws
+  views/code.lua    the Code view: a function, a file, a type's declaration, each call underlined where it lives
+  views/types.lua   the Types view: a line a function, takes → name → gives; a folder's, a file's, a type's; types opened in place
+  typesview.lua     the Types view as data: a function's line, the names that are types, the types opened as a set of keys laid out
+  written.lua       what a file has written, from treesitter: a function's signature, the types it declares
   draw/outline.lua  the tree's rows and head, the pane's head and tabs
   hints.lua         the keys that act where the cursor is: the status line's three groups and the ? float
   screen_tree.lua   the tree's tab layout, its keys and the pane beside it
+  opening.lua       + and - in the pane: the type or function line under the cursor opened or closed in place
   draw/page.lua     the Built from and Used by tabs, the contract, the seam
   calls.lua         the call tree as data: rows down or up or from the top, the budget, what each key does, what / lists
   draw/calls.lua    the Calls screen: its head, the column titles, the tree, the call and the body, what each function takes and gives
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
-  draw/types.lua    the Types screen: every type the most travelled first, or one type's flow, and the code beside
   lens_panel.lua    the lens float and its keys
   picker.lua        the / float on every screen: a prompt, a list of picks, fuzzy matching
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
@@ -985,6 +990,7 @@ tests/
   outline.lua       the tree's specs, on a graph written by hand
   here.lua          here's resolution specs, on a model written by hand
   types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
+  typesview.lua     a function's line, the names that are types, the types opened in place laid out
   check.lua         every screen through its keys on a real repo
 ```
 
