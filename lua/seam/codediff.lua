@@ -96,24 +96,41 @@ end
 --- The range's changes to `path` as it is, line by line, when the diff is
 --- on and the range ends at the working tree: the lines added with the
 --- bytes changed on each, the lines removed before each line, and the
---- lines a change starts on.
+--- lines a change starts on. With `name`, the function of that name only,
+--- its lines then against its lines now, as the pane's Code diffs it, so
+--- code moved elsewhere in the file is not laid inside it; nothing when it
+--- did not change.
 ---@param path string
+---@param name? string
 ---@return { add: table<integer, integer[][]|true>, del: table<integer, table[]>, start: table<integer, true> }|nil
-function M.diff_of(path)
+function M.diff_of(path, name)
   local C = changes.get()
   if not (changed.on() and not C.range.to and C.files[path] and C.files[path] ~= 'gone') then
     return nil
   end
-  local A = changes.lines(changes.key(C, path, 'from'))
   local out = { add = {}, del = {}, start = {} }
-  for _, it in ipairs(diff.items(A, changes.lines(path))) do
+  local items, A, a0, b0
+  if name then
+    local ka
+    items, ka, _, a0, b0 = changed.decl_items(C, path, name, false)
+    if not items then
+      return out
+    end
+    A = changes.lines(ka)
+  else
+    A, a0, b0 = changes.lines(changes.key(C, path, 'from')), 0, 0
+    items = diff.items(A, changes.lines(path))
+  end
+  for _, it in ipairs(items) do
     if it.kind == 'del' then
-      out.del[it.b] = out.del[it.b] or {}
-      table.insert(out.del[it.b], { a = it.a, text = A[it.a] or '', spans = it.spans, start = it.start })
+      local b, a = it.b + b0, it.a + a0
+      out.del[b] = out.del[b] or {}
+      table.insert(out.del[b], { a = a, text = A[a] or '', spans = it.spans, start = it.start })
     elseif it.kind == 'add' then
-      out.add[it.b] = it.spans or true
+      local b = it.b + b0
+      out.add[b] = it.spans or true
       if it.start then
-        out.start[it.b] = true
+        out.start[b] = true
       end
     end
   end
