@@ -129,7 +129,7 @@ local function moved()
   local key = st.ptype and st.ptype.row.key or x and x.key or ''
   if st.oshown ~= key then
     st.oshown = key
-    odraw.head(st.obuf.head, index.model(), st.outline, x)
+    odraw.head(st.obuf.head, index.model(), st.outline, subject())
     show_pane(subject())
     S().paint()
   end
