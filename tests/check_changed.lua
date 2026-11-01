@@ -5,9 +5,9 @@
 -- working tree undoes that edit: the file's function changed in its
 -- signature, one gone and one new. Nothing is written in the repo.
 -- The signs in the tree, gc, ]c [c, D's diff in Code and its displays and
--- in Types, ]c in the pane, a row the range left alone plain, Used by now
--- and at HEAD on gu, the lens's range, a range picked, ]c on the code
--- screen, its code and its types with the diff.
+-- in Types, ]c in the pane, a row the range left alone plain, the lens's
+-- range, a range picked, ]c on the code screen, its code and its types
+-- with the diff.
 local api = vim.api
 local changes = require 'seam.changes'
 local outline = require 'seam.outline'
@@ -294,20 +294,6 @@ return function(t)
     if not (pane[1] and pane[1]:find('seamCheckGone', 1, true)) then
       fail('the gone function does not show its lines: ' .. tostring(pane[1]))
     end
-  end
-
-  -- Used by on the function: now, then at HEAD
-  t.where 'changed used by'
-  screen.show(n1.id)
-  api.nvim_set_current_win(st.owin.tree)
-  key 'gu'
-  local pane = table.concat(api.nvim_buf_get_lines(st.obuf.pane, 0, -1, false), '\n')
-  if not (pane:find('\n now', 1, true) and pane:find('\n at HEAD', 1, true) and pane:find('was  (', 1, true)) then
-    fail 'Used by does not say who uses it now and at HEAD'
-  end
-  key 'gu'
-  if st.view.aside then
-    fail 'gu again did not come back'
   end
 
   -- the code screen: ]c to the line that changed

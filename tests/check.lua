@@ -196,7 +196,7 @@ local function check_tree()
     local all = vim.tbl_map(function(v)
       return v.name
     end, V.of(x))
-    local order, last = { Code = 1, Types = 2, ['Built from'] = 3, ['Used by'] = 4, Map = 5 }, 0
+    local order, last = { Code = 1, Types = 2, Map = 3 }, 0
     for _, n in ipairs(all) do
       if not order[n] or order[n] < last then
         fail('beside the tree the tabs are out of order: ' .. table.concat(all, ', '))
@@ -204,7 +204,7 @@ local function check_tree()
       end
       last = order[n]
     end
-    if x and x.kind ~= 'gone' and #all < 3 then
+    if x and x.kind ~= 'gone' and #all < 2 then
       fail('beside the tree the row has only the tabs ' .. table.concat(all, ', '))
     end
     want_tabs = table.concat(all, '     ')
@@ -427,9 +427,9 @@ do
       fail('<S-Tab> from Code did not go to the last tab: ' .. st.view.at)
     end
     key '<Tab>'
-    -- gu gb gm: straight to that tab, lit, and the same key back to Code; tabs
+    -- gm: straight to the Map, lit, and the same key back to Code; a tab
     -- here, so the status line leaves them to ?
-    for _, a in ipairs { { 'gu', 'Used by' }, { 'gb', 'Built from' }, { 'gm', 'Map' } } do
+    for _, a in ipairs { { 'gm', 'Map' } } do
       where = 'tree ' .. a[1]
       local has = V.has(tree_screen.subject(), a[2]) ~= nil
       if vim.tbl_contains(require('seam.pane').view_hints(tree_screen.subject()), a[1]) then
@@ -968,13 +968,12 @@ do
   end
 end
 
--- Used by and Built from in the pane, on every contract's row or a spread
--- of them: <Tab> to each, every display through <C-Tab> and back with
--- <C-S-Tab>, each checked against the index; n and N from the tree into
--- the pane from place to place, + on ⋯ N more and - back, gf on a place
-local seams = require 'seam.seams'
-local seams_view = require 'seam.views.seams'
+-- The Map in the pane, on every contract's row or a spread of them: gm,
+-- every display through <C-Tab> and back with <C-S-Tab>, the head naming
+-- it, no row wider than the pane; in the pane the foot telling the name
+-- under the cursor, the line that calls it as that line reads; <Esc> back
 local views = require 'seam.views'
+local foot = require 'seam.map.foot'
 local contracts = {}
 for _, c in pairs(st.models[st.cur].byid) do
   if c.nusers and c.nusers > 0 then
@@ -992,66 +991,33 @@ if max > 0 and #contracts > max then
   contracts = pick
 end
 
--- the pane's rows that are places, n and N's stops
-local function stops()
-  local out = {}
-  for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
-    if require('seam.draw').meta(st.obuf.pane, i).place then
-      out[#out + 1] = i
-    end
-  end
-  return out
-end
-
--- the view `name` shown in the pane, as the head's tabs say, its display
--- named after them; every place a real line, every row inside the pane
-local function check_seams(name)
+-- the Map shown in the pane, named with its display in the head, every row
+-- inside the pane; the names on it that stand for a call, row and span
+local function check_map()
   local x = tree_screen.subject()
   local v, display = views.shown(x, st.view)
-  if not v or v.name ~= name then
-    return fail(('the pane shows %s, not %s'):format(v and v.name or 'nothing', name))
+  if not v or v.name ~= 'Map' then
+    fail(('the pane shows %s, not the Map'):format(v and v.name or 'nothing'))
+    return {}
   end
-  local m = st.models[st.cur]
   local tabs = api.nvim_buf_get_lines(st.obuf.phead, 2, 3, false)[1] or ''
-  if not tabs:find(name, 1, true) or not tabs:find(display, 1, true) then
-    fail(('the tabs %q do not name %s %s'):format(tabs, name, display))
+  if not tabs:find('Map', 1, true) or not tabs:find(display, 1, true) then
+    fail(('the tabs %q do not name the Map %s'):format(tabs, display))
   end
-  local head = api.nvim_buf_get_lines(st.obuf.phead, 0, 1, false)[1] or ''
-  local want = name == 'Used by' and seams_view.used_count(m, x) or seams_view.built_count(m, x)
-  if not head:find(want, 1, true) then
-    fail(('the head says %q, not %s'):format(head, want))
-  end
-  local places = seams_view.places(m, x, name == 'Used by' and 'used' or 'built')
   local pw = api.nvim_win_get_width(st.owin.pane)
-  local rows = lines(st.obuf.pane)
-  for i, l in ipairs(rows) do
-    if api.nvim_strwidth(l) >= pw then
+  local hits = {}
+  for i, l in ipairs(lines(st.obuf.pane)) do
+    if api.nvim_strwidth(l) > pw then
       fail(('row %d is %d wide, the pane %d: %s'):format(i, api.nvim_strwidth(l), pw, l))
       break
     end
-  end
-  local list = stops()
-  if #places > 0 and #list == 0 then
-    fail(name .. ' ' .. display .. ': places but no stop for n')
-  end
-  for _, i in ipairs(list) do
-    local at = require('seam.draw').at(st.obuf.pane, i, 0)
-    local n = at and #code.file(at.path).lines or 0
-    if not at or not at.line or at.line < 1 or at.line > n then
-      fail(('row %d stands for %s, no line of the repo'):format(i, vim.inspect(at, { newline = ' ', indent = '' })))
-      break
-    end
-    -- a place's line of code is the line it stands for
-    if display ~= 'by user' and display ~= 'as signatures' then
-      local src = vim.trim(code.file(at.path).lines[at.line] or '')
-      local shown = rows[i]
-      if not shown:find(src:sub(1, 12), 1, true) then
-        fail(('row %d does not show %s:%d, %q'):format(i, at.path, at.line, src:sub(1, 30)))
-        break
+    for _, h in ipairs(require('seam.draw').meta(st.obuf.pane, i).hits or {}) do
+      if h.item.at then
+        hits[#hits + 1] = { row = i, col = h.s, at = h.item.at }
       end
     end
   end
-  return list, places
+  return hits
 end
 
 for ci, c in ipairs(contracts) do
@@ -1062,90 +1028,52 @@ for ci, c in ipairs(contracts) do
   where = c.id .. ' show'
   screen.show(c)
   api.nvim_set_current_win(st.owin.tree)
-  for _, name in ipairs { 'Built from', 'Used by' } do
-    where = ('%s %s'):format(c.id, name)
-    if (views.shown(tree_screen.subject(), st.view) or {}).name ~= name then
-      key(name == 'Used by' and 'gu' or 'gb')
+  if views.has(tree_screen.subject(), 'Map') or (views.shown(tree_screen.subject(), st.view) or {}).name == 'Map' then
+    if (views.shown(tree_screen.subject(), st.view) or {}).name ~= 'Map' then
+      key 'gm'
     end
     local v = views.shown(tree_screen.subject(), st.view)
-    for di = 1, #v.displays do
-      where = ('%s %s %s'):format(c.id, name, select(2, views.shown(tree_screen.subject(), st.view)))
-      local list = check_seams(name)
-      if list and #list > 0 then
-        key 'n'
-        local cur = api.nvim_get_current_win() == st.owin.pane and api.nvim_win_get_cursor(st.owin.pane)[1]
-        if cur ~= list[1] then
-          fail(('n from the tree went to %s, not the first place, row %d'):format(tostring(cur), list[1]))
-        end
-        key 'n'
-        cur = api.nvim_win_get_cursor(st.owin.pane)[1]
-        if cur ~= (list[2] or list[1]) then
-          fail(('n went to row %d, not %d'):format(cur, list[2] or list[1]))
-        end
-        key 'N'
-        if api.nvim_win_get_cursor(st.owin.pane)[1] ~= list[1] then
-          fail 'N did not come back to the first place'
-        end
-        -- + on ⋯ N more shows the rest, - on one of them hides them again
-        local more
-        for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
-          more = more or (require('seam.draw').meta(st.obuf.pane, i).more and i)
-        end
-        if more then
-          local before = #list
-          api.nvim_win_set_cursor(st.owin.pane, { more, 0 })
-          key '+'
-          local now = stops()
-          if #now <= before then
-            fail(('+ on ⋯ more left %d places, as before'):format(#now))
+    local ds = views.displays(v, tree_screen.subject())
+    for di = 1, #ds do
+      where = ('%s Map %s'):format(c.id, select(2, views.shown(tree_screen.subject(), st.view)))
+      local hits = check_map()
+      local h = hits[(ci + di) % math.max(#hits, 1) + 1]
+      if h then
+        api.nvim_set_current_win(st.owin.pane)
+        api.nvim_win_set_cursor(st.owin.pane, { h.row, h.col })
+        foot.update()
+        local fb = foot.shown()
+        if not fb then
+          fail(('no foot on the name at row %d'):format(h.row))
+        else
+          local fl = lines(fb)
+          local src = vim.trim(code.file(h.at.path).lines[h.at.line] or '')
+          if not (fl[3] or ''):find(src:sub(1, 12), 1, true) then
+            fail(('the foot does not show %s:%d, %q: %s'):format(h.at.path, h.at.line, src:sub(1, 30), fl[3] or ''))
           end
-          key '-'
-          if #stops() ~= before then
-            fail(('- after + left %d places, not %d'):format(#stops(), before))
-          end
-        end
-        if ci % 3 == di % 3 then
-          api.nvim_win_set_cursor(st.owin.pane, { list[1], 0 })
-          local at = require('seam.draw').at(st.obuf.pane, list[1], 0)
-          key 'gf'
-          went(('gf on a place of %s'):format(name), at.path, at.line, st.owin.pane)
         end
         key '<Esc>'
         if api.nvim_get_current_win() ~= st.owin.tree then
           fail '<Esc> in the pane did not give the cursor back to the tree'
+        elseif foot.shown() then
+          fail 'the foot stayed with the cursor back in the tree'
         end
       end
       key '<C-Tab>'
-      if di == #v.displays then
+      if di == #ds then
         local function now()
           return select(2, views.shown(tree_screen.subject(), st.view))
         end
-        if now() ~= v.displays[1] then
+        if now() ~= ds[1] then
           fail '<C-Tab> on the last display did not come round to the first'
         end
         key '<C-S-Tab>'
-        if now() ~= v.displays[#v.displays] then
+        if now() ~= ds[#ds] then
           fail '<C-S-Tab> on the first display did not go round to the last'
         end
         key '<C-Tab>'
       end
     end
-  end
-  -- a folder: who uses it from outside, by file
-  where = c.id .. ' its folder'
-  local x = tree_screen.at()
-  for _ = 1, 4 do
-    if not x or x.kind == 'dir' then
-      break
-    end
-    key 'h'
-    x = tree_screen.at()
-  end
-  if x and x.kind == 'dir' then
-    if (views.shown(x, st.view) or {}).name ~= 'Used by' then
-      key 'gu'
-    end
-    check_seams 'Used by'
   end
 end
 
@@ -1364,8 +1292,8 @@ dofile(root .. '/tests/check_changed.lua') {
 
 -- from your own code: a file of the repo in a tab of its own, the cursor on
 -- a contract's name, here() puts the tree's cursor on it, the page on it
--- with its Used by; on a local function, calls puts it on the code screen
--- and called by shows its row with its Used by; gf
+-- with its Map; on a local function, calls puts it on the code screen
+-- and called by shows its row with its Map; gf
 -- comes back to the file
 do
   local m = st.models[st.cur]
@@ -1412,7 +1340,7 @@ do
     if api.nvim_get_current_tabpage() ~= st.tab or st.screen ~= 'tree' or (tree_screen.at() or {}).id ~= c.id then
       fail 'here page did not show its row in the tree'
     end
-    check_seams 'Used by'
+    check_map()
     api.nvim_set_current_tabpage(from)
     vim.cmd 'tabclose'
     api.nvim_set_current_tabpage(st.tab)
@@ -1446,7 +1374,7 @@ do
       elseif st.screen ~= 'tree' or (tree_screen.at() or {}).id ~= f.id then
         fail 'called by did not show its row in the tree'
       else
-        check_seams 'Used by'
+        check_map()
       end
       api.nvim_set_current_tabpage(from)
       vim.cmd 'tabclose'

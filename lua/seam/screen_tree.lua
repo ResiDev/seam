@@ -314,12 +314,11 @@ function M.all_keys()
     {
       'The pane',
       {
-        { '<Tab> <S-Tab>', 'the next and previous tab: Code, Types, Built from, Used by, Map' },
-        { 'gu gb gm', 'straight to Used by, Built from, the Map, and back' },
+        { '<Tab> <S-Tab>', 'the next and previous tab: Code, Types, Map' },
+        { 'gm', 'straight to the Map, and back' },
         { '<C-Tab> <C-S-Tab>', 'next and previous display' },
         { 'D', 'the diff on or off, here and on the code screen, for the session' },
-        { 'n N', 'into it, on the next and previous place, in Used by and Built from' },
-        { 'T', 'inputs and outputs, in the Map' },
+        { 'T', 'the Map by folder: each signature, or names only' },
         { '<C-d> <C-u> <M-j> <M-k>', 'scroll it half a screen' },
         { '<C-e> <C-y>', 'scroll it a line' },
       },
@@ -390,9 +389,6 @@ function M.status()
     if x.kind == 'fn' or x.kind == 'file' then
       row[#row + 1] = 'J'
     end
-    if pane.has_places() then
-      row[#row + 1] = 'n N'
-    end
   end
   local seam = { 's', '/', 'L', 'q' }
   -- the change keys take the room of the ones every tree has, still in ?
@@ -427,12 +423,6 @@ local function tree_keys(buf)
     S().close()
   end, o(buf))
   S().goto_keys(buf)
-  vim.keymap.set('n', 'n', function()
-    pane.next_place(1)
-  end, o(buf))
-  vim.keymap.set('n', 'N', function()
-    pane.next_place(-1)
-  end, o(buf))
   for _, k in ipairs { 'l', 'h', 's' } do
     vim.keymap.set('n', k, press(k), o(buf))
   end

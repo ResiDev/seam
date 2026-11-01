@@ -1,6 +1,6 @@
 -- The pane's views: beside the tree every view is a tab; on the code screen
--- two, Code and Types, what is read most there, and Used by, Built from and
--- the Map aside, each on its own key (on both screens). Which rows each
+-- two, Code and Types, what is read most there, and the Map aside on its
+-- key (on both screens). Which rows each
 -- has something for, the displays it can be shown in, and how it draws.
 -- `st.view` holds the tab chosen, the view aside shown, and each view's
 -- display. The diff (D) is no view: Code and Types draw what changed.
@@ -10,7 +10,6 @@ local index = require 'seam.index'
 local st = require 'seam.state'
 local map_view = require 'seam.views.map'
 local names_view = require 'seam.views.names'
-local seams_view = require 'seam.views.seams'
 local types_view = require 'seam.views.types'
 local M = {}
 
@@ -43,18 +42,13 @@ local function diffed(row)
   return row.kind == 'gone' or (changed_view.on() and changed_view.has(index.model(), row, true))
 end
 
--- a name in the code is seen through its type: its Code, Built from and
--- Used by are the type's; one with no repo type has only Types
+-- a name in the code is seen through its type: its Code is the type's;
+-- one with no repo type has only Types
 local function as_type(row)
   return row.kind == 'name' and row.as_type or row
 end
 local function typed(row)
   return row.kind ~= 'name' or row.as_type ~= nil
-end
-local function through(f)
-  return function(out, row, ...)
-    return f(out, as_type(row), ...)
-  end
 end
 
 ---@type seam.View[]
@@ -102,33 +96,6 @@ M.list = {
     end,
     count = function(m, row)
       return changed_view.on() and changed_view.count(m, as_type(row)) or nil
-    end,
-  },
-  {
-    name = 'Built from',
-    key = 'gb',
-    displays = seams_view.BUILT,
-    has = typed,
-    draw = through(seams_view.built_from),
-    count = function(m, row)
-      return seams_view.built_count(m, as_type(row))
-    end,
-  },
-  {
-    name = 'Used by',
-    key = 'gu',
-    displays = seams_view.USED,
-    has = typed,
-    -- a function that changed: who uses it now, then who used it at the range's start
-    draw = function(out, row, m, display, ctx)
-      local x = as_type(row)
-      if changed_view.changed_fn(m, x) then
-        return changed_view.used_by(out, x, m, display, ctx, seams_view.used_by)
-      end
-      seams_view.used_by(out, x, m, display, ctx)
-    end,
-    count = function(m, row)
-      return changed_view.used_count(m, as_type(row)) or seams_view.used_count(m, as_type(row))
     end,
   },
   {
@@ -270,7 +237,7 @@ function M.has(row, name)
   return v and not v.tab and v or nil
 end
 
---- `gu` `gb` `gm`: the view aside called `name`, or when it is shown, back
+--- `gm`: the view aside called `name`, or when it is shown, back
 --- to the tab chosen. False when the row has no such view.
 ---@param row seam.ORow|nil
 ---@param sv seam.ViewState

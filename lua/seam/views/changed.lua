@@ -4,13 +4,12 @@
 -- unnumbered on red; added lines on green; the words that changed on a line
 -- lit stronger. Changes only, every run of unchanged lines folded three
 -- lines from a change; or whole. For the Types view, a type's own lines and
--- a function's line as it was. Used by now and at the range's start.
+-- a function's line as it was.
 local changes = require 'seam.changes'
 local code = require 'seam.code'
 local diff = require 'seam.diff'
 local draw = require 'seam.draw'
 local graph = require 'seam.graph'
-local index = require 'seam.index'
 local outline = require 'seam.outline'
 local st = require 'seam.state'
 local tv = require 'seam.typesview'
@@ -18,7 +17,6 @@ local written = require 'seam.written'
 local M = {}
 
 local row, plural = draw.row, draw.plural
-local api_width = vim.api.nvim_strwidth
 
 M.DISPLAYS = { 'changes only', 'whole file' }
 -- a folder's files shown before the rest is left to its rows
@@ -292,59 +290,7 @@ function M.block_diff(d, lines)
   return out, true
 end
 
----------------------------------------------------------------- Used by
-
---- How the function on row `x` changed when its signature or body did.
----@param m table
----@param x seam.ORow
----@return seam.DeclChange|nil
-function M.changed_fn(m, x)
-  local C = changes.get()
-  local n = C and x.kind == 'fn' and m.graph.nodes[x.id]
-  local d = n and changes.decl(C, n.path, n.name)
-  return d and (d.state == 'signature' or d.state == 'body') and d or nil
-end
-
--- the places that named the function at `from`: the files the range left
--- alone as they name it now, the others read at `from`
-local function then_places(m, C, x)
-  C.then_places = C.then_places or {}
-  local got = C.then_places[x.id]
-  if got then
-    return got
-  end
-  local node = m.graph.nodes[x.id]
-  got = {}
-  for _, p in ipairs(require('seam.views.seams').places(m, x, 'used')) do
-    if not C.files[p.path] then
-      got[#got + 1] = { path = p.path, line = p.line, col = p.col, key = p.path }
-    end
-  end
-  for _, path in ipairs(C.list) do
-    if C.files[path] ~= 'new' then
-      for _, u in ipairs(changes.named_at_from(C, path, node.name, node.path)) do
-        got[#got + 1] = { path = path, line = u.line, col = u.col, key = changes.key(C, path, 'from') }
-      end
-    end
-  end
-  C.then_places[x.id] = got
-  return got
-end
-
---- What the pane's head says in Used by of a function that changed: how,
---- and how many places use it now and used it at `from`.
----@param m table
----@param x seam.ORow
----@return string|nil
-function M.used_count(m, x)
-  local d = M.changed_fn(m, x)
-  if not d then
-    return nil
-  end
-  local C = assert(changes.get())
-  local now = #require('seam.views.seams').places(m, x, 'used')
-  return ('%s   used by %s now, %d at %s'):format(WORD[d.state], plural(now, 'place'), #then_places(m, C, x), C.range.from)
-end
+---------------------------------------------------------------- a function as it was
 
 -- a function's line as written in a version: (name: Type, …) → name → gives
 local function was_line(r, key, d, name, gives)
@@ -421,82 +367,6 @@ function M.was_row(node, d, gives, cols)
   end
   r.bg = 'SeamDiffDelete'
   return r
-end
-
---- Used by on a function whose signature or body changed: its line as it
---- was and is when its signature changed, who uses it now (`now`, Used by
---- as it is), then who used it at `from`, by file, each line as it was.
----@param out table[]
----@param x seam.ORow
----@param m table
----@param display string
----@param ctx seam.ViewCtx
----@param now fun(out: table[], x: seam.ORow, m: table, display: string, ctx: seam.ViewCtx)
-function M.used_by(out, x, m, display, ctx, now)
-  local C = assert(changes.get())
-  local d = assert(M.changed_fn(m, x))
-  local node = m.graph.nodes[x.id]
-  if d.state == 'signature' then
-    -- what it gives as the server said, where neither version writes it
-    local sig = m.sigs and m.sigs[x.id] and tv.sig(nil, m.sigs[x.id])
-    local gives = sig and tv.gives(sig)
-    for _, side in ipairs { { 'was  ', 'from', d.from }, { 'now  ', 'to', d.to } } do
-      local r = row():add(' '):add(side[1], 'SeamLabel')
-      was_line(r, changes.key(C, node.path, side[2]), side[3], node.name, gives)
-      out[#out + 1] = r
-    end
-    out[#out + 1] = row()
-  end
-  out[#out + 1] = row():add(' now', 'SeamBold')
-  now(out, x, m, display, ctx)
-  out[#out + 1] = row()
-  out[#out + 1] = row():add(' at ' .. C.range.from, 'SeamBold')
-  local list = then_places(m, C, x)
-  if #list == 0 then
-    out[#out + 1] = row():add(' nothing named it', 'SeamLabel')
-    return
-  end
-  local by, order = {}, {}
-  for _, p in ipairs(list) do
-    if not by[p.path] then
-      by[p.path] = {}
-      order[#order + 1] = p.path
-    end
-    table.insert(by[p.path], p)
-  end
-  table.sort(order, function(a, b)
-    local ta, tb = index.is_test(a), index.is_test(b)
-    if ta ~= tb then
-      return tb
-    end
-    return #by[a] > #by[b] or (#by[a] == #by[b] and a < b)
-  end)
-  local hl = require('seam.views.code').under
-  local short = require('seam.seams').shortener(vim.list_extend({ node.path }, order))
-  local W = ctx.width - 1
-  for _, path in ipairs(order) do
-    out[#out + 1] = row()
-    local s = C.files[path]
-    local h = row({ at = { path = path, line = by[path][1].line } }):add(' '):add(short(path), 'SeamBold')
-    h:add(s == 'gone' and '   file gone' or s and ('   ' .. changes.count(C, path) .. ' changed in the file') or '', 'SeamLabel')
-    out[#out + 1] = h
-    for _, p in ipairs(by[path]) do
-      local r = row { at = s and false or { path = path, line = p.line }, place = true }
-      r:add('   '):add(string.format('%4d', p.line), 'SeamGutter'):add '  '
-      local src = changes.lines(p.key)[p.line] or ''
-      local lead = #src:match '^%s*'
-      local start = r.b - lead
-      local room = W - r.w
-      if api_width(src:sub(lead + 1)) > room then
-        code.add(r, p.key, p.line, true, math.max(1, room - 1))
-        r:add('…', 'SeamLabel')
-      else
-        code.add(r, p.key, p.line, true)
-      end
-      code.underline(r, start, src, node.name, p.col, hl(m, path, node.path) or 'SeamUse')
-      out[#out + 1] = r
-    end
-  end
 end
 
 ---------------------------------------------------------------- the view

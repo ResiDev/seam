@@ -1,5 +1,6 @@
 -- The Map's keys in the pane: l opens a side's ⋯ more, or shows a name
--- in the tree; T inputs and outputs; J the code screen on the name. What
+-- in the tree; T each signature or names only, by folder; J the code
+-- screen on the name. What
 -- is under the cursor, for them and the status line.
 local api = vim.api
 local data = require 'seam.map.data'
@@ -62,9 +63,9 @@ function M.under_name()
   end
 end
 
--- does the display draw functions that T gives columns to?
-local function typed_display(x, d)
-  return d == 'both ways' and (x.kind == 'fn' or x.kind == 'type')
+-- does T act: the folder display, each signature or names only
+local function typed_display(_, d)
+  return d == 'folder'
 end
 
 --- What each of the Map's keys would do where the pane's cursor is, nil where nothing.
@@ -76,7 +77,7 @@ function M.acts()
     return out
   end
   local m = index.model()
-  out.T = m.sigs ~= nil and typed_display(x, d)
+  out.T = typed_display(x, d)
   local it = M.under()
   if not it then
     return out
@@ -124,7 +125,7 @@ function M.key(k)
     show_in_tree(it)
     return true
   elseif k == 'T' and a.T then
-    st.map.types = not st.map.types
+    st.map.types = not map_view.types_on()
   elseif k == 'J' and a.J then
     local sc = require 'seam.screen_code'
     if st.screen == 'code' then
@@ -156,8 +157,8 @@ function M.hints()
   return out
 end
 
---- What the status line adds after the view on the Map: ` · types` with
---- T on where it acts, and in the pane the name under the cursor.
+--- What the status line adds after the view on the Map: ` · names` with
+--- T off where it acts, and in the pane the name under the cursor.
 ---@param inside boolean the cursor is in the pane
 ---@return string
 function M.status(inside)
@@ -165,7 +166,7 @@ function M.status(inside)
   if not x then
     return ''
   end
-  local out = (map_view.types_on() and typed_display(x, d) and index.model().sigs) and ' · types' or ''
+  local out = (not map_view.types_on() and typed_display(x, d)) and ' · names' or ''
   local name = inside and M.under_name()
   return out .. (name and ('   › ' .. name) or '')
 end

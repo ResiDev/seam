@@ -1,4 +1,4 @@
-# make check: the formatting, here's, the types', the Types view's, the outline's, Used by and Built from's, the names', what changed's and the Map's specs,
+# make check: the formatting, here's, the types', the Types view's, the outline's, the names', what changed's and the Map's specs,
 # then every screen driven through its keys on a real repo (SEAM_REPO, the
 # lab's excalidraw copy by default).
 STYLUA ?= $(HOME)/.local/share/nvim/mason/bin/stylua
@@ -17,7 +17,6 @@ spec:
 	nvim --headless --clean -l tests/types.lua
 	nvim --headless --clean -l tests/typesview.lua
 	nvim --headless --clean -l tests/outline.lua
-	nvim --headless --clean -l tests/seams.lua
 	nvim --headless --clean -l tests/names.lua
 	nvim --headless --clean -l tests/changes.lua
 	nvim --headless --clean -l tests/map.lua
