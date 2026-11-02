@@ -53,15 +53,20 @@ end
 ---@param root TSNode
 ---@param row integer
 ---@param col integer
----@return integer|nil first, integer|nil last
+---@return integer|nil first, integer|nil last, TSNode|nil name
 function M.decl(root, row, col)
   local n = root:named_descendant_for_range(row, col, row, col)
+  -- a location at the line's start is on its `export` or `declare`: the declaration inside
+  while n and WRAP[n:type()] and n:named_child(0) and (M.DECL[n:named_child(0):type()] or WRAP[n:named_child(0):type()]) do
+    n = n:named_child(0)
+  end
   while n and not M.DECL[n:type()] do
     n = n:parent()
   end
   if not n then
     return nil
   end
+  local nm = n:field('name')[1]
   while n:parent() and WRAP[n:parent():type()] do
     n = n:parent()
   end
@@ -69,7 +74,7 @@ function M.decl(root, row, col)
   if ec == 0 and er > sr then
     er = er - 1
   end
-  return sr, er
+  return sr, er, nm
 end
 
 --- The code a hover answer leads with: its first fenced block, else its
@@ -259,9 +264,11 @@ local function read(locs)
     if root and r then
       local src = code.file(key).lines[r.start.line + 1] or ''
       local ok, col = pcall(vim.str_byteindex, src, 'utf-16', r.start.character, false)
-      local s, e = M.decl(root, r.start.line, ok and col or r.start.character)
+      local s, e, nm = M.decl(root, r.start.line, ok and col or r.start.character)
       if s then
-        local name = src:sub((ok and col or r.start.character) + 1):match '^[%w_$]+'
+        -- the declaration's own name: a location may start at the line, not the name
+        local nr, nc, _, ne = (nm or root):range()
+        local name = nm and (code.file(key).lines[nr + 1] or ''):sub(nc + 1, ne)
         return { key = key, path = fname, s = s + 1, e = e + 1, pkg = M.package(fname), name = name }
       end
     end
