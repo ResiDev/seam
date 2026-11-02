@@ -1,8 +1,8 @@
 -- The Map view: two displays on every kind of row, folder and type, each
 -- what the row calls above, the row, its callers below (seam.map.flow),
 -- drawn from the call graph and the types; folder with T off today's both
--- ways, names only (seam.map.both). Each row's ⋯ more opened and T kept in
--- st.map; the keys that act on it, l T J, and what is under the cursor
+-- ways, names only (seam.map.both). Each row's groups opened by hand and T
+-- kept in st.map; the keys that act on it, l T J, and what is under the cursor
 -- (seam.map.keys); the name under the cursor told at the foot (seam.map.foot).
 local api = vim.api
 local data = require 'seam.map.data'
@@ -47,14 +47,24 @@ local function dir_label(x)
   return (x.item.segs and table.concat(x.item.segs, '/') or dir_of(x):match '[^/]+$') .. '/'
 end
 
---- What the Map keeps for a row: the sides and bars opened past ⋯ more.
+--- What the Map keeps for a row: the groups opened by hand with l, by
+--- `left:` or `right:` and their key, never closed to fit.
 ---@param x seam.ORow
----@return { more: table<string, boolean> }
+---@return { open: table<string, boolean> }
 function M.state(x)
   st.map = st.map or { rows = {}, types = false }
   local k = subject(x).key or ''
-  st.map.rows[k] = st.map.rows[k] or { more = {} }
+  st.map.rows[k] = st.map.rows[k] or { open = {} }
   return st.map.rows[k]
+end
+
+-- the rows a side may take before its smallest groups close: the pane's,
+-- less the foot's least share, so a Map that fits is not under it
+local function budget(ctx)
+  if not ctx.height then
+    return nil
+  end
+  return ctx.height - math.ceil(ctx.height * require('seam.map.foot').SHARE)
 end
 
 --- Is T on: the folder display with each signature, or names only, as it
@@ -226,22 +236,25 @@ local function names_display(x, m, ctx, top, bottom, centre)
     return out
   end
   local left, right = items(top), items(bottom)
+  -- the widest the side is, its folders open or closed
   local function need(list)
     local n = 0
-    for _, l in ipairs(both.side(list, math.huge, { all = true, side = 'left' })) do
-      local w = 0
-      for _, sg in ipairs(l.segs) do
-        w = w + api.nvim_strwidth(sg[1])
+    for _, b in ipairs { math.huge, 0 } do
+      for _, l in ipairs(both.side(list, math.huge, { budget = b, side = 'left' })) do
+        local w = 0
+        for _, sg in ipairs(l.segs) do
+          w = w + api.nvim_strwidth(sg[1])
+        end
+        n = math.max(n, w + (l.indent or 0))
       end
-      n = math.max(n, w + (l.indent or 0))
     end
     return n
   end
   local w = ctx.width - 2
   local cw = api.nvim_strwidth(centre[1][1])
   local rl, rr = both.rooms(need(left), need(right), w, cw)
-  local L = both.side(left, rl, { all = s.more.left, side = 'left' })
-  local R = both.side(right, rr, { all = s.more.right, side = 'right' })
+  local L = both.side(left, rl, { budget = budget(ctx), open = s.open, side = 'left' })
+  local R = both.side(right, rr, { budget = budget(ctx), open = s.open, side = 'right' })
   return both.draw(L, R, centre, w)
 end
 
@@ -359,7 +372,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
         head = { { folder_text(grp.key), 'SeamBold', grp.dir and { kind = 'dir', path = grp.dir } or nil } }
       end
       -- where it is and its name in columns, its signature straight after
-      local items, prev = {}, nil
+      local items, prev, files = {}, nil, {}
       for _, e in ipairs(grp.list) do
         local cols, tail
         if by == 'folder' and is_top then
@@ -378,9 +391,10 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
         -- by folder an empty row between the files the calls are in
         local gap = by == 'folder' and is_top and prev ~= nil and e.path ~= prev
         prev = e.path
+        files[e.path] = true
         items[#items + 1] = { cols = cols, tail = tail, gap = gap }
       end
-      res[#res + 1] = { head = head, items = items }
+      res[#res + 1] = { head = head, items = items, key = grp.key, files = vim.tbl_count(files) }
     end
     return res
   end
@@ -401,7 +415,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   else
     centre = { segs = { { centre_name, x.kind == 'type' and 'SeamTypeBold' or 'SeamBold' } } }
   end
-  return flow.draw(groups(top, true), centre, groups(bottom, false), { width = ctx.width - 2, all_top = s.more.left, all_bottom = s.more.right })
+  return flow.draw(groups(top, true), centre, groups(bottom, false), { width = ctx.width - 2, height = budget(ctx), open = s.open })
 end
 
 --- The Map of `x` in `display`, rows under it left for the foot to stand

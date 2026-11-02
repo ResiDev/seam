@@ -1,4 +1,4 @@
--- The Map's keys in the pane: l opens a side's ⋯ more, or shows a name
+-- The Map's keys in the pane: l opens a group closed to fit, or shows a name
 -- in the tree; T each signature or names only, by folder; J the code
 -- screen on the name. What
 -- is under the cursor, for them and the status line.
@@ -60,6 +60,8 @@ function M.under_name()
     return it.name
   elseif it.path then
     return it.path:match '[^/]+$' .. (it.kind == 'dir' and '/' or '')
+  elseif it.fold then
+    return it.label
   end
 end
 
@@ -82,8 +84,8 @@ function M.acts()
   if not it then
     return out
   end
-  if it.more then
-    out.l = 'more'
+  if it.fold then
+    out.l = 'open'
   elseif it.kind == 'fn' or it.kind == 'file' or (it.kind == 'dir' and it.path) or (it.kind == 'type' and m.flows[it.name]) then
     out.l = 'show'
   end
@@ -119,8 +121,8 @@ function M.key(k)
   local a = M.acts()
   local s = map_view.state(x)
   local it = M.under() or {}
-  if k == 'l' and a.l == 'more' then
-    s.more[it.more] = true
+  if k == 'l' and a.l == 'open' then
+    s.open[it.fold] = true
   elseif k == 'l' and a.l == 'show' then
     show_in_tree(it)
     return true
@@ -146,7 +148,7 @@ end
 function M.hints()
   local a, out = M.acts(), {}
   if a.l then
-    out[#out + 1] = a.l == 'more' and { 'l', 'more' } or { 'l', 'show' }
+    out[#out + 1] = a.l == 'open' and { 'l', 'open' } or { 'l', 'show' }
   end
   if a.T then
     out[#out + 1] = 'T'

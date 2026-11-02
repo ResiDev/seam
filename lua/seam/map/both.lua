@@ -1,15 +1,15 @@
 -- The Map's both ways display: what the row is built from on the left, who
 -- uses it on the right, the order of the tabs; each side gathered into
 -- folders, an empty row between them, their files, each file's names after
--- it, a line from each file into the row. A function's calls and callers, a folder's or a file's
--- files across its edge with the names that cross, a type's makers and
--- takers. Pure: the items come as pieces, the rows go out with what each
--- name stands for in `meta.hits`.
+-- it, a line from each file into the row; a side taller than its room
+-- with its smallest folders closed to a line each. A function's calls and
+-- callers, a folder's or a file's files across its edge with the names
+-- that cross, a type's makers and takers. Pure: the items come as pieces,
+-- the rows go out with what each name stands for in `meta.hits`.
 local canvas = require 'seam.map.canvas'
+local draw = require 'seam.draw'
+local fold = require 'seam.map.fold'
 local M = {}
-
--- the most names a side lists before `⋯ N more`, opened with l
-M.CAP = 40
 
 local W = vim.api.nvim_strwidth
 
@@ -57,27 +57,27 @@ local function group(items)
   return out
 end
 
+-- a folder closed: its name and how many names in how many files, a line
+-- into the row; l opens it
+local function closed_line(g)
+  local hit = { fold = g.key, label = g.title }
+  local count = '  ' .. draw.plural(g.n, 'name') .. ' in ' .. draw.plural(#g.files, 'file')
+  return { segs = { { '▸ ', 'SeamLabel', hit }, { g.title, 'SeamBold', hit }, { count, 'SeamLabel', hit } }, join = true }
+end
+
 --- A side's lines: a folder, then its files indented under it, each with
---- its names after it, an empty row before the next folder in lines of at most `room` columns, or one a line
---- when `each`; cut to CAP names unless `all`, `⋯ N more` last standing
---- for `side`.
+--- its names after it in lines of at most `room` columns, or one a line
+--- when `each`, an empty row before the next folder. Past `budget` rows
+--- the folders with the fewest names close to a line each (seam.map.fold),
+--- never one in `open`; each opened by `side .. ':' .. its name`.
 ---@param items seam.BothItem[]
 ---@param room integer
----@param o { each: boolean|nil, all: boolean|nil, side: 'left'|'right' }
+---@param o { each: boolean|nil, budget: integer|nil, open: table<string, boolean>|nil, side: 'left'|'right' }
 ---@return seam.BothLine[]
 function M.side(items, room, o)
-  local more = 0
-  if not o.all and #items > M.CAP then
-    more = #items - M.CAP
-    items = vim.list_slice(items, 1, M.CAP)
-  end
-  local out = {}
-  for i, g in ipairs(group(items)) do
-    -- an empty row between one folder and the next
-    if i > 1 then
-      out[#out + 1] = { segs = {}, join = false }
-    end
-    out[#out + 1] = { segs = { { g.title, 'SeamBold', g.dir and { kind = 'dir', path = g.dir } or nil } }, join = false }
+  local gs = group(items)
+  for _, g in ipairs(gs) do
+    g.key, g.body = o.side .. ':' .. g.title, {}
     local mf = 0
     for _, f in ipairs(g.files) do
       mf = math.max(mf, W(f.name))
@@ -96,12 +96,24 @@ function M.side(items, room, o)
       for k, l in ipairs(lines) do
         local file = k == 1 and { f.name, 'SeamText', { kind = 'file', path = f.path } } or { '' }
         local pad = string.rep(' ', mf + 2 - W(file[1]))
-        out[#out + 1] = { segs = vim.list_extend({ file, { pad } }, l), join = k == 1, indent = 2 }
+        g.body[#g.body + 1] = { segs = vim.list_extend({ file, { pad } }, l), join = k == 1, indent = 2 }
       end
     end
+    g.lines = 1 + #g.body
   end
-  if more > 0 then
-    out[#out + 1] = { segs = { { '⋯ ' .. more .. ' more', 'SeamLabel', { more = o.side } } }, join = false }
+  -- the empty rows between folders stay, whatever closes
+  local shut = fold.closed(gs, (o.budget or math.huge) - (#gs - 1), o.open or {})
+  local out = {}
+  for i, g in ipairs(gs) do
+    if i > 1 then
+      out[#out + 1] = { segs = {}, join = false }
+    end
+    if shut[g.key] then
+      out[#out + 1] = closed_line(g)
+    else
+      out[#out + 1] = { segs = { { g.title, 'SeamBold', g.dir and { kind = 'dir', path = g.dir } or nil } }, join = false }
+      vim.list_extend(out, g.body)
+    end
   end
   return out
 end

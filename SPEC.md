@@ -681,6 +681,15 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   the server, an object a field a line, only where the file does not
   write it; an empty row over and under, at most half the pane.
 
+- **Groups close to fit, nothing left out** (2026-11-02, the user on a
+  real codebase). A side ended `⋯ 12 more` at a fixed 40 names, cut by
+  position, so which names went was arbitrary and a whole folder could
+  vanish. Now, past the pane's height less the foot's least share (each
+  side of both ways on its own, the flow's above and below together),
+  whole groups close, the fewest names first, each to one line, `▸` its
+  head and how many names in how many files; every group stays named. `l`
+  opens one for the row, and it is never closed again to fit.
+
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
   tree repeated the Built from tab a level at a time, and folders drew the
@@ -1134,8 +1143,9 @@ lua/seam/
   views/map.lua     the Map view: folder and type on a function, a folder, a file and a type, what each side holds, T's names only, its head's count
   map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows
   map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
-  map/flow.lua      the flow: calls above under their heads, a line down into the row, on to its callers below, each side in columns, cut to ⋯ N more
-  map/both.lua      folder with T off, names only: calls left, callers right, each side by folder and file, cut to ⋯ N more
+  map/flow.lua      the flow: calls above under their heads, a line down into the row, on to its callers below, each side in columns, groups closed to fit
+  map/both.lua      folder with T off, names only: calls left, callers right, each side by folder and file, groups closed to fit
+  map/fold.lua      which of the Map's groups close to a line so a side fits the pane: the fewest names first, never one opened with l
   map/foot.lua      the Map's foot: the name under the pane's cursor in full, a function's signature and the line that calls it, a type's declaration
   map/keys.lua      the Map's keys in the pane, l T J, where each acts, and the name under the cursor for the status line
 scripts/
@@ -1148,8 +1158,8 @@ tests/
   types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
-  map.lua           the Map's layouts on graphs written by hand: the facts, both ways, the flow
-  check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder
+  map.lua           the Map's layouts on graphs written by hand: the facts, both ways, the flow, which groups close to fit
+  check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder, its groups closed to fit and l opening one
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, the lens's range
   check.lua         every screen through its keys on a real repo, the Map and its foot on each contract
 ```
