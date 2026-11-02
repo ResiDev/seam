@@ -639,7 +639,7 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
-| **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under its name down a few rows, left, and on down under the row to its callers, so they stand apart from the row and do not read as what it gives, the row going on right of that line where it is too long, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
+| **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under the middle of its name down a few rows, left, and on down under the row to its callers, so they stand apart from the row and do not read as what it gives, the row going on right of that line where it is too long, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
 | **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
@@ -702,7 +702,7 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 - **The callers hang from the name** (2026-11-02, the user on tasksOf in
   raf: "the line comes out of the return type"). Falling from what the row
   gives, the line made its callers read as more of what it gives. Now it
-  falls from the row's name, and a row too long goes on under itself right
+  falls from the middle of the row's name, and a row too long goes on under itself right
   of that line. Nothing else changed; the other ways to say "its callers"
   are round eleven, `design/mocks/src/map/callers.py`; this is
   `design/mocks/map12-line-from-name.png`.
@@ -718,6 +718,13 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   its last. A type's declaration is no longer cut at seven lines: it runs
   as long as the foot holds, half the window, and only past that says
   `⋯ N more lines`.
+
+- **The foot is the tree's** (2026-11-02, the user: "why in the code view
+  am i getting the bottom bar thing, that's only for the tree view").
+  The code screen has no foot: its pane already tells the name under the
+  code's cursor, so a foot over the code repeated it and hid the code.
+  What the foot told there that the pane did not, a package type's own
+  declaration under a value's type, the pane now shows in full.
 
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
@@ -1050,8 +1057,10 @@ WithInitialValue<boolean>`), so for one the first type is looked up where
 the function that made the value writes it. The pane's Types view of the
 name draws the type as a written one is drawn, under a dim `no type is
 written for it; the TypeScript server says`, `asking the TypeScript server`
-until the answer lands and the pane is drawn again; the foot shows the
-hover's code in its colours and the type's declaration under it. A
+until the answer lands and the pane is drawn again, and when the type is a
+package's, its declaration under it, `ZodObject   type in zod`, in full;
+the foot beside the tree shows the hover's code in its colours and the
+type's declaration under it. A
 package's function (`createRoot`) at the foot is its hover, the signature,
 and the package it is in. A trial on excalidraw: 15 to 120 ms.
 
@@ -1195,8 +1204,8 @@ lua/seam/
   names.lua         what a name in the code is: a repo function, a type, an import's file, a value, a parameter, a field or method, its type and later uses
   codetypes.lua     the types the code does not write: after a value's name, after a function's parameters; the code's types display
   pane.lua          the pane beside the tree and the code: drawing it, its keys, the foot following its cursor
-  foot.lua          the foot: the repo function or type under the cursor in full, in every view and the code screen's code, over the window the cursor is in; a function's signature and the line that calls it, a type's declaration, a package's type once looked up, a value's type the server says
-  screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane and at the foot, J K n N
+  foot.lua          the foot: the name under the pane's cursor in full, beside the tree only, in every view; a function's signature and the line that calls it, a type's declaration, a package's type once looked up, a value's type the server says
+  screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane, J K n N
   views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names; a value's type the server says, where none is written
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
   lens_panel.lua    the lens float and its keys
@@ -1234,7 +1243,7 @@ tests/
   lookup.lua        package types: the package from a path, the declaration around a position, a hover's code and type, the call that made a value; for real on the trial excalidraw with node_modules, skipped without it or a server
   check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder, its groups closed to fit and l opening one
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, the lens's range
-  check.lua         every screen through its keys on a real repo, the foot on the Map, the Types view and the code
+  check.lua         every screen through its keys on a real repo, the foot on the Map and the Types view beside the tree, none on the code screen
 ```
 
 ## Tests
