@@ -128,11 +128,11 @@ eq(texts(rows), {
   '   c.ts  c ╶────┘',
 }, 'both ways: the folders with the most first, an empty row between them, a file a line, its names after it, joined to the centre')
 local many = {}
-for i = 1, both.CAP + 2 do
+for i = 1, 60 do
   many[i] = it('st/', 'a/st/s.ts', 'f' .. i)
 end
 local cut = both.side(many, 30, { side = 'left' })
-eq(cut[#cut].segs[1][1], '⋯ 2 more', 'a side past its cap: ⋯ more last')
+expect(#cut > 2, 'no cap: a side with room lists every name', #cut)
 for _, l in ipairs(cut) do
   local w = l.indent or 0
   for _, s in ipairs(l.segs) do
@@ -141,6 +141,51 @@ for _, l in ipairs(cut) do
   expect(w <= 30, 'names wrap to the room', l)
 end
 eq({ both.rooms(10, 80, 100, 10) }, { 10, 68 }, 'the narrower side what it needs, the wider the rest')
+
+-- which groups close to fit: the fewest names first, never one opened by hand
+local fold = require 'seam.map.fold'
+local function grp(key, lines, n)
+  return { key = key, lines = lines, n = n }
+end
+local three = { grp('a', 10, 9), grp('b', 4, 3), grp('c', 6, 5) }
+eq(fold.closed(three, 20, {}), {}, 'fits: nothing closed')
+eq(fold.closed(three, 17, {}), { b = true }, 'too tall: the fewest names closed first, until it fits')
+eq(fold.closed(three, 12, {}), { b = true, c = true }, 'taller still: the next fewest too')
+eq(fold.closed(three, 11, { b = true }), { c = true, a = true }, 'one opened by hand is never closed')
+eq(fold.closed(three, 17, { b = true }), {}, 'opening one closes no other: it counts as its one line')
+eq(fold.closed(three, 1, {}), { a = true, b = true, c = true }, 'no room: every group still its one line')
+eq(fold.closed({ grp('x', 2, 1), grp('y', 2, 1) }, 3, {}), { y = true }, 'among equals the later closes first')
+
+-- a side past its budget: its smallest folders closed to a line, named,
+-- with how many names in how many files
+local tall = {}
+for i = 1, 6 do
+  tall[#tall + 1] = it('big/', 'a/big/b' .. i .. '.ts', 'g' .. i)
+end
+tall[#tall + 1] = it('small/', 'a/small/s.ts', 's1')
+tall[#tall + 1] = it('small/', 'a/small/t.ts', 's2')
+local function side_texts(lines)
+  return vim.tbl_map(function(l)
+    return string.rep(' ', l.indent or 0) .. table.concat(vim.tbl_map(function(s)
+      return s[1]
+    end, l.segs))
+  end, lines)
+end
+eq(side_texts(both.side(tall, 40, { side = 'left', budget = 9 })), {
+  'big/',
+  '  b1.ts  g1',
+  '  b2.ts  g2',
+  '  b3.ts  g3',
+  '  b4.ts  g4',
+  '  b5.ts  g5',
+  '  b6.ts  g6',
+  '',
+  '▸ small/  2 names in 2 files',
+}, 'a side too tall: the folder with fewest names closed to its line')
+local opened = both.side(tall, 40, { side = 'left', budget = 9, open = { ['left:small/'] = true } })
+eq(#opened, 11, 'opened by hand: shown whole, taller than the budget')
+local closed = both.side(tall, 40, { side = 'left', budget = 9 })
+eq(closed[#closed].segs[1][3], { fold = 'left:small/', label = 'small/' }, 'the closed line opens its folder')
 
 -- the flow: the calls above under their heads, a line down through them
 -- into the row, from its end on down to its callers' heads
@@ -199,12 +244,40 @@ eq(texts(rows), {
   '  │',
   '  └──▶ mid',
 }, 'an empty row between files')
-local many = { { head = c 'a/', items = {} } }
-for i = 1, flow.CAP + 3 do
-  many[1].items[i] = { cols = { c('f' .. i) } }
+-- a flow taller than the pane: both sides share it, the group with the
+-- fewest names closed to its head and count
+local function items_of(prefix, n)
+  local out = {}
+  for i = 1, n do
+    out[i] = { cols = { c(prefix .. i) } }
+  end
+  return out
 end
-rows = flow.draw(many, { segs = c 'mid' }, {}, { width = 80 })
-expect(has(rows, '⋯ 3 more'), 'a side past its cap: ⋯ more', texts(rows))
+local tops = { { head = c 'a/', items = items_of('a', 5) }, { head = c 'b/', items = items_of('b', 2), files = 2 } }
+local bots = { { head = c 'u/', items = items_of('u', 3) } }
+rows = flow.draw(tops, { segs = c 'mid' }, bots, { width = 80 })
+expect(has(rows, 'b1') and not has(rows, '▸'), 'a flow that fits: nothing closed', texts(rows))
+rows = flow.draw(tops, { segs = c 'mid' }, bots, { width = 80, height = 17 })
+eq(texts(rows), {
+  '  ┌─ a/',
+  '  │    a1',
+  '  │    a2',
+  '  │    a3',
+  '  │    a4',
+  '  │    a5',
+  '  │',
+  '  ├─ ▸ b/  2 names in 2 files',
+  '  │',
+  '  └──▶ mid ──┐',
+  '             │',
+  '             │',
+  '             └─ u/',
+  '                  u1',
+  '                  u2',
+  '                  u3',
+}, 'a flow too tall: the group with fewest names closed to a line, every head still named')
+rows = flow.draw(tops, { segs = c 'mid' }, bots, { width = 80, height = 17, open = { ['left:b/'] = true } })
+expect(has(rows, 'b2') and not has(rows, '▸'), 'a group opened by hand stays open', texts(rows))
 
 -- a type's flow: In makes Model by mk; Model taken by tk1 giving Out, tk2
 -- giving Model back, tk3 a boolean; Out taken by o1 giving In

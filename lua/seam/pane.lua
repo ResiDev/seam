@@ -47,6 +47,7 @@ local function ctx(x, w)
   st.pctx = {
     open = st.opens[k],
     width = api.nvim_win_get_width(w.pane),
+    height = api.nvim_win_get_height(w.pane),
     head = x and x.kind == 'type' and x.name or nil,
   }
   return st.pctx
@@ -378,7 +379,7 @@ function M.all_keys(back)
     {
       'The Map',
       {
-        { 'l', 'open a side past its ⋯ more; on a name, show it in the tree' },
+        { 'l', 'open a group closed to fit, ▸; on a name, show it in the tree' },
         { 'T', 'folder: names only, or each signature; the choice stays' },
         { 'J', 'the code screen on the name under the cursor' },
       },

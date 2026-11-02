@@ -1,7 +1,8 @@
 -- The Map, driven through its keys, from tests/check.lua: on a function,
 -- its file, its folder and a type, reached with gm, each of its displays on
 -- <S-Tab>, the head listing them, no row wider than the pane; T on the
--- folder display, each signature or names only.
+-- folder display, each signature or names only; on the folder, its groups
+-- closed to fit a small room and l opening one.
 local api = vim.api
 local data = require 'seam.map.data'
 local map_view = require 'seam.views.map'
@@ -91,6 +92,59 @@ return function(t)
       fail(what .. ': <S-Tab> did not come back to ' .. first)
     end
   end
+  -- a side taller than its room: its smallest groups closed to a line, ▸,
+  -- each named; l on one opens it, and it stays open for the row. The room
+  -- made small by the foot's share
+  local function folds(what)
+    t.where('map folds ' .. what)
+    local foot = require 'seam.map.foot'
+    local share = foot.SHARE
+    foot.SHARE = 0.95
+    for _, d in ipairs { 'folder', 'type' } do
+      tree_win()
+      st.view.display.Map = d
+      pane.redraw()
+      local function closed()
+        local n, at, name = 0, nil, nil
+        for i, l in ipairs(lines()) do
+          local s = l:find('▸ ', 1, true)
+          if s then
+            n = n + 1
+            if not at then
+              at, name = { i, s + 3 }, l:sub(s + 4):match '^(%S+)'
+            end
+          end
+        end
+        return n, at, name
+      end
+      local n, at, name = closed()
+      if n > 0 then
+        api.nvim_set_current_win(st.owin.pane)
+        api.nvim_win_set_cursor(st.owin.pane, at)
+        key 'l'
+        local after = closed()
+        local shown_open = false
+        for _, l in ipairs(lines()) do
+          if l:find(name, 1, true) and not l:find('▸ ' .. name, 1, true) then
+            shown_open = true
+          end
+        end
+        if after ~= n - 1 or not shown_open then
+          fail(('%s %s: l on ▸ %s did not open it (%d closed, then %d)'):format(what, d, name, n, after))
+        end
+        tree_win()
+        key 'j'
+        key 'k'
+        if closed() ~= after then
+          fail(('%s %s: %s did not stay open for the row'):format(what, d, name))
+        end
+      end
+    end
+    foot.SHARE = share
+    st.view.display.Map = map_view.DISPLAYS[1]
+    pane.redraw()
+  end
+
   -- the function, and T on its folder display: each signature, and back
   tree_screen.show(f.id)
   displays('function ' .. f.name)
@@ -122,6 +176,7 @@ return function(t)
         key 'j'
         key 'k'
         displays('folder ' .. st.orows[j].key)
+        folds('folder ' .. st.orows[j].key)
         break
       end
     end

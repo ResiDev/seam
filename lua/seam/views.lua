@@ -26,6 +26,7 @@ local M = {}
 ---@class seam.ViewCtx
 ---@field open table<string, boolean> the types opened in place for the row, by key (seam.typesview)
 ---@field width integer the pane's
+---@field height integer|nil the pane's
 
 ---@class seam.ViewState
 ---@field at string the tab chosen, Code or Types
