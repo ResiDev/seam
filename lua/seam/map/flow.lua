@@ -108,8 +108,8 @@ end
 --- Pieces in lines of at most `room` columns, broken between words; a word
 --- longer than a line has a line of its own and goes past it. With them
 --- how far in from the first each line starts: 2, or with `hang`,
---- `hang` past the marked piece (`from`) once a line has it, so a line
---- falling from that piece runs clear of the lines under it; each line
+--- `hang` past the middle of the marked piece (`from`) once a line has
+--- it, so a line falling from there runs clear of the lines under it; each line
 --- after the first ends 2 past where the first may.
 ---@param segs table[]
 ---@param room integer
@@ -119,7 +119,7 @@ end
 function M.wrap(segs, room, hang)
   room = math.max(room, 8)
   local lines, indents, cur, w = {}, { 0 }, {}, 0
-  local at -- the marked piece's column, from the first line's start
+  local at -- the middle of the marked piece, from the first line's start
   for _, wd in ipairs(words(segs)) do
     local bare = wd.w - #(wd.pieces[#wd.pieces][1]:match ' *$')
     -- a line goes on from its first letter
@@ -130,7 +130,7 @@ function M.wrap(segs, room, hang)
       end
       for _, p in ipairs(wd.pieces) do
         if hang and p.from then
-          at = indents[#lines + 1] + w
+          at = indents[#lines + 1] + w + math.floor(vim.fn.strchars(p[1]) / 2)
         end
         cur[#cur + 1] = p
         w = w + vim.fn.strchars(p[1])
@@ -199,7 +199,7 @@ local function put_closed(cv, g, k, x, y)
 end
 
 --- The rows: `top` above, a line down from its heads into `centre`, from
---- the centre's name (`centre.from`, its piece), else its end, a line on
+--- the middle of the centre's name (`centre.from`, its piece), else its end, a line on
 --- down to `bottom`'s heads. Past `height` rows the groups
 --- of both sides with the fewest names close to a line each
 --- (seam.map.fold), never one in `open`; each opened by `left:` above or
@@ -215,7 +215,7 @@ function M.draw(top, centre, bottom, o)
   local ws, bws = widths(top), widths(bottom)
   local cx = #top > 0 and G + 5 or 0
   -- the centre, going on under itself clear of the line from its name;
-  -- where its name starts and it ends
+  -- the middle of its name and where it ends
   local segs = { unpack(centre.segs) }
   local n_ = centre.from and segs[centre.from]
   if n_ then
@@ -227,7 +227,7 @@ function M.draw(top, centre, bottom, o)
     local x = cx + ins[li]
     for _, s in ipairs(l) do
       if s.from then
-        ox, oline = x, li
+        ox, oline = x + math.floor(vim.fn.strchars(s[1]) / 2), li
       end
       x = x + vim.fn.strchars(s[1])
     end
@@ -299,7 +299,7 @@ function M.draw(top, centre, bottom, o)
   if #bottom > 0 then
     local top_y
     if ox then
-      -- from under its name down a while, left, then down under the row
+      -- from under its name's middle down a while, left, then down under the row
       local turn = y + M.DROP
       top_y = turn
       cv:v(ox, oy, turn)
