@@ -100,7 +100,7 @@ local function build(file)
     ms = d.ms or {},
     packages = d.packages or {},
     exports = d.exports or {},
-    libs = d.libs or {},
+    libs = d.libs, -- nil in an index older than format 4
     byid = {},
     bykey = {},
     contracts = {},

@@ -529,6 +529,10 @@ end
 function M.draw(out, x, m, display, ctx)
   x = subject(x)
   if display == 'library' and x.kind ~= 'type' then
+    if not m.libs then
+      out[#out + 1] = row():add(' the index is older than libraries: :Seam! indexes it again', 'SeamLabel')
+      return
+    end
     local names = data.libraries(m, holds(x, m))
     if #names == 0 then
       out[#out + 1] = row():add(' it takes nothing from a library', 'SeamLabel')
