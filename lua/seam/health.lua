@@ -86,12 +86,42 @@ local function server()
   end
 end
 
+local function indexed()
+  health.start 'seam: the index'
+  local index = require 'seam.index'
+  local st = require 'seam.state'
+  local root = st.root or vim.fs.root(0, { '.git', 'package.json' }) or vim.fn.getcwd()
+  local file = index.dir(root) .. '/treesitter.json'
+  local fh = io.open(file, 'r')
+  if not fh then
+    return health.info('no index for ' .. vim.fn.fnamemodify(root, ':~') .. ' yet: :Seam makes one')
+  end
+  local s = fh:read '*a'
+  fh:close()
+  local v = index.version(root)
+  local say = v < index.VERSION and health.warn or health.ok
+  say(('%s: format %d, seam reads %d%s'):format(vim.fn.fnamemodify(file, ':~'), v, index.VERSION, v < index.VERSION and '; :Seam! indexes it again' or ''))
+  local ok, d = pcall(vim.json.decode, s)
+  if ok and d.libs then
+    local by = {}
+    for _, l in ipairs(d.libs) do
+      by[l.library] = (by[l.library] or 0) + #l.uses
+    end
+    local ls = vim.tbl_keys(by)
+    table.sort(ls, function(a, b)
+      return by[a] > by[b]
+    end)
+    health.info(('%d names taken from %d libraries%s'):format(#d.libs, #ls, #ls > 0 and (': ' .. table.concat(vim.list_slice(ls, 1, 8), ', ')) or ''))
+  end
+end
+
 function M.check()
   copy()
   colours()
   treesitter()
   keys()
   server()
+  indexed()
 end
 
 return M
