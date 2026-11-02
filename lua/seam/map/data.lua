@@ -1,7 +1,8 @@
 -- What the Map draws from, read off the model: a function's calls and
 -- callers through the lens, how much it goes on to reach, what crosses a
--- folder's or a file's edge, a type's makers and takers, and the names the
--- Map writes folders and files by. Pure, so the specs drive it on a graph
+-- folder's or a file's edge, a type's makers and takers, the names taken
+-- from libraries and where, and the names the Map writes folders and files
+-- by. Pure, so the specs drive it on a graph
 -- written by hand.
 local graph = require 'seam.graph'
 local index = require 'seam.index'
@@ -224,6 +225,79 @@ function M.fns_in(m, path)
   for _, n in ipairs(require('seam.outline').functions(m, path)) do
     out[#out + 1] = n.id
   end
+  return out
+end
+
+---------------------------------------------------------------- libraries
+
+-- each file's nodes by line, once a model
+local function by_path(m)
+  local c = memo(m)
+  if not c.bypath then
+    c.bypath = {}
+    for _, id in ipairs(c.ids) do
+      local n = m.graph.nodes[id]
+      c.bypath[n.path] = c.bypath[n.path] or {}
+      table.insert(c.bypath[n.path], n)
+    end
+  end
+  return c.bypath
+end
+
+--- The node line `line` of `path` is in: the innermost function, class or
+--- component, else the file's top.
+---@param m table
+---@param path string
+---@param line integer
+---@return seam.Node|nil
+function M.owner(m, path, line)
+  local best
+  for _, n in ipairs(by_path(m)[path] or {}) do
+    if n.line <= line and line <= (n.end_line or n.line) and (not best or n.line >= best.line) then
+      best = n
+    end
+  end
+  return best
+end
+
+---@class seam.LibName
+---@field library string the package, `react`, `@codemirror/view`
+---@field name string the name taken from it, `useState`
+---@field uses { path: string, line: integer, col: integer, id: string|nil, test: boolean }[] by path then line, `id` the node each is in, `col` 1-based
+---@field test boolean every use in a test
+
+--- The names taken from libraries where `inside(path, line)` says, each
+--- with its uses there: the names used outside tests first, the libraries
+--- used most first, then each library's names used most.
+---@param m table
+---@param inside fun(path: string, line: integer): boolean
+---@return seam.LibName[]
+function M.libraries(m, inside)
+  local out, total = {}, {}
+  for _, l in ipairs(m.libs or {}) do
+    local uses, test = {}, true
+    for _, u in ipairs(l.uses) do
+      if inside(u.path, u.line) then
+        local n = M.owner(m, u.path, u.line)
+        local t = index.is_test(u.path)
+        uses[#uses + 1] = { path = u.path, line = u.line, col = u.col, id = n and n.id, test = t }
+        test = test and t
+      end
+    end
+    if #uses > 0 then
+      out[#out + 1] = { library = l.library, name = l.name, uses = uses, test = test }
+      total[l.library] = (total[l.library] or 0) + #uses
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.test ~= b.test then
+      return not a.test
+    elseif a.library ~= b.library then
+      local ta, tb = total[a.library], total[b.library]
+      return ta > tb or (ta == tb and a.library < b.library)
+    end
+    return #a.uses > #b.uses or (#a.uses == #b.uses and a.name < b.name)
+  end)
   return out
 end
 

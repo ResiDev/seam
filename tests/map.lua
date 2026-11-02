@@ -95,6 +95,55 @@ eq(data.where(m, 'pa/src/top.ts', RUN), 'pa/src/ files', "the package's top")
 eq(data.where(m, 'pb/src/x.ts', RUN), 'pb/src/', 'another package from its name')
 eq(data.short(m, 'pa/src/run/run.ts', 'pa/src/x'), 'run/run.ts', 'a file in the same package')
 eq(data.short(m, 'pb/src/x.ts', 'pa/src/x'), 'pb/src/x.ts', 'a file in another package')
+-- the names taken from libraries: each use in the innermost function, the
+-- libraries used most first, then their names used most, tests last
+m.libs = {
+  { library = 'clsx', name = 'clsx', uses = { { path = 'pa/src/run/run.ts', line = 15, col = 3 } } },
+  {
+    library = 'react',
+    name = 'useRef',
+    uses = { { path = 'pa/src/run/run.ts', line = 14, col = 3 } },
+  },
+  {
+    library = 'react',
+    name = 'useState',
+    uses = {
+      { path = 'pa/src/run/run.ts', line = 12, col = 3 },
+      { path = 'pa/src/run/up.ts', line = 2, col = 5 },
+      { path = 'pa/src/run/up.ts', line = 12, col = 1 },
+    },
+  },
+  { library = 'vitest', name = 'it', uses = { { path = 'pa/src/run/run.test.ts', line = 4, col = 1 } } },
+}
+eq(data.owner(m, 'pa/src/run/up.ts', 12).id, A1, 'a use is in the function whose lines hold it')
+eq(data.owner(m, 'pa/src/run/up.ts', 100), nil, 'past every function, in none')
+local function libs(inside)
+  return vim.tbl_map(function(l)
+    return l.library .. ' ' .. l.name .. ' ' .. #l.uses
+  end, data.libraries(m, inside))
+end
+local within_run = data.within 'pa/src/run'
+eq(
+  libs(function(p)
+    return within_run(p)
+  end),
+  { 'react useState 3', 'react useRef 1', 'clsx clsx 1', 'vitest it 1' },
+  'a folder: react used most, its names used most first, a test last'
+)
+eq(
+  vim.tbl_map(function(u)
+    return u.id
+  end, data.libraries(m, within_run)[1].uses),
+  { RUN, A, A1 },
+  'each use with the function it is in'
+)
+eq(
+  libs(function(p, l)
+    return p == 'pa/src/run/run.ts' and l >= 10 and l <= 18
+  end),
+  { 'react useRef 1', 'react useState 1', 'clsx clsx 1' },
+  "a function: only its lines'"
+)
 local into, out = data.crossing(m, data.within 'pa/src/st')
 eq(#into, 2, 'into st/: run calls b and c')
 eq(#out, 0, 'st/ calls nothing outside')

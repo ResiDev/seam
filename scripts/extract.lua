@@ -3,7 +3,8 @@
 -- use it and the names it is built from, resolved through relative paths,
 -- every tsconfig's `paths` and workspace packages by name; and the call
 -- graph: each function, component and class, and each file's top, with the
--- callables it names.
+-- callables it names; and each name taken from a library, a package from
+-- outside the repo, with every place it is named.
 local repo, out = arg[1], arg[2]
 local site = vim.fn.stdpath 'data' .. '/site/parser/'
 local function add_lang(lang)
@@ -250,6 +251,22 @@ local function resolve_spec(from, spec)
       return in_workspace(w, spec:sub(#name + 2))
     end
   end
+end
+
+-- the library an import names: `@scope/name` or `name`, its subpath left
+-- off; nil for a relative path, a tsconfig path or a workspace package
+local function library_of(from, spec)
+  if spec:match '^[./]' then
+    return nil
+  end
+  for _, m in ipairs(paths_for(from)) do
+    local pre = m.pat:gsub('%*$', '')
+    if spec == m.pat or (m.pat:sub(-1) == '*' and spec:sub(1, #pre) == pre) then
+      return nil
+    end
+  end
+  local lib = spec:match '^(@[^/]+/[^/]+)' or spec:match '^([^/]+)'
+  return not workspace[lib] and lib or nil
 end
 
 local function text_of(node, src)
@@ -622,6 +639,7 @@ local function declares(node)
   return false
 end
 local NODES = {}
+local LIBS = {} -- `library\nname` -> { library, name, uses }
 
 local nuses = 0
 local done = 0
@@ -629,9 +647,14 @@ for path, f in pairs(F) do
   f.root = vim.treesitter.get_string_parser(f.src, f.lang):parse()[1]:root()
   local bound = {} -- local name -> export
   local ns = {} -- local namespace -> target path
+  local libs = {} -- local name -> { library, name }
   for localname, im in pairs(f.imports) do
     if im.spec then
       local target = resolve_spec(path, im.spec)
+      local lib = not target and library_of(path, im.spec)
+      if lib then
+        libs[localname] = { lib, im.name }
+      end
       if target then
         if im.name == '*' then
           ns[localname] = target
@@ -664,6 +687,24 @@ for path, f in pairs(F) do
       local r, c = node:start()
       hit.uses[#hit.uses + 1] = { path = path, line = r + 1, col = c + 1, role = role(node) }
       nuses = nuses + 1
+    end
+    -- a library's name: as imported, or after a namespace or default
+    -- import's dot, else the local name a default or namespace has
+    local lb = cap == 'id' and libs[txt]
+    if lb and not excluded(node) then
+      local name, p = lb[2], node:parent()
+      if name == '*' or name == 'default' then
+        local prop = p
+          and (
+            (p:type() == 'member_expression' and p:field('object')[1] == node and p:field('property')[1])
+            or (p:type() == 'nested_type_identifier' and p:field('module')[1] == node and p:field('name')[1])
+          )
+        name = prop and text_of(prop, f.src) or txt
+      end
+      local k = lb[1] .. '\n' .. name
+      LIBS[k] = LIBS[k] or { library = lb[1], name = name, uses = {} }
+      local r, c = node:start()
+      table.insert(LIBS[k].uses, { path = path, line = r + 1, col = c + 1 })
     end
   end
 
@@ -785,18 +826,28 @@ end
 table.sort(exports, function(a, b)
   return a.id < b.id
 end)
+local libs = vim.tbl_values(LIBS)
+table.sort(libs, function(a, b)
+  return a.library < b.library or (a.library == b.library and a.name < b.name)
+end)
+for _, l in ipairs(libs) do
+  table.sort(l.uses, function(a, b)
+    return a.path < b.path or (a.path == b.path and (a.line < b.line or (a.line == b.line and a.col < b.col)))
+  end)
+end
 local fh = assert(io.open(out, 'w'))
 table.sort(NODES, function(a, b)
   return a.id < b.id
 end)
 fh:write(vim.json.encode {
   source = 'treesitter',
-  version = 3,
+  version = 4,
   repo = repo,
   ms = timing,
   packages = pkgs,
   exports = exports,
   nodes = NODES,
+  libs = libs,
   notes = { 'imports resolved by relative path and tsconfig paths only; a local that shadows an imported or top-level name still counts' },
 })
 fh:close()

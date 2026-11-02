@@ -103,7 +103,7 @@ view: `D` turns the diff on in Code and Types (What changed, below).
 |---|---|---|---|---|
 | **Code** | | the file | its body, imports underlined | its declaration |
 | **Types** | what comes in and goes out: the types its exports take and give | the same for the file, then the types it declares | what it takes and gives, each type expandable | where it comes from and what it becomes, one step each way; its fields with who sets and reads each |
-| **Map** | two displays on `<S-Tab>`: folder, type (section 6) | the same two | the same two | the same two |
+| **Map** | three displays on `<S-Tab>`: folder, type, library (section 6) | the same three | the same three | folder and type |
 
 - **Built from, Used by and size are gone** (2026-11-01). The Map's flow
   shows what Built from and Used by did for a function, each call and
@@ -634,13 +634,15 @@ folders as boxes, a graph of boxes and lines, both ways, every way between
 two, in order with a lane a file, the body cut to its calls, size by reach,
 an icicle, types as boxes with functions on the arrows, values as lanes.
 
-**Chosen.** The Map has two displays, the same on every kind of row,
-`<S-Tab>` stepping through them. The head lists them, the one shown bold.
+**Chosen.** The Map has three displays, the same on every kind of row
+but a type, which has no library, `<S-Tab>` stepping through them. The
+head lists them, the one shown bold.
 
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
 | **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under the middle of its name down a few rows, left, and on down under the row to its callers, so they stand apart from the row and do not read as what it gives, the row going on right of that line where it is too long, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
 | **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
+| **library** | each name it takes from a library a head, the library dim after it, the libraries used most first, then their names used most, tests last; a line down through them into the row; under each the file and every line it uses it on (`design/mocks/map12-libraries.png`) | the same, under each the functions using it, the file once and the line each first uses it on, tests dim | the same for a file | none |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
   `map9-type.png`, `map9-type-cursor-type.png`, rounds seven to nine in
@@ -706,6 +708,20 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   of that line. Nothing else changed; the other ways to say "its callers"
   are round eleven, `design/mocks/src/map/callers.py`; this is
   `design/mocks/map12-line-from-name.png`.
+
+- **What it takes from libraries** (2026-11-02, the user: "what
+  libraries are used where"). The Map showed only the repo calling
+  itself, so a component leaning on React looked as if it did little. A
+  third display, library, lists each name taken from a package outside the
+  repo, grouped by that name with its library after it, and under it the
+  functions using it. The treesitter index (format 4) keeps each library
+  import's name and every place it is named: an import that resolves to
+  no repo file through a relative path, a tsconfig path or a workspace
+  package, after a namespace or default import's dot where there is one.
+  Each use goes to the innermost function whose lines hold it. Package
+  types are still never indexed; the foot asks the server of one when the
+  cursor rests on it. `design/mocks/map12-libraries.png`, from
+  `design/mocks/src/map/libraries.py` on excalidraw.
 
 - **The foot everywhere** (2026-11-02, the user: "would be nice to have
   in other parts like Types, so you could see the definition of the type
@@ -1224,7 +1240,7 @@ lua/seam/
   views/codetypes.lua the code screen's types display: the function's line, its values, the functions inside; with the diff, a line as it was
   views/map.lua     the Map view: folder and type on a function, a folder, a file and a type, what each side holds, T's names only, its head's count
   map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows as wide as what is on them
-  map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
+  map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers, the names taken from libraries and the function each use is in
   map/flow.lua      the flow: calls above under their heads, a line down into the row, on to its callers below, each side in columns, groups closed to fit
   map/both.lua      folder with T off, names only: calls left, callers right, each side by folder and file, groups closed to fit
   map/fold.lua      which of the Map's groups close to a line so a side fits the pane: the fewest names first, never one opened with l

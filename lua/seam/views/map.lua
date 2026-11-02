@@ -1,7 +1,8 @@
 -- The Map view: two displays on every kind of row, folder and type, each
 -- what the row calls above, the row, its callers below (seam.map.flow),
 -- drawn from the call graph and the types; folder with T off today's both
--- ways, names only (seam.map.both). Each row's groups opened by hand and T
+-- ways, names only (seam.map.both); and on a function, a file or a folder
+-- a third, library: each name it takes from a library above, where. Each row's groups opened by hand and T
 -- kept in st.map; the keys that act on it, l T J, and what is under the cursor
 -- (seam.map.keys); the name under the cursor told at the foot (seam.foot).
 local api = vim.api
@@ -13,7 +14,7 @@ local tv = require 'seam.typesview'
 local types_view = require 'seam.views.types'
 local M = {}
 
-M.DISPLAYS = { 'folder', 'type' }
+M.DISPLAYS = { 'folder', 'type', 'library' }
 
 local row = draw.row
 
@@ -41,6 +42,14 @@ end
 
 local function dir_of(x)
   return outline.full(x.item)
+end
+
+--- The displays the row has: library on a function, a file or a folder.
+---@param x seam.ORow
+---@return string[]
+function M.displays(x)
+  x = subject(x)
+  return x and x.kind == 'type' and { 'folder', 'type' } or M.DISPLAYS
 end
 
 local function dir_label(x)
@@ -419,6 +428,97 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   return flow.draw(groups(top, true), centre, groups(bottom, false), { width = ctx.width - 2, height = budget(ctx), open = s.open })
 end
 
+-- where a row holds a line of the code: in a function's lines, in its
+-- file, in its folder
+local function holds(x, m)
+  if x.kind == 'fn' then
+    local n = m.graph.nodes[x.id]
+    return function(path, line)
+      return path == n.path and n.line <= line and line <= (n.end_line or n.line)
+    end
+  end
+  local inside = data.within(x.kind == 'dir' and dir_of(x) or x.path)
+  return function(path)
+    return inside(path)
+  end
+end
+
+--- library: each name the row takes from a library a head, its library
+--- after it, a line down through them into the row; under each the
+--- functions using it, the file once and the line each first uses it on,
+--- tests dim and last; on a function, its file and every line using it.
+local function library_display(x, m, ctx, label, names)
+  local flow = require 'seam.map.flow'
+  local home = home_of(x, m)
+  local fn = x.kind == 'fn'
+  local groups = {}
+  for _, l in ipairs(names) do
+    local u1 = l.uses[1]
+    local head = {
+      {
+        l.name,
+        l.name:match '^%u' and 'SeamType' or 'SeamMapFn',
+        {
+          kind = l.name:match '^%u' and 'type' or 'value',
+          name = l.name,
+          from = { path = u1.path, line = u1.line, col = u1.col - 1 },
+        },
+      },
+      { '  ' .. l.library, 'SeamLabel' },
+    }
+    local items, files = {}, {}
+    for _, u in ipairs(l.uses) do
+      files[u.path] = true
+    end
+    if fn then
+      local tail = {}
+      for i, u in ipairs(l.uses) do
+        tail[#tail + 1] =
+          { (i > 1 and ' ' or '') .. ':' .. u.line, 'SeamLabel', { kind = 'fn', id = x.id, at = { path = u.path, line = u.line, inside = label } } }
+      end
+      items[1] = { cols = { { { u1.path:match '[^/]+$', 'SeamText', { kind = 'file', path = u1.path } } } }, tail = tail }
+    else
+      -- each function once, at its first use; tests last
+      local firsts, seen = {}, {}
+      for _, u in ipairs(l.uses) do
+        local k = u.id or u.path
+        if not seen[k] then
+          seen[k] = true
+          firsts[#firsts + 1] = u
+        end
+      end
+      table.sort(firsts, function(a, b)
+        if a.test ~= b.test then
+          return not a.test
+        end
+        return a.path < b.path or (a.path == b.path and a.line < b.line)
+      end)
+      local prev
+      for _, u in ipairs(firsts) do
+        local file = data.short(m, u.path, home)
+        local n = u.id and m.graph.nodes[u.id]
+        local at = { ':' .. u.line, 'SeamLabel' }
+        local where = u.path ~= prev and { { file, u.test and 'SeamLabel' or 'SeamText', { kind = 'file', path = u.path } }, at }
+          or { { string.rep(' ', vim.fn.strchars(file)) }, at }
+        prev = u.path
+        local who = n
+            and {
+              {
+                data.label(n),
+                u.test and 'SeamLabel' or 'SeamMapFn',
+                { kind = 'fn', id = n.id, at = { path = u.path, line = u.line, inside = data.label(n) } },
+              },
+            }
+          or { { '(top level)', 'SeamLabel' } }
+        items[#items + 1] = { cols = { where, who } }
+      end
+    end
+    groups[#groups + 1] = { head = head, items = items, key = l.library .. ' ' .. l.name, files = vim.tbl_count(files) }
+  end
+  local hl = fn and 'SeamMapFnBold' or 'SeamBold'
+  return flow.draw(groups, { segs = { { label, hl } } }, {}, { width = ctx.width - 2, height = budget(ctx), open = M.state(x).open })
+end
+
 --- The Map of `x` in `display`, rows under it left for the foot to stand
 --- over.
 ---@param out table[]
@@ -428,6 +528,19 @@ end
 ---@param ctx seam.ViewCtx
 function M.draw(out, x, m, display, ctx)
   x = subject(x)
+  if display == 'library' and x.kind ~= 'type' then
+    local names = data.libraries(m, holds(x, m))
+    if #names == 0 then
+      out[#out + 1] = row():add(' it takes nothing from a library', 'SeamLabel')
+      return
+    end
+    local label = x.kind == 'fn' and data.label(m.graph.nodes[x.id]) or x.kind == 'dir' and dir_label(x) or data.short(m, x.path, x.path)
+    vim.list_extend(out, library_display(x, m, ctx, label, names))
+    for _ = 1, require('seam.foot').MAX do
+      out[#out + 1] = row()
+    end
+    return
+  end
   local top, bottom = sides(x, m)
   if #top == 0 and #bottom == 0 then
     out[#out + 1] = row():add(' nothing calls it and it calls nothing', 'SeamLabel')

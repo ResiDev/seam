@@ -61,18 +61,20 @@ return function(t)
     if (views.shown(pane.subject(), st.view) or {}).name ~= 'Map' then
       key 'gm'
     end
-    local first = map_view.DISPLAYS[1]
+    local ds = map_view.displays(pane.subject())
+    local first = ds[1]
     st.view.display.Map = first
     pane.redraw()
     if shown() ~= first then
       return fail('the Map is not shown on ' .. what)
     end
-    for i, d in ipairs(map_view.DISPLAYS) do
+    for i, d in ipairs(ds) do
       if shown() ~= d then
         fail(('%s: display %d is %s, not %s'):format(what, i, tostring(shown()), d))
       end
       local ls = lines()
-      if #ls < 2 then
+      -- library on a row that takes nothing from one says so in a row
+      if #ls < 2 and not (d == 'library' and (ls[1] or ''):find('nothing from a library', 1, true)) then
         fail(('%s %s: %d rows'):format(what, d, #ls))
       end
       -- nothing cut: a row past the pane goes on right, unwrapped
@@ -86,7 +88,7 @@ return function(t)
         end
       end
       local head = table.concat(api.nvim_buf_get_lines(st.obuf.phead, 0, -1, false), ' ')
-      if not head:find(table.concat(map_view.DISPLAYS, ' · '), 1, true) then
+      if not head:find(table.concat(ds, ' · '), 1, true) then
         fail(('%s %s: the head does not list the displays: %s'):format(what, d, head))
       end
       key '<S-Tab>'
@@ -103,7 +105,7 @@ return function(t)
     local foot = require 'seam.foot'
     local share = foot.SHARE
     foot.SHARE = 0.95
-    for _, d in ipairs { 'folder', 'type' } do
+    for _, d in ipairs(map_view.displays(pane.subject())) do
       tree_win()
       st.view.display.Map = d
       pane.redraw()
