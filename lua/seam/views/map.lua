@@ -3,7 +3,7 @@
 -- drawn from the call graph and the types; folder with T off today's both
 -- ways, names only (seam.map.both). Each row's groups opened by hand and T
 -- kept in st.map; the keys that act on it, l T J, and what is under the cursor
--- (seam.map.keys); the name under the cursor told at the foot (seam.map.foot).
+-- (seam.map.keys); the name under the cursor told at the foot (seam.foot).
 local api = vim.api
 local data = require 'seam.map.data'
 local draw = require 'seam.draw'
@@ -64,7 +64,7 @@ local function budget(ctx)
   if not ctx.height then
     return nil
   end
-  return ctx.height - math.ceil(ctx.height * require('seam.map.foot').SHARE)
+  return ctx.height - math.ceil(ctx.height * require('seam.foot').SHARE)
 end
 
 --- Is T on: the folder display with each signature, or names only, as it
@@ -449,7 +449,7 @@ function M.draw(out, x, m, display, ctx)
     rows = flow_display(x, m, ctx, C, display == 'type' and 'type' or 'folder', top, bottom, label)
   end
   vim.list_extend(out, rows)
-  for _ = 1, require('seam.map.foot').MAX do
+  for _ = 1, require('seam.foot').MAX do
     out[#out + 1] = row()
   end
 end

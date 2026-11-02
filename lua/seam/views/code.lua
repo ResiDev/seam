@@ -1,9 +1,11 @@
 -- The Code view: a function from its doc comment to its end, a file whole,
 -- a type's declaration; each name from another file underlined where it
 -- lives, each value's type after its name where none is written.
+local api = vim.api
 local code = require 'seam.code'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
+local names = require 'seam.names'
 local outline = require 'seam.outline'
 local theme = require 'seam.theme'
 local M = {}
@@ -24,6 +26,34 @@ function M.under(m, from, to)
     return theme.hue(pkg).under
   end
   return 'SeamUnder'
+end
+
+--- What the code copied under the cursor in `win` names, as the foot
+--- tells it: a repo function `{ id }`, a repo type `{ kind = 'type', name,
+--- decl }`; nil off one.
+---@param win integer
+---@param m table
+---@return table|nil
+function M.at_cursor(win, m)
+  local cur = api.nvim_win_get_cursor(win)
+  for _, c in ipairs(code.spans(api.nvim_win_get_buf(win), cur[1] - 1)) do
+    if type(c[3]) == 'number' and cur[2] >= c[4] and cur[2] < c[4] + c[5] then
+      local n = names.at(m, c[1], c[2], c[3] + cur[2] - c[4])
+      if n and n.kind == 'call' then
+        return { id = n.id }
+      elseif n and n.kind == 'type' then
+        return { kind = 'type', name = n.name, decl = n.decl }
+      elseif n and n.at and m.graph then
+        -- a function the file holds as a value, `const f = () => …`
+        for _, node in ipairs(outline.by_file(m.graph)[c[1]] or {}) do
+          if node.name == n.name and node.line == n.at.line and node.kind ~= 'module' then
+            return { id = node.id }
+          end
+        end
+      end
+      return nil
+    end
+  end
 end
 
 --- Code rows of `path` for the lines in `set`, a ⋯ between runs, `lit`

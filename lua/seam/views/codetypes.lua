@@ -9,6 +9,7 @@ local changed = require 'seam.views.changed'
 local code = require 'seam.code'
 local codetypes = require 'seam.codetypes'
 local draw = require 'seam.draw'
+local outline = require 'seam.outline'
 local st = require 'seam.state'
 local types_view = require 'seam.views.types'
 local M = {}
@@ -77,7 +78,14 @@ function M.draw(out, m, e, width)
       end
       x:to(width - 7):add((' %4d'):format(r.line), 'SeamGutter')
       local key = 'ct:' .. r.line .. ':' .. r.name
-      x.meta.tv = { key = key, id = 'l', names = placed, chain = {} }
+      x.meta.tv = { key = key, id = 'l', names = placed, chain = {}, path = e.path }
+      if r.kind == 'fn' and r.depth == 0 then
+        for _, n in ipairs(outline.by_file(m.graph)[e.path] or {}) do
+          if n.line == r.line and n.name == r.name then
+            x.meta.tv.fn_id = n.id
+          end
+        end
+      end
       out[#out + 1] = x
       local seen, line = {}, { id = 'l', names = {}, path = e.path }
       for _, p in ipairs(placed) do

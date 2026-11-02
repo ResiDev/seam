@@ -1,7 +1,8 @@
 -- The pane's views: beside the tree every view is a tab; on the code screen
 -- two, Code and Types, what is read most there, and the Map aside on its
 -- key (on both screens). Which rows each
--- has something for, the displays it can be shown in, and how it draws.
+-- has something for, the displays it can be shown in, how it draws, and
+-- what is under its cursor, for the foot.
 -- `st.view` holds the tab chosen, the view aside shown, and each view's
 -- display. The diff (D) is no view: Code and Types draw what changed.
 local changed_view = require 'seam.views.changed'
@@ -23,6 +24,7 @@ local M = {}
 ---@field draw fun(out: table[], row: seam.ORow, m: table, display: string, ctx: seam.ViewCtx)
 ---@field count fun(m: table, row: seam.ORow): string|nil what the pane's head says of the row in this view
 ---@field nowrap boolean|nil its rows go on right past the pane, scrolled with zl zh, not wrapped
+---@field under fun(win: integer, row: seam.ORow, m: table): table|nil what is under the cursor in the pane `win`, for the foot (seam.foot)
 
 ---@class seam.ViewCtx
 ---@field open table<string, boolean> the types opened in place for the row, by key (seam.typesview)
@@ -80,6 +82,9 @@ M.list = {
     count = function(m, row)
       return changed_view.on() and changed_view.count(m, as_type(row)) or nil
     end,
+    under = function(win, _, m)
+      return code_view.at_cursor(win, m)
+    end,
   },
   {
     name = 'Types',
@@ -99,6 +104,9 @@ M.list = {
     count = function(m, row)
       return changed_view.on() and changed_view.count(m, as_type(row)) or nil
     end,
+    under = function(win, row, m)
+      return types_view.at_cursor(win, m, row.from or row.path)
+    end,
   },
   {
     name = 'Map',
@@ -113,6 +121,9 @@ M.list = {
     end,
     draw = map_view.draw,
     count = map_view.count,
+    under = function()
+      return require('seam.map.keys').under()
+    end,
   },
 }
 

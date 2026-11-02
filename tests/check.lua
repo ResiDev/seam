@@ -782,6 +782,21 @@ local function check_answer()
   elseif (n.kind == 'value' or n.kind == 'param' or n.kind == 'field' or n.kind == 'method') and not ph:find(n.name, 1, true) then
     fail(('on the %s %s the pane says %q'):format(n.kind, n.name, ph))
   end
+  -- on a repo function or type the foot over the code tells it
+  local cur = api.nvim_win_get_cursor(st.cwin.code)
+  local meta = require('seam.draw').meta(st.cbuf.code, cur[1])
+  local on_it = meta.lnum == n.line and cur[2] - (meta.start or 0) >= n.col and cur[2] - (meta.start or 0) < n.e
+  if on_it and (n.kind == 'call' or n.kind == 'type') then
+    local fb = require('seam.foot').shown()
+    local want = n.kind == 'call' and st.models[st.cur].graph.nodes[n.id].name or n.decl.name
+    if not fb then
+      fail(('no foot on the %s %s'):format(n.kind, n.name))
+    elseif not table.concat(lines(fb), '\n'):find(want, 1, true) then
+      fail(('the foot on %s does not name %s'):format(n.name, want))
+    elseif api.nvim_win_get_config(vim.fn.bufwinid(fb)).win ~= st.cwin.code then
+      fail(('the foot on %s is not over the code'):format(n.name))
+    end
+  end
   -- its later uses lit, each name and its line
   local lit = 0
   for _, mk in ipairs(api.nvim_buf_get_extmarks(st.cbuf.code, ns_uses, 0, -1, { details = true })) do
@@ -983,7 +998,7 @@ end
 -- it, no row wider than the pane; in the pane the foot telling the name
 -- under the cursor, the line that calls it as that line reads; <Esc> back
 local views = require 'seam.views'
-local foot = require 'seam.map.foot'
+local foot = require 'seam.foot'
 local contracts = {}
 for _, c in pairs(st.models[st.cur].byid) do
   if c.nusers and c.nusers > 0 then
@@ -1207,6 +1222,31 @@ do
         if not tv.is_open(st.pctx.open, st.pctx.defaults, tkey) then
           fail('+ on the line did not open ' .. ty .. ' again')
         end
+      end
+      -- the foot on a type named in the Types view: its declaration; on the
+      -- function's line, off a name, its signature
+      where = 'types view foot'
+      for i, t in ipairs(tv_rows()) do
+        local n = t.key == tkey and t.names and t.names[1]
+        if n then
+          api.nvim_win_set_cursor(st.owin.pane, { i, n.s })
+          foot.update()
+          local fb = foot.shown()
+          local d = require('seam.names').type_decl(m, n.name, t.path)
+          local fl = fb and table.concat(lines(fb), '\n') or ''
+          local first = d and vim.trim(code.file(d.path).lines[d.line] or '') or n.name
+          if not fb then
+            fail('no foot on ' .. n.name)
+          elseif not fl:find(n.name, 1, true) or not fl:find(first:sub(1, 20), 1, true) then
+            fail(('the foot on %s does not show its declaration: %s'):format(n.name, fl))
+          end
+          break
+        end
+      end
+      api.nvim_win_set_cursor(st.owin.pane, { 1, 0 })
+      foot.update()
+      if not (foot.shown() and table.concat(lines(foot.shown()), '\n'):find(node.name, 1, true)) then
+        fail('no foot with ' .. node.name .. ' on its line')
       end
       -- + on the function's line, off a name: it as written
       where = 'types view + line'
