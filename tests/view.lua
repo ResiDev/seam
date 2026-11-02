@@ -12,7 +12,8 @@
 --   OUT     where it writes (default $TMPDIR/seam-view): NN.txt, NN.png
 --   SIZE    columns x rows (default 180x50; seam needs 150 columns)
 --   COLORS  a colorscheme lazy.nvim installed, by name (CONFIG=clean)
---   KEEP=1  leave it running: `tmux -L seam-view attach`
+--   SOCK    the tmux server's name (default seam-view), one a run side by side
+--   KEEP=1  leave it running: `tmux -L <SOCK> attach`
 --   PICTURES=0  text alone, no NN.png: quicker, for comparing runs
 --
 -- Step 00 is seam open on REPO (it waits for st.tab, indexing first if
@@ -26,7 +27,8 @@ local OUT = env.OUT or ((env.TMPDIR or '/tmp') .. '/seam-view')
 local cols, rows = (env.SIZE or '180x50'):match '^(%d+)x(%d+)$'
 cols, rows = tonumber(cols) or 180, tonumber(rows) or 50
 local SOCK = OUT .. '/nvim.sock'
-local TMUX = { 'tmux', '-L', 'seam-view', '-f', '/dev/null' }
+local NAME = env.SOCK or 'seam-view'
+local TMUX = { 'tmux', '-L', NAME, '-f', '/dev/null' }
 
 ---@param cmd string[]
 ---@return string out
@@ -376,6 +378,6 @@ if env.KEEP ~= '1' then
 end
 io.stdout:write(table.concat(said, '\n') .. '\n')
 if env.KEEP == '1' then
-  io.stdout:write 'still running: tmux -L seam-view attach\n'
+  io.stdout:write('still running: tmux -L ' .. NAME .. ' attach\n')
 end
 vim.cmd 'qa!'
