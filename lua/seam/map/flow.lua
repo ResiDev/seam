@@ -1,7 +1,7 @@
 -- The Map's flow: what the row calls above, gathered under heads (a folder,
 -- or the type each gives), a line down the left through the heads into the
--- row, written as what it takes → its name → what it gives; from what it
--- gives a line on down to its callers, gathered the same way. Each item
+-- row, written as what it takes → its name → what it gives; from its name
+-- a line on down to its callers, gathered the same way. Each item
 -- where it is and its name in columns, then its signature straight after;
 -- nothing is cut: a line too long for the pane goes on under itself, and
 -- a flow taller than the pane has its smallest groups closed to a line
@@ -15,8 +15,8 @@ local M = {}
 -- the column the line down the left runs in
 M.G = 1
 
--- the rows the line falls from the row's output before it turns to its
--- callers, so they stand apart from it
+-- the rows the line falls under the row before it turns to its callers,
+-- so they stand apart from it
 M.DROP = 2
 
 ---@class seam.FlowItem
@@ -92,8 +92,8 @@ local function words(segs)
       local sp = s[1]:find(' ', i, true)
       local e = sp or #s[1]
       local text = s[1]:sub(i, e)
-      -- the mark of where the row's output starts kept on its first letter
-      cur.pieces[#cur.pieces + 1] = { text, s[2], s[3], out = i == 1 and s.out or nil }
+      -- the mark of where the row's name starts kept on its first letter
+      cur.pieces[#cur.pieces + 1] = { text, s[2], s[3], from = i == 1 and s.from or nil }
       cur.w = cur.w + vim.fn.strchars(text)
       if sp then
         close()
@@ -106,22 +106,35 @@ local function words(segs)
 end
 
 --- Pieces in lines of at most `room` columns, broken between words; a word
---- longer than a line has a line of its own and goes past it.
+--- longer than a line has a line of its own and goes past it. With them
+--- how far in from the first each line starts: 2, or with `hang`,
+--- `hang` past the marked piece (`from`) once a line has it, so a line
+--- falling from that piece runs clear of the lines under it; each line
+--- after the first ends 2 past where the first may.
 ---@param segs table[]
 ---@param room integer
----@return table[][]
-function M.wrap(segs, room)
+---@param hang integer|nil
+---@return table[][] lines
+---@return integer[] indents
+function M.wrap(segs, room, hang)
   room = math.max(room, 8)
-  local lines, cur, w = {}, {}, 0
+  local lines, indents, cur, w = {}, { 0 }, {}, 0
+  local at -- the marked piece's column, from the first line's start
   for _, wd in ipairs(words(segs)) do
     local bare = wd.w - #(wd.pieces[#wd.pieces][1]:match ' *$')
     -- a line goes on from its first letter
     if not (w == 0 and #lines > 0 and bare == 0) then
-      if w > 0 and w + bare > room then
+      if w > 0 and w + bare > math.max(room - math.max(indents[#lines + 1] - 2, 0), 8) then
         lines[#lines + 1], cur, w = cur, {}, 0
+        indents[#lines + 1] = at and at + hang or 2
       end
-      vim.list_extend(cur, wd.pieces)
-      w = w + wd.w
+      for _, p in ipairs(wd.pieces) do
+        if hang and p.from then
+          at = indents[#lines + 1] + w
+        end
+        cur[#cur + 1] = p
+        w = w + vim.fn.strchars(p[1])
+      end
     end
   end
   if #cur > 0 then
@@ -134,10 +147,10 @@ function M.wrap(segs, room)
     end
     local last = l[#l]
     if last then
-      l[#l] = { (last[1]:gsub(' +$', '')), last[2], last[3], out = last.out }
+      l[#l] = { (last[1]:gsub(' +$', '')), last[2], last[3], from = last.from }
     end
   end
-  return lines
+  return lines, indents
 end
 
 -- an item's rows from `y`: its columns, then its tail from after them,
@@ -186,13 +199,13 @@ local function put_closed(cv, g, k, x, y)
 end
 
 --- The rows: `top` above, a line down from its heads into `centre`, from
---- the centre's output (`centre.out`, the piece it starts at), else its
---- end, a line on down to `bottom`'s heads. Past `height` rows the groups
+--- the centre's name (`centre.from`, its piece), else its end, a line on
+--- down to `bottom`'s heads. Past `height` rows the groups
 --- of both sides with the fewest names close to a line each
 --- (seam.map.fold), never one in `open`; each opened by `left:` above or
 --- `right:` below, then its key.
 ---@param top seam.FlowGroup[]
----@param centre { segs: table[], out: integer|nil }
+---@param centre { segs: table[], from: integer|nil }
 ---@param bottom seam.FlowGroup[]
 ---@param o { width: integer, height: integer|nil, open: table<string, boolean>|nil }
 ---@return table[]
@@ -201,18 +214,19 @@ function M.draw(top, centre, bottom, o)
   local cv = canvas.new()
   local ws, bws = widths(top), widths(bottom)
   local cx = #top > 0 and G + 5 or 0
-  -- the centre, going on under itself; where its output starts and it ends
+  -- the centre, going on under itself clear of the line from its name;
+  -- where its name starts and it ends
   local segs = { unpack(centre.segs) }
-  local o_ = centre.out and segs[centre.out]
-  if o_ then
-    segs[centre.out] = { o_[1], o_[2], o_[3], out = true }
+  local n_ = centre.from and segs[centre.from]
+  if n_ then
+    segs[centre.from] = { n_[1], n_[2], n_[3], from = true }
   end
-  local lines = M.wrap(segs, o.width - cx - 2)
+  local lines, ins = M.wrap(segs, o.width - cx - 2, 2)
   local ox, oline, e
   for li, l in ipairs(lines) do
-    local x = li == 1 and cx or cx + 2
+    local x = cx + ins[li]
     for _, s in ipairs(l) do
-      if s.out then
+      if s.from then
         ox, oline = x, li
       end
       x = x + vim.fn.strchars(s[1])
@@ -274,7 +288,7 @@ function M.draw(top, centre, bottom, o)
   end
   local oy
   for li, l in ipairs(lines) do
-    local x = li == 1 and cx or cx + 2
+    local x = cx + ins[li]
     if li == oline then
       oy = y
     end
@@ -285,7 +299,7 @@ function M.draw(top, centre, bottom, o)
   if #bottom > 0 then
     local top_y
     if ox then
-      -- from under what it gives down a while, left, then down under the row
+      -- from under its name down a while, left, then down under the row
       local turn = y + M.DROP
       top_y = turn
       cv:v(ox, oy, turn)

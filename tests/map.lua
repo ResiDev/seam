@@ -205,7 +205,7 @@ local closed = both.side(tall, 40, { side = 'left', budget = 9 })
 eq(closed[#closed].segs[1][3], { fold = 'left:small/', label = 'small/' }, 'the closed line opens its folder')
 
 -- the flow: the calls above under their heads, a line down through them
--- into the row, from its end on down to its callers' heads
+-- into the row, from its name on down to its callers' heads
 local flow = require 'seam.map.flow'
 local function c(s)
   return { { s } }
@@ -216,7 +216,7 @@ rows = flow.draw({
     items = { { cols = { c 's.ts:12', c 'b' }, tail = c '(A)   →  B' }, { cols = { c '    :14', c 'cc' }, tail = c '()   nothing' } },
   },
   { head = c 'k/', items = { { cols = { c 'c.ts:20', c 'd' }, tail = c '(B, A)   →  C' } } },
-}, { segs = { { '(A)' }, { ' → ' }, { 'mid' }, { ' → ' }, { 'C' } }, out = 5 }, {
+}, { segs = { { '(A)' }, { ' → ' }, { 'mid' }, { ' → ' }, { 'C' } }, from = 3 }, {
   { head = c 'u/', items = { { cols = { c 'u.ts:3', c 'u' }, tail = c '(C)' } } },
 }, { width = 80 })
 eq(
@@ -230,13 +230,13 @@ eq(
     '  │    c.ts:20  d    (B, A)   →  C',
     '  │',
     '  └──▶ (A) → mid → C',
-    '                   │',
-    '         ┌─────────┘',
+    '             │',
+    '         ┌───┘',
     '         │',
     '         └─ u/',
     '              u.ts:3  u   (C)',
   },
-  'the flow: heads on the line down into the row, an empty row between them, where and the name in columns, the signature after, the callers from what the row gives, under the row'
+  'the flow: heads on the line down into the row, an empty row between them, where and the name in columns, the signature after, the callers from its name, under the row'
 )
 -- a signature too long for the pane goes on under itself, nothing cut
 local long = flow.wrap(c '(Alpha, Beta, Gamma, Delta)   →  Epsilon', 16)
@@ -249,6 +249,21 @@ eq(
   { '(Alpha, Beta,', 'Gamma, Delta)', '→  Epsilon' },
   'a line too long breaks between words, nothing cut'
 )
+-- a row too long goes on right of the line falling from its name
+rows = flow.draw({}, {
+  segs = { { '(A)' }, { ' → ' }, { 'mid' }, { ' → ' }, { 'Alpha Beta Gamma Delta' } },
+  from = 3,
+}, { { head = c 'u/', items = { { cols = { c 'u.ts:3', c 'u' } } } } }, { width = 20 })
+eq(texts(rows), {
+  ' (A) → mid → Alpha',
+  '       │ Beta Gamma',
+  '       │ Delta',
+  '       │',
+  '   ┌───┘',
+  '   │',
+  '   └─ u/',
+  '        u.ts:3  u',
+}, "the row's lines under its name go on right of the line from it")
 -- by folder an empty row between files
 rows = flow.draw({
   { head = c 's/', items = { { cols = { c 'a.ts:1', c 'a' } }, { gap = true, cols = { c 'b.ts:2', c 'b' } } } },

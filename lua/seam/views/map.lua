@@ -403,17 +403,16 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   local centre
   if fn then
     local t, g = sig(x.id)
-    local segs, out = {}, nil
+    local segs = {}
     if t then
       segs = cat(tsegs('(' .. t .. ')', false, nil, x.path), { { ' → ', 'SeamLabel' } })
     end
     segs[#segs + 1] = { centre_name, 'SeamMapFnBold' }
+    local from = #segs
     if g then
-      segs = cat(segs, { { ' → ', 'SeamLabel' } })
-      out = #segs + 1
-      segs = cat(segs, tsegs(g, false, nil, x.path))
+      segs = cat(segs, { { ' → ', 'SeamLabel' } }, tsegs(g, false, nil, x.path))
     end
-    centre = { segs = segs, out = out }
+    centre = { segs = segs, from = from }
   else
     centre = { segs = { { centre_name, x.kind == 'type' and 'SeamTypeBold' or 'SeamBold' } } }
   end

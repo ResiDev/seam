@@ -639,7 +639,7 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
 
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
-| **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under what it gives down a few rows, left, and on down under the row to its callers, so they stand apart from the row, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
+| **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under its name down a few rows, left, and on down under the row to its callers, so they stand apart from the row and do not read as what it gives, the row going on right of that line where it is too long, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
 | **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
@@ -698,6 +698,14 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   a long file name keep 30 columns rather than one a line. The flow's
   signatures still go on under themselves; a better answer for a side too
   wide may come later.
+
+- **The callers hang from the name** (2026-11-02, the user on tasksOf in
+  raf: "the line comes out of the return type"). Falling from what the row
+  gives, the line made its callers read as more of what it gives. Now it
+  falls from the row's name, and a row too long goes on under itself right
+  of that line. Nothing else changed; the other ways to say "its callers"
+  are round eleven, `design/mocks/src/map/callers.py`; this is
+  `design/mocks/map12-line-from-name.png`.
 
 - **The foot everywhere** (2026-11-02, the user: "would be nice to have
   in other parts like Types, so you could see the definition of the type
