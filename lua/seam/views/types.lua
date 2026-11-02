@@ -135,6 +135,10 @@ local function typed(r, text, known, names, lit)
     end
     if known(n.name) then
       names[#names + 1] = { s = s, e = e, name = n.name }
+    else
+      -- a package's, for the foot to look up
+      r.meta.others = r.meta.others or {}
+      table.insert(r.meta.others, { s = s, e = e, name = n.name })
     end
   end
   return r
@@ -560,8 +564,9 @@ M.render = render
 
 --- What is under the cursor in `win`, drawn as the Types view draws, as
 --- the foot tells it: a type named there, resolved in the file its line is
---- from (`path` when the line does not say), a type's head, a name in a
---- declaration's copied code, else the function whose line it is.
+--- from (`path` when the line does not say), a type's head, a type of no
+--- repo's named in that file, a name in a declaration's copied code, else
+--- the function whose line it is.
 ---@param win integer
 ---@param m table
 ---@param path string|nil
@@ -584,6 +589,10 @@ function M.at_cursor(win, m, path)
   local d = n and path and resolve(m, n.name, path)
   if d then
     return { kind = 'type', name = n.name, decl = d }
+  end
+  local o = path and tv.at(meta.others or {}, cur[2])
+  if o then
+    return { kind = 'type', name = o.name, from = { path = path } }
   end
   return require('seam.views.code').at_cursor(win, m) or (t.fn_id and { id = t.fn_id }) or nil
 end

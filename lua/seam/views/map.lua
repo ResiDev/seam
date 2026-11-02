@@ -105,8 +105,9 @@ end
 
 -- text as pieces coloured as a signature is: types, builtins, the rest
 local BUILTIN = { string = 1, number = 1, boolean = 1, unknown = 1, void = 1, never = 1, any = 1, undefined = 1, null = 1 }
--- with `dim`, all but the types dim, as what a function takes is written
-local function tsegs(text, dim, hit)
+-- with `dim`, all but the types dim, as what a function takes is written;
+-- each type a name for the foot, as the file `from` names it
+local function tsegs(text, dim, hit, from)
   local out, i = {}, 1
   local rest = dim and 'SeamLabel' or 'SeamText'
   for a, w, b in text:gmatch '()([%a_$][%w_$]*)()' do
@@ -114,7 +115,8 @@ local function tsegs(text, dim, hit)
       out[#out + 1] = { text:sub(i, a - 1), rest, hit }
     end
     local hl = BUILTIN[w] and (dim and 'SeamLabel' or '@type.builtin') or w:match '^%u' and 'SeamType' or rest
-    out[#out + 1] = { w, hl, hit }
+    local whit = hit or (from and hl == 'SeamType' and { kind = 'type', name = w, from = { path = from }, sig = true }) or nil
+    out[#out + 1] = { w, hl, whit }
     i = b
   end
   if i <= #text then
@@ -298,7 +300,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   end
   local function takes(e)
     local t = sig(e.id)
-    return t and tsegs('(' .. t .. ')', true) or {}
+    return t and tsegs('(' .. t .. ')', true, nil, m.graph.nodes[e.id].path) or {}
   end
   local function gives(e)
     local _, g = sig(e.id)
@@ -307,7 +309,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
     elseif g == 'void' then
       return { { GAP .. 'nothing', 'SeamLabel' } }
     end
-    return cat({ { GAP .. '→  ', 'SeamLabel' } }, tsegs(g))
+    return cat({ { GAP .. '→  ', 'SeamLabel' } }, tsegs(g, false, nil, m.graph.nodes[e.id].path))
   end
   -- the line each function is declared on in its file
   local function decl(e)
@@ -403,13 +405,13 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
     local t, g = sig(x.id)
     local segs, out = {}, nil
     if t then
-      segs = cat(tsegs('(' .. t .. ')'), { { ' → ', 'SeamLabel' } })
+      segs = cat(tsegs('(' .. t .. ')', false, nil, x.path), { { ' → ', 'SeamLabel' } })
     end
     segs[#segs + 1] = { centre_name, 'SeamMapFnBold' }
     if g then
       segs = cat(segs, { { ' → ', 'SeamLabel' } })
       out = #segs + 1
-      segs = cat(segs, tsegs(g))
+      segs = cat(segs, tsegs(g, false, nil, x.path))
     end
     centre = { segs = segs, out = out }
   else

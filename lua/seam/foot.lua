@@ -8,12 +8,15 @@
 -- what the server says it gives, an object a field a line; then the line
 -- that calls it, and what that line sits in. A type: where it is declared,
 -- how many make and take it, and its declaration as written, comments left
--- out, cut only where the foot ends.
+-- out, cut only where the foot ends. A type of no repo's, a package's: its
+-- declaration where the server says it is (seam.lookup), once it has said.
 local api = vim.api
 local code = require 'seam.code'
 local data = require 'seam.map.data'
 local draw = require 'seam.draw'
 local index = require 'seam.index'
+local lookup = require 'seam.lookup'
+local names = require 'seam.names'
 local st = require 'seam.state'
 local tv = require 'seam.typesview'
 local written = require 'seam.written'
@@ -148,9 +151,32 @@ local function fn_rows(m, it, W)
   return rows
 end
 
+-- a declaration's lines s..e of `path` (or a file read under that key) as
+-- rows, comments left out, each marked `decl`, its first line's indent off
+-- them all
+local function decl_rows(rows, path, s, e)
+  local lines = code.file(path).lines
+  local ind = #(lines[s] or ''):match '^%s*'
+  local inside = false
+  for l = s, math.max(s, e or s) do
+    local src = vim.trim(lines[l] or '')
+    if inside then
+      inside = not src:find('*/', 1, true)
+    elseif src:sub(1, 2) == '/*' then
+      inside = not src:find('*/', 3, true)
+    elseif src ~= '' and src:sub(1, 2) ~= '//' then
+      local r = draw.row { decl = true }
+      r:add ' '
+      code.add(r, path, l, math.min(ind, #lines[l]:match '^%s*'))
+      rows[#rows + 1] = r
+    end
+  end
+  return rows
+end
+
 local function type_rows(m, it)
   local f = m.flows and m.flows[it.name]
-  local e = it.decl or (f and f.decls[1])
+  local e = it.decl or (it.from and names.type_decl(m, it.name, it.from.path)) or (f and f.decls[1])
   if not e then
     return nil
   end
@@ -161,28 +187,28 @@ local function type_rows(m, it)
     local makers, takers = data.flow(m, it.name)
     where = where .. ('   made by %d, taken by %d'):format(#makers, #takers)
   end
-  local rows = { draw.row():add(' '):add(it.name, 'SeamTypeBold'):add(where, 'SeamLabel') }
-  local lines = code.file(e.path).lines
-  local inside = false
-  for l = e.line, math.max(e.line, e.end_line or e.line) do
-    local s = vim.trim(lines[l] or '')
-    if inside then
-      inside = not s:find('*/', 1, true)
-    elseif s:sub(1, 2) == '/*' then
-      inside = not s:find('*/', 3, true)
-    elseif s ~= '' and s:sub(1, 2) ~= '//' then
-      local r = draw.row { decl = true }
-      r:add ' '
-      code.add(r, e.path, l, false)
-      rows[#rows + 1] = r
-    end
+  return decl_rows({ draw.row():add(' '):add(it.name, 'SeamTypeBold'):add(where, 'SeamLabel') }, e.path, e.line, e.end_line)
+end
+
+-- a type of no repo's: its declaration where the server says it is, once
+-- it has said; the foot drawn again then
+local function package_rows(m, it)
+  local from = it.from
+  local got = from and lookup.get(it.name, from.path, from.line and from, function()
+    vim.schedule(M.update)
+  end)
+  if not got then
+    return nil
   end
-  return rows
+  local rel = got.path:sub(1, #st.root + 1) == st.root .. '/' and got.path:sub(#st.root + 2)
+  local where = got.pkg or ((rel and data.short(m, rel, rel) or got.path) .. ':' .. got.s)
+  return decl_rows({ draw.row():add(' '):add(it.name, 'SeamTypeBold'):add('   type in ' .. where, 'SeamLabel') }, got.key, got.s, got.e)
 end
 
 --- The foot's rows for `it`, what a view says is under its cursor: a repo
 --- function `{ id, at? }`, `at` the line that calls it, or a type
---- `{ kind = 'type', name, decl? }`, under a rule `W` wide; a declaration's
+--- `{ kind = 'type', name, decl?, from? }`, `from` the file it is written in
+--- and where, `{ path, line?, col? }`, under a rule `W` wide; a declaration's
 --- rows marked `decl`, the ones cut when the foot is full. Nil when it has
 --- nothing to tell.
 ---@param m table
@@ -194,7 +220,7 @@ function M.rows(m, it, W)
   if it and it.id and m.graph and m.graph.nodes[it.id] then
     rows = fn_rows(m, it, W)
   elseif it and it.kind == 'type' then
-    rows = type_rows(m, it)
+    rows = type_rows(m, it) or package_rows(m, it)
   end
   if not rows then
     return nil
