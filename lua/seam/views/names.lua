@@ -1,8 +1,11 @@
 -- The Types view of a name in the code (a row of kind 'name'): a method's
 -- line, then the type a field or method is in with its lines lit, then each
 -- repo type its type names, written out under labels (`in`, `is`, `takes`,
--- `gives`) and open by default, as a function's own types are.
+-- `gives`) and open by default, as a function's own types are. A value no
+-- type is written for: the type the TypeScript server says, asked once the
+-- pane shows it (seam.lookup), drawn as a written one is.
 local draw = require 'seam.draw'
+local lookup = require 'seam.lookup'
 local tv = require 'seam.typesview'
 local types = require 'seam.types'
 local types_view = require 'seam.views.types'
@@ -60,6 +63,28 @@ function M.draw(out, x, m, ctx)
     C.lit_lines = { path = mem.decl.path, from = mem.doc or mem.line, to = mem.end_line or mem.line }
   end
   local t = n.kind == 'method' and mem and mem.type or n.type
+  local said, asking
+  if not t and n.at then
+    said, asking = lookup.value(path, n.at, function()
+      -- drawn again when the pane still shows the name
+      local pane = require 'seam.pane'
+      local x2 = pane.wins() and pane.subject()
+      if x2 and x2.key == x.key then
+        pane.redraw()
+      end
+    end)
+    t = said and said.type
+  end
+  if said then
+    out[#out + 1] = row():add(' no type is written for it; the TypeScript server says', 'SeamLabel')
+    local r, placed = row():add ' ', {}
+    types_view.typed(r, t, C.known, placed)
+    -- under the key and line the repo types it names open under below; the
+    -- foot off those tells what the server said
+    r.meta.tv = { key = 'n', id = 'l', names = placed, chain = {}, path = path }
+    r.meta.value = { kind = 'value', name = n.name, from = { path = path, line = n.at.line, col = n.at.col } }
+    out[#out + 1] = r
+  end
   if t then
     local takes = n.kind == 'method' and M.shape(t)
     local tk = {}
@@ -71,11 +96,14 @@ function M.draw(out, x, m, ctx)
     end
   end
   if #line.names == 0 then
+    if said then
+      return
+    end
     local r = row():add ' '
     if t then
       types_view.typed(r, t, C.known, {})
     else
-      r:add('no type is written for it', 'SeamLabel')
+      r:add(asking and 'no type is written for it; asking the TypeScript server' or 'no type is written for it', 'SeamLabel')
     end
     out[#out + 1] = r
     return

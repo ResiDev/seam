@@ -28,8 +28,8 @@ function M.under(m, from, to)
   return 'SeamUnder'
 end
 
--- a type's name no repo type answers, written at byte `col` of line `l`:
--- a package's, looked up where it is written
+-- a name no repo function or type answers, written at byte `col` of line
+-- `l`: a package's type, looked up where it is written, or its value
 local function written_type(path, l, col)
   local root, src = names.tree(path)
   local n = root and root:named_descendant_for_range(l - 1, col, l - 1, col)
@@ -38,15 +38,20 @@ local function written_type(path, l, col)
     return nil
   end
   local w = vim.treesitter.get_node_text(n, src)
+  local _, sc = n:start()
   if w:match '^%u' then
-    local _, sc = n:start()
     return { kind = 'type', name = w, from = { path = path, line = l, col = sc } }
+  elseif t == 'identifier' then
+    -- a package's function or value, `createRoot`: what the server says of it
+    return { kind = 'value', name = w, from = { path = path, line = l, col = sc } }
   end
 end
 
 --- What the code copied under the cursor in `win` names, as the foot
 --- tells it: a repo function `{ id }`, a repo type `{ kind = 'type', name,
---- decl }`, a type of no repo's `{ kind = 'type', name, from }`; nil off one.
+--- decl }`, a type of no repo's `{ kind = 'type', name, from }`, a value no
+--- type is written for or a package's `{ kind = 'value', name, from }`,
+--- `from` where it is made; nil off one.
 ---@param win integer
 ---@param m table
 ---@return table|nil
@@ -69,6 +74,9 @@ function M.at_cursor(win, m)
             return { id = node.id }
           end
         end
+      end
+      if n.at and not n.type and (n.kind == 'value' or n.kind == 'param') then
+        return { kind = 'value', name = n.name, from = { path = c[1], line = n.at.line, col = n.at.col } }
       end
       return nil
     end

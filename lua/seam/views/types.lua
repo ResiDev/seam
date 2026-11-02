@@ -565,8 +565,9 @@ M.render = render
 --- What is under the cursor in `win`, drawn as the Types view draws, as
 --- the foot tells it: a type named there, resolved in the file its line is
 --- from (`path` when the line does not say), a type's head, a type of no
---- repo's named in that file, a name in a declaration's copied code, else
---- the function whose line it is.
+--- repo's named in that file, a value's type the server said
+--- (seam.views.names), a name in a declaration's copied code, else the
+--- function whose line it is.
 ---@param win integer
 ---@param m table
 ---@param path string|nil
@@ -589,6 +590,8 @@ function M.at_cursor(win, m, path)
   local d = n and path and resolve(m, n.name, path)
   if d then
     return { kind = 'type', name = n.name, decl = d }
+  elseif meta.value then
+    return meta.value
   end
   local o = path and tv.at(meta.others or {}, cur[2])
   if o then
