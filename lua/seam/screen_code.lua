@@ -1,7 +1,7 @@
 -- The code screen: a function's or a file's code on the left, seam's copied
 -- lines with their numbers, each value's type after its name, the names
 -- from another file underlined, or its types; the pane on the right for the
--- name under the cursor, the foot over the code telling it in full; the
+-- name under the cursor told in full; the
 -- trail of J's in the head, K back along it.
 local api = vim.api
 local code = require 'seam.code'
@@ -227,22 +227,7 @@ local function moved()
     st.code.subject = x
     pane.follow(x)
   end
-  require('seam.foot').update()
   vim.cmd 'redrawstatus'
-end
-
---- What the name under the code's cursor is, as the foot tells it: a repo
---- function or type, in the code or its types.
----@return table|nil
-function M.under()
-  if not (valid() and top()) then
-    return nil
-  end
-  local m = index.model()
-  if st.code.display == 'types' then
-    return require('seam.views.types').at_cursor(st.cwin.code, m, top().path)
-  end
-  return code_view.at_cursor(st.cwin.code, m)
 end
 
 ---------------------------------------------------------------- the screen
@@ -629,21 +614,7 @@ function M.init()
   end, o(st.cbuf.chead))
   s.goto_keys(st.cbuf.chead)
   api.nvim_create_autocmd('CursorMoved', { group = s.aug, buffer = st.cbuf.code, callback = moved })
-  api.nvim_create_autocmd('WinEnter', {
-    group = s.aug,
-    buffer = st.cbuf.code,
-    callback = function()
-      require('seam.foot').update()
-      vim.cmd 'redrawstatus'
-    end,
-  })
-  api.nvim_create_autocmd('WinLeave', {
-    group = s.aug,
-    buffer = st.cbuf.code,
-    callback = function()
-      require('seam.foot').close()
-    end,
-  })
+  api.nvim_create_autocmd('WinEnter', { group = s.aug, buffer = st.cbuf.code, command = 'redrawstatus' })
   -- nothing to do in the code's head: the cursor goes back to the code
   api.nvim_create_autocmd('WinEnter', { group = s.aug, buffer = st.cbuf.chead, callback = M.to_code })
   api.nvim_create_autocmd('VimResized', {

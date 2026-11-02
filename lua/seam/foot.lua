@@ -1,7 +1,6 @@
 -- The foot: the name under the cursor told in full, wherever the cursor
--- rests on one seam knows, in the pane's views (each says what is under its
--- cursor) and on the code screen's code; in a window over the last rows of
--- the window the cursor is in, at least 15% of it, at most half, a rule and
+-- rests on one seam knows in the pane beside the tree (each view says what
+-- is under its cursor); in a window over the last rows of the pane, at least 15% of it, at most half, a rule and
 -- an empty row over it, an empty row under it, its lines going on under
 -- themselves, code in its colours. A function: its signature as written in
 -- its file, where it is, and when the file does not write what it gives,
@@ -176,6 +175,21 @@ local function decl_rows(rows, path, s, e)
   return rows
 end
 
+--- A declaration the server pointed at, `d` from seam.lookup, put after
+--- `rows`: `name` and the package or file it is in, then its lines as
+--- written, comments left out. The foot's and the pane's alike.
+---@param m table
+---@param d { key: string, path: string, s: integer, e: integer, pkg: string|nil }
+---@param name string
+---@param rows table[]
+---@return table[] rows
+function M.declared(m, d, name, rows)
+  local rel = d.path:sub(1, #st.root + 1) == st.root .. '/' and d.path:sub(#st.root + 2)
+  local where = d.pkg or ((rel and data.short(m, rel, rel) or d.path) .. ':' .. d.s)
+  rows[#rows + 1] = draw.row():add(' '):add(name, 'SeamTypeBold'):add('   type in ' .. where, 'SeamLabel')
+  return decl_rows(rows, d.key, d.s, d.e)
+end
+
 local function type_rows(m, it)
   local f = m.flows and m.flows[it.name]
   local e = it.decl or (it.from and names.type_decl(m, it.name, it.from.path)) or (f and f.decls[1])
@@ -202,9 +216,7 @@ local function package_rows(m, it)
   if not got then
     return nil
   end
-  local rel = got.path:sub(1, #st.root + 1) == st.root .. '/' and got.path:sub(#st.root + 2)
-  local where = got.pkg or ((rel and data.short(m, rel, rel) or got.path) .. ':' .. got.s)
-  return decl_rows({ draw.row():add(' '):add(it.name, 'SeamTypeBold'):add('   type in ' .. where, 'SeamLabel') }, got.key, got.s, got.e)
+  return M.declared(m, got, it.name, {})
 end
 
 -- a value no type is written for, a package's function: what the server
@@ -227,13 +239,9 @@ local function value_rows(m, it)
   if got.fn and got.pkg then
     rows[1]:add('   in ' .. got.pkg, 'SeamLabel')
   end
-  local d = got.def
-  if d then
-    local rel = d.path:sub(1, #st.root + 1) == st.root .. '/' and d.path:sub(#st.root + 2)
-    local where = d.pkg or ((rel and data.short(m, rel, rel) or d.path) .. ':' .. d.s)
+  if got.def then
     rows[#rows + 1] = draw.row()
-    rows[#rows + 1] = draw.row():add(' '):add(d.name or '', 'SeamTypeBold'):add('   type in ' .. where, 'SeamLabel')
-    decl_rows(rows, d.key, d.s, d.e)
+    M.declared(m, got.def, got.def.name or '', rows)
   end
   return rows
 end
@@ -275,19 +283,18 @@ function M.close()
   F.win, F.key = nil, nil
 end
 
---- What is under the cursor in `win`, as the foot tells it: in the pane,
---- what its view shown says; in the code screen's code, the name there.
+--- What is under the cursor in `win`, as the foot tells it: in the tree's
+--- pane, what its view shown says. The code screen has none: its pane tells
+--- the name under the code's cursor in full already.
 ---@param win integer
 ---@return table|nil
 function M.under(win)
   local pane = require 'seam.pane'
   local w = pane.wins()
-  if w and win == w.pane then
+  if st.screen == 'tree' and w and win == w.pane then
     local x = pane.subject()
     local v = require('seam.views').shown(x, st.view)
     return v and v.under and v.under(win, x, index.model()) or nil
-  elseif st.screen == 'code' and st.cwin and win == st.cwin.code then
-    return require('seam.screen_code').under()
   end
 end
 
