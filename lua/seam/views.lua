@@ -22,6 +22,7 @@ local M = {}
 ---@field has fun(row: seam.ORow): boolean
 ---@field draw fun(out: table[], row: seam.ORow, m: table, display: string, ctx: seam.ViewCtx)
 ---@field count fun(m: table, row: seam.ORow): string|nil what the pane's head says of the row in this view
+---@field nowrap boolean|nil its rows go on right past the pane, scrolled with zl zh, not wrapped
 
 ---@class seam.ViewCtx
 ---@field open table<string, boolean> the types opened in place for the row, by key (seam.typesview)
@@ -105,6 +106,8 @@ M.list = {
     displays = map_view.DISPLAYS,
     -- the head lists them all, the one shown bold
     list = true,
+    -- a drawing: a row past the pane goes on right, not under itself
+    nowrap = true,
     has = function(row)
       return map_view.has(index.model(), row)
     end,

@@ -1,6 +1,6 @@
 -- The Map, driven through its keys, from tests/check.lua: on a function,
 -- its file, its folder and a type, reached with gm, each of its displays on
--- <S-Tab>, the head listing them, no row wider than the pane; T on the
+-- <S-Tab>, the head listing them, no row cut, the pane unwrapped; T on the
 -- folder display, each signature or names only; on the folder, its groups
 -- closed to fit a small room and l opening one.
 local api = vim.api
@@ -67,7 +67,6 @@ return function(t)
     if shown() ~= first then
       return fail('the Map is not shown on ' .. what)
     end
-    local width = api.nvim_win_get_width(st.owin.pane)
     for i, d in ipairs(map_view.DISPLAYS) do
       if shown() ~= d then
         fail(('%s: display %d is %s, not %s'):format(what, i, tostring(shown()), d))
@@ -76,9 +75,13 @@ return function(t)
       if #ls < 2 then
         fail(('%s %s: %d rows'):format(what, d, #ls))
       end
+      -- nothing cut: a row past the pane goes on right, unwrapped
+      if vim.wo[st.owin.pane].wrap then
+        fail(('%s %s: the pane wraps the Map'):format(what, d))
+      end
       for j, l in ipairs(ls) do
-        if vim.fn.strdisplaywidth(l) > width then
-          fail(('%s %s: row %d is wider than the pane, %d > %d: %s'):format(what, d, j, vim.fn.strdisplaywidth(l), width, l))
+        if l:match '…$' then
+          fail(('%s %s: row %d is cut: %s'):format(what, d, j, l))
           break
         end
       end

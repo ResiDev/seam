@@ -327,12 +327,20 @@ function M.pane(buf, win, m, x, sv, ctx, keep)
   end
   local view = keep and win and api.nvim_win_is_valid(win) and api.nvim_win_call(win, vim.fn.winsaveview)
   draw.put(buf, out)
+  if win and api.nvim_win_is_valid(win) then
+    vim.wo[win].wrap = not (v and v.nowrap)
+  end
   if view then
     api.nvim_win_call(win, function()
       vim.fn.winrestview(view)
     end)
   else
     code.scroll_to(win, 1, 1)
+    if win and api.nvim_win_is_valid(win) then
+      api.nvim_win_call(win, function()
+        vim.fn.winrestview { leftcol = 0, col = 0 }
+      end)
+    end
   end
 end
 

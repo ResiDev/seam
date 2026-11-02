@@ -690,6 +690,15 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   head and how many names in how many files; every group stays named. `l`
   opens one for the row, and it is never closed again to fit.
 
+- **Nothing cut on the right** (2026-11-02, the user: "just removing the
+  truncation is at least better"). In both ways a long file name or
+  folder pushed a side past the pane's edge, and the drawing cut it with
+  `…`. Now the drawing is as wide as what is on it and the pane does not
+  wrap the Map: a long row goes on right, for `zl` `zh`. The names after
+  a long file name keep 30 columns rather than one a line. The flow's
+  signatures still go on under themselves; a better answer for a side too
+  wide may come later.
+
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
   tree repeated the Built from tab a level at a time, and folders drew the
@@ -1141,7 +1150,7 @@ lua/seam/
   codediff.lua      the range's changes on the code shown: its changed lines numbered in the signs' colours, or with the diff on drawn inline; ]c [c
   views/codetypes.lua the code screen's types display: the function's line, its values, the functions inside; with the diff, a line as it was
   views/map.lua     the Map view: folder and type on a function, a folder, a file and a type, what each side holds, T's names only, its head's count
-  map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows
+  map/canvas.lua    a grid of lines joining into box characters, text and what it stands for over them, laid out as rows as wide as what is on them
   map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers
   map/flow.lua      the flow: calls above under their heads, a line down into the row, on to its callers below, each side in columns, groups closed to fit
   map/both.lua      folder with T off, names only: calls left, callers right, each side by folder and file, groups closed to fit
