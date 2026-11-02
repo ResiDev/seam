@@ -255,7 +255,7 @@ local function names_display(x, m, ctx, top, bottom, centre)
   local rl, rr = both.rooms(need(left), need(right), w, cw)
   local L = both.side(left, rl, { budget = budget(ctx), open = s.open, side = 'left' })
   local R = both.side(right, rr, { budget = budget(ctx), open = s.open, side = 'right' })
-  return both.draw(L, R, centre, w)
+  return both.draw(L, R, centre)
 end
 
 -- what a type's head stands for: the first type of the repo it names

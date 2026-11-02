@@ -1,7 +1,8 @@
 -- A canvas for the Map's drawings: lines join by their ends into box
 -- characters, text over them; each cell may say what it stands for, so the
--- rows it becomes carry the names under the cursor. Ported from the mocks'
--- generator (design/mocks/src/map/ideas.py). Pure.
+-- rows it becomes carry the names under the cursor. As wide as what is put
+-- on it: nothing is cut at the pane's edge, a long row goes on right.
+-- Ported from the mocks' generator (design/mocks/src/map/ideas.py). Pure.
 local draw = require 'seam.draw'
 local M = {}
 
@@ -27,17 +28,16 @@ local GLYPH = {
 local C = {}
 C.__index = C
 
---- A canvas `w` columns wide, as tall as what is put on it.
----@param w integer
+--- A canvas as wide and as tall as what is put on it.
 ---@return table
-function M.new(w)
-  return setmetatable({ w = w, H = 0, bits = {}, txt = {}, hl = {}, hit = {}, cut = {} }, C)
+function M.new()
+  return setmetatable({ H = 0, bits = {}, txt = {}, hl = {}, hit = {}, last = {} }, C)
 end
 
 function C:grow(y)
   while y >= self.H do
     local r = self.H
-    self.bits[r], self.txt[r], self.hl[r], self.hit[r] = {}, {}, {}, {}
+    self.bits[r], self.txt[r], self.hl[r], self.hit[r], self.last[r] = {}, {}, {}, {}, -1
     self.H = self.H + 1
   end
 end
@@ -51,10 +51,9 @@ function C:put(x, y, text, hl, hit)
   local k = 0
   for ch in text:gmatch '[%z\1-\127\194-\244][\128-\191]*' do
     local cx = x + k
-    if cx >= 0 and cx < self.w then
+    if cx >= 0 then
       self.txt[y][cx], self.hl[y][cx], self.hit[y][cx] = ch, hl, hit
-    elseif cx >= self.w then
-      self.cut[y] = true
+      self.last[y] = math.max(self.last[y], cx)
     end
     k = k + 1
   end
@@ -74,9 +73,8 @@ function C:bit(x, y, b, hl)
     return
   end
   self:grow(y)
-  if x >= self.w then
-    self.cut[y] = true
-    return
+  if b > 0 then
+    self.last[y] = math.max(self.last[y], x)
   end
   self.bits[y][x] = bit.bor(self.bits[y][x] or 0, b)
   self.hl[y][x] = self.hl[y][x] or hl
@@ -121,8 +119,7 @@ function C:at(x, y)
 end
 
 --- The canvas as rows, `indent` spaces first: each run of a highlight
---- one mark, `meta.hits` the byte span of each thing a cell stood for,
---- `…` at the edge of a row something was cut from.
+--- one mark, `meta.hits` the byte span of each thing a cell stood for.
 ---@param indent? integer
 ---@return table[]
 function C:rows(indent)
@@ -130,12 +127,7 @@ function C:rows(indent)
   for y = 0, self.H - 1 do
     local r = draw.row { hits = {} }
     r:add(string.rep(' ', indent or 1))
-    local last = -1
-    for x = 0, self.w - 1 do
-      if self.txt[y][x] or (self.bits[y][x] or 0) > 0 then
-        last = x
-      end
-    end
+    local last = self.last[y]
     local run, rhl, rhit = {}, nil, nil
     local function flush()
       if #run > 0 then
@@ -165,9 +157,6 @@ function C:rows(indent)
       run[#run + 1] = ch
     end
     flush()
-    if self.cut[y] then
-      r:add('…', 'SeamLabel')
-    end
     out[#out + 1] = r
   end
   -- no blank rows at the bottom

@@ -118,7 +118,7 @@ local L = both.side(
   40,
   { side = 'left' }
 )
-rows = both.draw(L, both.side({ it('up/', 'a/up/u.ts', 'u') }, 40, { side = 'right' }), { { 'mid', 'SeamBold' } }, 80)
+rows = both.draw(L, both.side({ it('up/', 'a/up/u.ts', 'u') }, 40, { side = 'right' }), { { 'mid', 'SeamBold' } })
 eq(texts(rows), {
   ' st/',
   '   s.ts  b  b2 ╶┐',
@@ -131,16 +131,33 @@ local many = {}
 for i = 1, 60 do
   many[i] = it('st/', 'a/st/s.ts', 'f' .. i)
 end
-local cut = both.side(many, 30, { side = 'left' })
-expect(#cut > 2, 'no cap: a side with room lists every name', #cut)
-for _, l in ipairs(cut) do
-  local w = l.indent or 0
-  for _, s in ipairs(l.segs) do
-    w = w + vim.api.nvim_strwidth(s[1])
+local function widest(lines)
+  local n = 0
+  for _, l in ipairs(lines) do
+    local w = l.indent or 0
+    for _, s in ipairs(l.segs) do
+      w = w + vim.api.nvim_strwidth(s[1])
+    end
+    n = math.max(n, w)
   end
-  expect(w <= 30, 'names wrap to the room', l)
+  return n
 end
+local cut = both.side(many, 50, { side = 'left' })
+expect(#cut > 2, 'no cap: a side with room lists every name', #cut)
+expect(widest(cut) <= 50, 'names wrap to the room', widest(cut))
+-- after a long file name the names keep their room, the line going on right
+local long_file = 'a/st/' .. string.rep('x', 40) .. '.ts'
+local longs = vim.tbl_map(function(i)
+  return it('st/', long_file, 'f' .. i)
+end, { 1, 2, 3, 4, 5, 6, 7, 8 })
+local past = both.side(longs, 50, { side = 'left' })
+eq(#past, 2, 'names after a long file name not squeezed: the eight on one line')
+expect(widest(past) > 50, 'a line past the room goes on right', widest(past))
 eq({ both.rooms(10, 80, 100, 10) }, { 10, 68 }, 'the narrower side what it needs, the wider the rest')
+local cv = require('seam.map.canvas').new()
+cv:put(0, 0, string.rep('x', 300))
+cv:h(300, 302, 0)
+eq(texts(cv:rows(1)), { ' ' .. string.rep('x', 300) .. '╶─╴' }, 'the canvas cuts nothing: a long row goes on right, no …')
 
 -- which groups close to fit: the fewest names first, never one opened by hand
 local fold = require 'seam.map.fold'

@@ -11,6 +11,10 @@ local draw = require 'seam.draw'
 local fold = require 'seam.map.fold'
 local M = {}
 
+-- the least room the names after a file get, a long file name or not: past
+-- the side's room the line goes on right, the pane scrolled to it
+M.NAMES = 30
+
 local W = vim.api.nvim_strwidth
 
 local function width(segs)
@@ -82,7 +86,7 @@ function M.side(items, room, o)
     for _, f in ipairs(g.files) do
       mf = math.max(mf, W(f.name))
     end
-    local nroom = math.max(room - mf - 4, 12)
+    local nroom = math.max(room - mf - 4, M.NAMES)
     for _, f in ipairs(g.files) do
       local lines, cur = {}, nil
       for _, segs in ipairs(f.names) do
@@ -145,16 +149,15 @@ end
 ---@param left seam.BothLine[]
 ---@param right seam.BothLine[]
 ---@param centre table[] pieces
----@param w integer the room across
 ---@return table[]
-function M.draw(left, right, centre, w)
+function M.draw(left, right, centre)
   local lw = 0
   for _, l in ipairs(left) do
     lw = math.max(lw, (l.indent or 0) + width(l.segs))
   end
   local n = math.max(#left, #right, 1)
   local mid = math.floor(n / 2)
-  local cv = canvas.new(w)
+  local cv = canvas.new()
   local l0, r0 = mid - math.floor(#left / 2), mid - math.floor(#right / 2)
   local bus = lw + 2
   local lo, hi = mid, mid

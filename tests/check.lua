@@ -1001,8 +1001,8 @@ if max > 0 and #contracts > max then
   contracts = pick
 end
 
--- the Map shown in the pane, named with its display in the head, every row
--- inside the pane; the names on it that stand for a call, row and span
+-- the Map shown in the pane, named with its display in the head, no row
+-- cut, the pane unwrapped; the names on it that stand for a call, row and span
 local function check_map()
   local x = tree_screen.subject()
   local v, display = views.shown(x, st.view)
@@ -1014,11 +1014,13 @@ local function check_map()
   if not tabs:find('Map', 1, true) or not tabs:find(display, 1, true) then
     fail(('the tabs %q do not name the Map %s'):format(tabs, display))
   end
-  local pw = api.nvim_win_get_width(st.owin.pane)
+  if vim.wo[st.owin.pane].wrap then
+    fail 'the pane wraps the Map'
+  end
   local hits = {}
   for i, l in ipairs(lines(st.obuf.pane)) do
-    if api.nvim_strwidth(l) > pw then
-      fail(('row %d is %d wide, the pane %d: %s'):format(i, api.nvim_strwidth(l), pw, l))
+    if l:match '…$' then
+      fail(('row %d is cut: %s'):format(i, l))
       break
     end
     for _, h in ipairs(require('seam.draw').meta(st.obuf.pane, i).hits or {}) do

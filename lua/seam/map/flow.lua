@@ -198,7 +198,7 @@ end
 ---@return table[]
 function M.draw(top, centre, bottom, o)
   local G = M.G
-  local cv = canvas.new(o.width)
+  local cv = canvas.new()
   local ws, bws = widths(top), widths(bottom)
   local cx = #top > 0 and G + 5 or 0
   -- the centre, going on under itself; where its output starts and it ends
