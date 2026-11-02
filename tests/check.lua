@@ -782,20 +782,9 @@ local function check_answer()
   elseif (n.kind == 'value' or n.kind == 'param' or n.kind == 'field' or n.kind == 'method') and not ph:find(n.name, 1, true) then
     fail(('on the %s %s the pane says %q'):format(n.kind, n.name, ph))
   end
-  -- on a repo function or type the foot over the code tells it
-  local cur = api.nvim_win_get_cursor(st.cwin.code)
-  local meta = require('seam.draw').meta(st.cbuf.code, cur[1])
-  local on_it = meta.lnum == n.line and cur[2] - (meta.start or 0) >= n.col and cur[2] - (meta.start or 0) < n.e
-  if on_it and (n.kind == 'call' or n.kind == 'type') then
-    local fb = require('seam.foot').shown()
-    local want = n.kind == 'call' and st.models[st.cur].graph.nodes[n.id].name or n.decl.name
-    if not fb then
-      fail(('no foot on the %s %s'):format(n.kind, n.name))
-    elseif not table.concat(lines(fb), '\n'):find(want, 1, true) then
-      fail(('the foot on %s does not name %s'):format(n.name, want))
-    elseif api.nvim_win_get_config(vim.fn.bufwinid(fb)).win ~= st.cwin.code then
-      fail(('the foot on %s is not over the code'):format(n.name))
-    end
+  -- the code screen has no foot: its pane tells the name in full
+  if require('seam.foot').shown() then
+    fail(('a foot over the code screen on %s'):format(n.name))
   end
   -- its later uses lit, each name and its line
   local lit = 0

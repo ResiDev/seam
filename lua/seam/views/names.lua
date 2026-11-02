@@ -84,6 +84,12 @@ function M.draw(out, x, m, ctx)
     r.meta.tv = { key = 'n', id = 'l', names = placed, chain = {}, path = path }
     r.meta.value = { kind = 'value', name = n.name, from = { path = path, line = n.at.line, col = n.at.col } }
     out[#out + 1] = r
+    -- the type's own declaration, a package's: a repo type opens under is below
+    local d = said.def
+    if d and d.pkg then
+      out[#out + 1] = row()
+      require('seam.foot').declared(m, d, d.name or '', out)
+    end
   end
   if t then
     local takes = n.kind == 'method' and M.shape(t)
