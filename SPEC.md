@@ -331,13 +331,23 @@ run/
   Mocks: `design/mocks/where-underline-core.png` (update()),
   `where-underline-react.png` (useOwnedRun() calling core's createRun).
 - **A call already open above** (recursion) is dim and doesn't open.
-- **Nothing beside a name.** The pane shows its types and counts; the tree
-  stays narrow. (Decided 2026-10-31; `design/mocks/tree-cols-*.png` were not liked.)
+- **Nothing beside a name** in the tree's own order. The pane shows its
+  types and counts; the tree stays narrow. (Decided 2026-10-31;
+  `design/mocks/tree-cols-*.png` were not liked.)
 - **`s` changes the order,** as `<Tab>` does in today's explorer: by folder
-  (the tree), most used first, most calling first. The two sorted orders are
-  a flat list of functions, each with its package's hue bar and two counts,
-  used by and calls, the one it sorts by lit. Tests don't count.
-  `design/mocks/tree-sort-used.png`, `tree-sort-calls.png`.
+  (the tree), most used first, most calling first. The two sorted orders
+  keep the tree, folders, files, functions and calls, what is open open,
+  and sort each level's rows by the order's count, the most first, the
+  tree's order between equals, so the biggest fan-in or fan-out is on top
+  at every level. Every row has two counts, used by and calls, the one it
+  sorts by lit. A function's: the functions calling it, and those it
+  calls. A file's or a folder's: the functions outside it that call into
+  it, and those outside it that it calls, a call inside it not counted.
+  Each counted once; tests and a file's top don't count; the lens is kept.
+  Counted once a model and lens, from the same calls the Map's folder and
+  file read across their edge. The cursor stays on its row.
+  `design/mocks/tree-sort-used.png`, `tree-sort-calls.png` (the flat list
+  first mocked; the tree kept since, 2026-11-02).
 - **An opened function shows its calls, in the order they run,** and nothing
   around them: no closures, `if`s or `case`s (`design/mocks/tree-flow.png` was not
   liked).

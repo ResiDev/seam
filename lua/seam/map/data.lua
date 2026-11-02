@@ -168,6 +168,32 @@ function M.within(dir)
   end
 end
 
+--- Every call through the lens, tests left out at both ends, as `{ from,
+--- to }` node ids by path then line and then as written, each pair once:
+--- what the edges of folders and files are read from.
+---@param m table
+---@return { from: string, to: string }[]
+function M.edges(m)
+  local c = memo(m)
+  if not c.edges then
+    local g = m.graph
+    local out = {}
+    local top = graph.visible(m, 'top')
+    for _, id in ipairs(c.ids) do
+      local n = g.nodes[id]
+      if not n.test and top(n.path) then
+        for _, k in ipairs(M.calls(m, id)) do
+          if not g.nodes[k].test then
+            out[#out + 1] = { from = id, to = k }
+          end
+        end
+      end
+    end
+    c.edges = out
+  end
+  return c.edges
+end
+
 --- The calls across the edge of what `inside` holds, tests left out:
 --- `into` each call from outside to a function inside, `out` each call
 --- from inside to a function outside, as `{ from, to }` node ids in the
@@ -178,22 +204,12 @@ end
 function M.crossing(m, inside)
   local g = m.graph
   local into, out = {}, {}
-  local top = graph.visible(m, 'top')
-  for _, id in ipairs(memo(m).ids) do
-    local n = g.nodes[id]
-    if not n.test and top(n.path) then
-      local a = inside(n.path)
-      for _, k in ipairs(M.calls(m, id)) do
-        local c = g.nodes[k]
-        if not c.test then
-          local b = inside(c.path)
-          if a and not b then
-            out[#out + 1] = { from = id, to = k }
-          elseif b and not a then
-            into[#into + 1] = { from = id, to = k }
-          end
-        end
-      end
+  for _, e in ipairs(M.edges(m)) do
+    local a, b = inside(g.nodes[e.from].path), inside(g.nodes[e.to].path)
+    if a and not b then
+      out[#out + 1] = e
+    elseif b and not a then
+      into[#into + 1] = e
     end
   end
   return into, out

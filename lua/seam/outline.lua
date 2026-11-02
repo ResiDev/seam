@@ -1,7 +1,8 @@
 -- The tree as data, no windows: folders, files, each file's functions in
 -- the file's order, and what each function calls, opened a level at a time
--- in the order first written; or every function, the most used or the most
--- calling first. The state is `st.outline`.
+-- in the order first written; or the same tree with each level the most used
+-- or the most calling first. The state is `st.outline`.
+local data = require 'seam.map.data'
 local graph = require 'seam.graph'
 local index = require 'seam.index'
 local tree = require 'seam.tree'
@@ -23,8 +24,12 @@ local M = {}
 ---@field can_open boolean
 ---@field open boolean
 ---@field seen boolean a call already open above on its branch: dim, it does not open
----@field used integer|nil the sorted orders: the functions calling it, tests left out
----@field calls integer|nil the sorted orders: the functions it calls
+---@field used integer|nil the sorted orders: its fan-in, M.fan's
+---@field calls integer|nil the sorted orders: its fan-out, M.fan's
+
+---@class seam.Fan
+---@field used integer the functions calling it; a file's or folder's from outside it
+---@field calls integer the functions it calls; a file's or folder's outside it
 
 M.ORDERS = { 'tree', 'used', 'calls' }
 
@@ -141,11 +146,156 @@ local function open_first(m, it)
   return false
 end
 
+--- A node's two counts in `fan`, nothing there being none.
+---@param fan table<string, seam.Fan>
+---@param key string
+---@return integer used, integer calls
+function M.count(fan, key)
+  local f = fan[key]
+  if not f then
+    return 0, 0
+  end
+  return f.used, f.calls
+end
+
+-- `list` the most `by` first, equals in the order they came
+local function most_first(list, fan, by, key_of)
+  local at, n = {}, {}
+  for i, x in ipairs(list) do
+    local used, calls = M.count(fan, key_of(x))
+    at[x], n[x] = i, by == 'used' and used or calls
+  end
+  local out = { unpack(list) }
+  table.sort(out, function(a, b)
+    if n[a] ~= n[b] then
+      return n[a] > n[b]
+    end
+    return at[a] < at[b]
+  end)
+  return out
+end
+
+-- every folder holding `path`, the deepest first
+local function folders(path)
+  local out = {}
+  local p = path:match '^(.*)/[^/]*$'
+  while p do
+    out[#out + 1] = p
+    p = p:match '^(.*)/[^/]*$'
+  end
+  return out
+end
+
+--- Fan-in and fan-out, once for a model and its lens, by key: a function's
+--- node id, `f:<path>` a file's, `d:<path>` a folder's whole path. A
+--- function: the functions calling it and those it calls. A file or a
+--- folder: the functions outside it that call into it, and those outside
+--- it that it calls. Each counted once; tests and a file's top left out.
+---@param m table
+---@return table<string, seam.Fan>
+function M.fan(m)
+  local c = m.outline_fan
+  if c and c.visible == m.visible then
+    return c.fan
+  end
+  local fan, g = {}, m.graph
+  if g then
+    local top, up = graph.visible(m, 'top'), graph.visible(m, 'up')
+    for id, n in pairs(g.nodes) do
+      if n.kind ~= 'module' and not n.test then
+        fan[id] = { used = M.used_by(g, id, up), calls = #data.calls(m, id) }
+      end
+    end
+    local into, outof, dirs = {}, {}, {}
+    local function add(sets, key, id)
+      sets[key] = sets[key] or {}
+      sets[key][id] = true
+    end
+    -- the folders of `from` without `to` in them, deepest first
+    local function apart(from, to)
+      dirs[from] = dirs[from] or folders(from)
+      local out = {}
+      for _, d in ipairs(dirs[from]) do
+        if to:sub(1, #d + 1) == d .. '/' then
+          break
+        end
+        out[#out + 1] = d
+      end
+      return out
+    end
+    for _, e in ipairs(data.edges(m)) do
+      local a, b = g.nodes[e.from], g.nodes[e.to]
+      if a.kind ~= 'module' and a.path ~= b.path then
+        add(outof, 'f:' .. a.path, e.to)
+        for _, d in ipairs(apart(a.path, b.path)) do
+          add(outof, 'd:' .. d, e.to)
+        end
+        if up(a.path) and top(b.path) then
+          add(into, 'f:' .. b.path, e.from)
+          for _, d in ipairs(apart(b.path, a.path)) do
+            add(into, 'd:' .. d, e.from)
+          end
+        end
+      end
+    end
+    for _, x in ipairs { { into, 'used' }, { outof, 'calls' } } do
+      for key, set in pairs(x[1]) do
+        fan[key] = fan[key] or { used = 0, calls = 0 }
+        fan[key][x[2]] = vim.tbl_count(set)
+      end
+    end
+  end
+  m.outline_fan = { visible = m.visible, fan = fan }
+  return fan
+end
+
+-- a tree.walk item's key in M.fan
+local function fan_key(it)
+  return it.kind == 'dir' and ('d:' .. M.full(it)) or ('f:' .. it.path)
+end
+
+-- the tree's folders and files with each level the most `by` first, equals
+-- in the tree's order; once for a model, its lens and the order
+local function walk_by(m, by)
+  local c = m.outline_sorted
+  if not (c and c.visible == m.visible) then
+    c = { visible = m.visible }
+    m.outline_sorted = c
+  end
+  if not c[by] then
+    local fan = M.fan(m)
+    local root = { kids = {} }
+    local at = { [0] = root }
+    for _, it in ipairs(walk(m)) do
+      local n = { it = it, kids = {} }
+      table.insert(at[it.depth].kids, n)
+      at[it.depth + 1] = n
+    end
+    local items = {}
+    local function key_of(x)
+      return fan_key(x.it)
+    end
+    local function emit(n)
+      for _, k in ipairs(most_first(n.kids, fan, by, key_of)) do
+        items[#items + 1] = k.it
+        emit(k)
+      end
+    end
+    emit(root)
+    c[by] = items
+  end
+  return c[by]
+end
+
 -- a call's row and, opened, the rows of what it calls under it
 local function fn_rows(out, m, o, key, id, depth, under, chain)
   local g = m.graph
   local node = g.nodes[id]
   local row = { key = key, kind = 'fn', depth = depth, path = node.path, id = id, seen = chain[id] == true }
+  local fan = o.order ~= 'tree' and M.fan(m)
+  if fan then
+    row.used, row.calls = M.count(fan, id)
+  end
   if under then
     if node.path == under.path then
       row.where = 'here'
@@ -156,6 +306,11 @@ local function fn_rows(out, m, o, key, id, depth, under, chain)
     end
   end
   local kids = not row.seen and graph.kids(g, id, 'down', graph.visible(m, 'down')) or {}
+  if fan then
+    kids = most_first(kids, fan, o.order, function(k)
+      return k.id
+    end)
+  end
   row.can_open = #kids > 0
   row.open = row.can_open and o.open[key] == true
   out[#out + 1] = row
@@ -186,55 +341,25 @@ function M.used_by(g, id, visible)
   return n
 end
 
--- every function, the most used or the most calling first, then by name
-local function sorted(m, o)
-  local g = m.graph
-  if not g then
-    return {}
-  end
-  local top, up, down = graph.visible(m, 'top'), graph.visible(m, 'up'), graph.visible(m, 'down')
-  local list = {}
-  for id, n in pairs(g.nodes) do
-    if n.kind ~= 'module' and not n.test and top(n.path) then
-      list[#list + 1] = { n = n, used = M.used_by(g, id, up), calls = #graph.kids(g, id, 'down', down) }
-    end
-  end
-  local by = o.order
-  table.sort(list, function(a, b)
-    if a[by] ~= b[by] then
-      return a[by] > b[by]
-    end
-    if a.n.name ~= b.n.name then
-      return a.n.name < b.n.name
-    end
-    if a.n.path ~= b.n.path then
-      return a.n.path < b.n.path
-    end
-    return a.n.line < b.n.line
-  end)
-  local out = {}
-  for _, x in ipairs(list) do
-    local row = fn_rows(out, m, o, 'f:' .. x.n.path .. '\n' .. x.n.id, x.n.id, 0, nil, {})
-    row.used, row.calls = x.used, x.calls
-  end
-  return out
-end
-
 --- The rows the outline shows, top to bottom.
 ---@param m table the model
 ---@param o seam.Outline
 ---@return seam.ORow[]
 function M.rows(m, o)
-  if o.order ~= 'tree' then
-    return sorted(m, o)
-  end
+  local fan = o.order ~= 'tree' and M.fan(m)
   local out, skip = {}, nil
-  for _, it in ipairs(walk(m)) do
+  for _, it in ipairs(fan and walk_by(m, o.order) or walk(m)) do
     if not (skip and it.depth > skip) then
       skip = nil
       local key = (it.kind == 'dir' and 'd:' or 'f:') .. it.path
       local row = { key = key, kind = it.kind, depth = it.depth, path = it.path, item = it, seen = false }
       local fns = it.kind == 'file' and M.functions(m, it.path) or {}
+      if fan then
+        row.used, row.calls = M.count(fan, fan_key(it))
+        fns = most_first(fns, fan, o.order, function(n)
+          return n.id
+        end)
+      end
       if it.kind == 'dir' then
         row.can_open = it.touched == true
       else
@@ -288,8 +413,8 @@ function M.find(rows, key)
 end
 
 --- Open the folders and the file down to `target`, a node id or a file's
---- path, and put the cursor on it; in a sorted order, on the function when
---- it is listed, else back to the tree. False when the tree has no row for it.
+--- path, and put the cursor on it, in whichever order. False when the tree
+--- has no row for it.
 ---@param m table
 ---@param o seam.Outline
 ---@param target string
@@ -304,13 +429,6 @@ function M.reveal(m, o, target)
     return false
   end
   local key = 'f:' .. path .. (node and ('\n' .. node.id) or '')
-  if o.order ~= 'tree' then
-    if node and M.find(M.rows(m, o), key) then
-      o.cursor = key
-      return true
-    end
-    o.order = 'tree'
-  end
   for _, it in ipairs(walk(m)) do
     local full = M.full(it)
     if it.kind == 'dir' and path:sub(1, #full + 1) == full .. '/' then
@@ -340,12 +458,6 @@ function M.key(m, o, rows, i, k)
     local at = vim.fn.index(M.ORDERS, o.order) + 1
     o.order = M.ORDERS[at % #M.ORDERS + 1]
     if row then
-      o.cursor = row.key
-    end
-    -- back in the tree, the function the cursor was on is shown where it lives
-    local top = row and row.kind == 'fn' and row.key:match '^f:[^\n]*\n([^\n]*)'
-    if o.order == 'tree' and top then
-      M.reveal(m, o, top)
       o.cursor = row.key
     end
     return 'redraw'

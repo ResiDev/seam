@@ -144,24 +144,15 @@ end
 ---@param rows seam.ORow[]
 function M.rows(buf, m, o, rows)
   local out = {}
-  local flat = WORDS[o.order] ~= nil
+  local sorted = WORDS[o.order] ~= nil
+  local lit, dim = o.order == 'used' and 'SeamBold' or 'SeamLabel', o.order == 'calls' and 'SeamBold' or 'SeamLabel'
   for _, x in ipairs(rows) do
     local r = tree_row(m, x)
     -- the range's sign in the left column
     r:add(x.sign or ' ', x.sign and signs.HL[x.sign])
-    if flat then
-      -- the package's bar down the left, on the functions listed
-      if x.depth == 0 then
-        tree.bar(r, index.pkg_of(m, x.path))
-      else
-        r:add ' '
-      end
-      r:add ' '
-    else
-      r:add ' '
-    end
+    r:add ' '
     r:add(string.rep('  ', x.depth))
-    local room = (flat and USED_END - 6 or M.LW - 1) - r.w
+    local room = (sorted and USED_END - 6 or M.LW - 1) - r.w
     if x.kind == 'fn' then
       local node = m.graph.nodes[x.id]
       local under, pkg = call_mark(m, x, node)
@@ -170,11 +161,6 @@ function M.rows(buf, m, o, rows)
         room = room - 1
       end
       fn_name(r, node, room, under, x.seen)
-      if flat and x.depth == 0 then
-        local lit, dim = o.order == 'used' and 'SeamBold' or 'SeamLabel', o.order == 'calls' and 'SeamBold' or 'SeamLabel'
-        r:to(USED_END - #tostring(x.used)):add(tostring(x.used), lit)
-        r:to(CALLS_END - #tostring(x.calls)):add(tostring(x.calls), dim)
-      end
     elseif x.kind == 'gone' then
       r:add(trunc(M.name(m, x), room), 'SeamGone')
     else
@@ -188,6 +174,10 @@ function M.rows(buf, m, o, rows)
       else
         r:add(trunc(x.path:match '[^/]+$', room), 'SeamName')
       end
+    end
+    if sorted and x.used then
+      r:to(USED_END - #tostring(x.used)):add(tostring(x.used), lit)
+      r:to(CALLS_END - #tostring(x.calls)):add(tostring(x.calls), dim)
     end
     out[#out + 1] = r
   end
@@ -257,7 +247,7 @@ function M.pane_head(buf, m, o, x, sv)
     end
     if count then
       h:add('   ' .. count, 'SeamLabel')
-    elseif WORDS[o.order] and x.depth == 0 then
+    elseif WORDS[o.order] and x.used then
       h:add(o.order == 'used' and ('   used by ' .. x.used) or ('   calls ' .. x.calls), 'SeamLabel')
     end
   elseif x and x.kind == 'file' then
