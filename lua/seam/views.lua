@@ -112,6 +112,7 @@ M.list = {
     name = 'Map',
     key = 'gm',
     displays = map_view.DISPLAYS,
+    displays_of = map_view.displays,
     -- the head lists them all, the one shown bold
     list = true,
     -- a drawing: a row past the pane goes on right, not under itself

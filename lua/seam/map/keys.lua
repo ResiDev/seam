@@ -61,7 +61,7 @@ function M.under_name()
     return nil
   elseif it.id and m.graph.nodes[it.id] then
     return data.label(m.graph.nodes[it.id]) .. '()'
-  elseif it.kind == 'type' then
+  elseif it.kind == 'type' or it.kind == 'value' then
     return it.name
   elseif it.path then
     return it.path:match '[^/]+$' .. (it.kind == 'dir' and '/' or '')
