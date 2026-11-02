@@ -1110,6 +1110,8 @@ lua/seam/
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
   lens_panel.lua    the lens float and its keys
   picker.lua        the / float on every screen: a prompt, a list of picks, fuzzy matching
+  tsserver.lua      which TypeScript server seam asks: $SEAM_TS, the repo's, Mason's or the PATH's
+  health.lua        :checkhealth seam: this copy, Neovim, the colours, the parsers and highlight queries, the keys and terminal, the server
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
   changes.lua       what changed in the range, from git: the files, each end's lines, each declaration new, gone, signature or body changed, where a name was used at from
   diff.lua          two versions of some lines compared: the hunks, the words changed, laid out with removed lines where they were and unchanged runs folded

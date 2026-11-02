@@ -10,38 +10,12 @@ local fh = assert(io.open(index, 'r'))
 local nodes = vim.json.decode(fh:read '*a').nodes
 fh:close()
 
--- the first native TypeScript (7+) server found: the repo's own Effect or
--- tsgo build, then tsc 7 or tsgo from Mason or the PATH
-local function native_tsc(bin)
-  local v = vim.system({ bin, '--version' }, { text = true }):wait()
-  return v.code == 0 and tonumber((v.stdout or ''):match 'Version (%d+)') or 0
-end
-local function server()
-  local env = os.getenv 'SEAM_TS'
-  if env and env ~= '' then
-    return vim.split(env, ' ', { trimempty = true })
-  end
-  local effect = repo .. '/node_modules/.bin/effect-tsgo'
-  if vim.fn.executable(effect) == 1 then
-    local exe = vim.trim(vim.system({ effect, 'get-exe-path' }, { cwd = repo, text = true }):wait().stdout or '')
-    if exe ~= '' and vim.fn.executable(exe) == 1 then
-      return { exe }
-    end
-  end
-  local mason = vim.fn.stdpath 'data' .. '/mason/bin/'
-  for _, bin in ipairs { repo .. '/node_modules/.bin/tsgo', mason .. 'tsc', vim.fn.exepath 'tsc', mason .. 'tsgo', vim.fn.exepath 'tsgo' } do
-    if bin ~= '' and vim.fn.executable(bin) == 1 and (bin:match 'tsgo$' or native_tsc(bin) >= 7) then
-      return { bin }
-    end
-  end
-end
-local cmd = server()
+local here = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
+package.path = here .. '/lua/?.lua;' .. package.path
+local cmd, why = require('seam.tsserver').command(repo)
 if not cmd then
-  io.stderr:write 'types: no TypeScript 7 server: tsc 7 or tsgo, from the repo, Mason or the PATH; or say which in $SEAM_TS\n'
+  io.stderr:write('types: ' .. why .. '\n')
   os.exit(1)
-end
-if not os.getenv 'SEAM_TS' or os.getenv 'SEAM_TS' == '' then
-  vim.list_extend(cmd, { '--lsp', '--stdio' })
 end
 
 local id = vim.lsp.start({
