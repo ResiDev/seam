@@ -54,7 +54,13 @@ export declare function line(x: number): Point;
 ]]
 local tree = vim.treesitter.get_string_parser(SRC, 'typescript'):parse()[1]:root()
 local function decl(row, col)
-  return { lookup.decl(tree, row, col) }
+  local s, e = lookup.decl(tree, row, col)
+  return { s, e }
+end
+-- a declaration's own name, where the server's location starts at the line
+local function named(row, col)
+  local _, _, nm = lookup.decl(tree, row, col)
+  return nm and vim.treesitter.get_node_text(nm, SRC)
 end
 eq(decl(1, 21), { 1, 4 }, 'a class, from its name, with its export and declare')
 eq(decl(3, 6), { 1, 4 }, 'from inside it, the class')
@@ -64,6 +70,8 @@ eq(decl(13, 17), { 13, 15 }, 'an exported interface')
 eq(decl(16, 12), {}, 'a variable is no declaration of a type')
 eq(decl(19, 24), { 19, 19 }, 'a function signature')
 eq(decl(0, 15), {}, 'an import is none')
+eq(named(6, 4), 'ReactNode', 'a type alias named from the start of its line')
+eq(named(13, 0), 'Options', 'an exported interface named from the start of its line')
 
 -- a hover's code, and the type it says
 local function fence(x)
