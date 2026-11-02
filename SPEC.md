@@ -699,6 +699,18 @@ an icicle, types as boxes with functions on the arrows, values as lanes.
   signatures still go on under themselves; a better answer for a side too
   wide may come later.
 
+- **The foot everywhere** (2026-11-02, the user: "would be nice to have
+  in other parts like Types, so you could see the definition of the type
+  too"). One rule: where the cursor rests on a repo function or a repo
+  type, the foot tells it, in the pane's Map, Types and Code and on the
+  code screen's code, its code or its types, over the window the cursor
+  is in. Each view says what is under its cursor (`under` in the views'
+  registry); a name is resolved as `+` resolves it, in the file its line
+  is from. It moves over the window's first rows when the cursor is on
+  its last. A type's declaration is no longer cut at seven lines: it runs
+  as long as the foot holds, half the window, and only past that says
+  `⋯ N more lines`.
+
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
   tree repeated the Built from tab a level at a time, and folders drew the
@@ -1119,7 +1131,7 @@ lua/seam/
   code.lua          a code pane: copied lines, copied captures painted in view, enclosing function
   draw/init.lua     rows, putting them in a buffer, the pieces both screens share
   outline.lua       the tree as data: folders, files, functions, the calls under each, the orders, reveal
-  views.lua         the pane's views, a registry: the two tabs and the views aside, which rows each has, its displays, how it draws
+  views.lua         the pane's views, a registry: the two tabs and the views aside, which rows each has, its displays, how it draws, what is under its cursor for the foot
   views/code.lua    the Code view: a function, a file, a type's declaration, each call underlined where it lives
   views/types.lua   the Types view: a line a function, takes → name → gives; a folder's, a file's, a type's; types opened in place
   typesview.lua     the Types view as data: a function's line, the names that are types, the types opened as a set of keys laid out
@@ -1132,8 +1144,9 @@ lua/seam/
   scope.lua         a file's bindings from treesitter: what each name resolves to in its function, the uses of a binding
   names.lua         what a name in the code is: a repo function, a type, an import's file, a value, a parameter, a field or method, its type and later uses
   codetypes.lua     the types the code does not write: after a value's name, after a function's parameters; the code's types display
-  pane.lua          the pane beside the tree and the code: drawing it, its keys, the Map's foot following its cursor
-  screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane, J K n N
+  pane.lua          the pane beside the tree and the code: drawing it, its keys, the foot following its cursor
+  foot.lua          the foot: the repo function or type under the cursor in full, in every view and the code screen's code, over the window the cursor is in; a function's signature and the line that calls it, a type's declaration
+  screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane and at the foot, J K n N
   views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
   lens_panel.lua    the lens float and its keys
@@ -1155,7 +1168,6 @@ lua/seam/
   map/flow.lua      the flow: calls above under their heads, a line down into the row, on to its callers below, each side in columns, groups closed to fit
   map/both.lua      folder with T off, names only: calls left, callers right, each side by folder and file, groups closed to fit
   map/fold.lua      which of the Map's groups close to a line so a side fits the pane: the fewest names first, never one opened with l
-  map/foot.lua      the Map's foot: the name under the pane's cursor in full, a function's signature and the line that calls it, a type's declaration
   map/keys.lua      the Map's keys in the pane, l T J, where each acts, and the name under the cursor for the status line
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
@@ -1170,7 +1182,7 @@ tests/
   map.lua           the Map's layouts on graphs written by hand: the facts, both ways, the flow, which groups close to fit
   check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder, its groups closed to fit and l opening one
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, the lens's range
-  check.lua         every screen through its keys on a real repo, the Map and its foot on each contract
+  check.lua         every screen through its keys on a real repo, the foot on the Map, the Types view and the code
 ```
 
 ## Tests

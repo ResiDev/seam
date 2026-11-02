@@ -2,7 +2,7 @@
 -- view shown, for what the screen says it is about; the keys in it, and
 -- those that reach it from the left: the other tab, a view aside, the next
 -- display, the diff, scrolling it, ]c [c from change to change, + and -,
--- and the Map's foot following the cursor.
+-- and the foot following the cursor.
 local api = vim.api
 local draw = require 'seam.draw'
 local index = require 'seam.index'
@@ -66,7 +66,7 @@ function M.show(x, keep)
   local m = index.model()
   odraw.pane_head(st.obuf.phead, m, st.outline, x, st.view)
   odraw.pane(st.obuf.pane, w.pane, m, x, st.view, ctx(x, w), keep)
-  require('seam.map.foot').update()
+  require('seam.foot').update()
 end
 
 -- The pane following the cursor, drawn once it rests: moving over rows draws
@@ -460,7 +460,7 @@ function M.autocmds(aug)
         local w = M.wins()
         if w and api.nvim_get_current_win() == w.pane then
           draw.cursor_line(w.pane)
-          require('seam.map.foot').update()
+          require('seam.foot').update()
         end
         vim.cmd 'redrawstatus'
       end,
@@ -470,6 +470,7 @@ function M.autocmds(aug)
       buffer = b,
       callback = function()
         M.flush()
+        require('seam.foot').update()
         vim.cmd 'redrawstatus'
       end,
     })
@@ -479,7 +480,7 @@ function M.autocmds(aug)
     buffer = st.obuf.pane,
     callback = function()
       draw.cursor_clear(st.obuf.pane)
-      require('seam.map.foot').close()
+      require('seam.foot').close()
     end,
   })
 end

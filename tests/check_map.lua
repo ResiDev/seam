@@ -100,7 +100,7 @@ return function(t)
   -- made small by the foot's share
   local function folds(what)
     t.where('map folds ' .. what)
-    local foot = require 'seam.map.foot'
+    local foot = require 'seam.foot'
     local share = foot.SHARE
     foot.SHARE = 0.95
     for _, d in ipairs { 'folder', 'type' } do

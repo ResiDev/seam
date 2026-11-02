@@ -374,6 +374,8 @@ function M.open(root)
     callback = function()
       if api.nvim_get_current_tabpage() == st.tab then
         paint()
+        -- the cursor scrolled under the foot: it moves to the window's top
+        require('seam.foot').update()
       end
     end,
   })

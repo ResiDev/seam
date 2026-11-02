@@ -191,7 +191,7 @@ local function render(out, C, items)
       if x.head.changed then
         r:add('   '):add('~', 'SeamSignChange'):add(' changed', 'SeamLabel')
       end
-      r.meta.tv = { key = x.key, chain = x.chain, names = {} }
+      r.meta.tv = { key = x.key, chain = x.chain, names = {}, path = dc.path }
       out[#out + 1] = r
     else
       local l = x.line
@@ -238,7 +238,7 @@ local function render(out, C, items)
         r:to(l.col):add(l.note, 'SeamLabel')
       end
       light(C, r, x.key, l.id, names)
-      r.meta.tv = { key = x.key, id = l.id, names = names, chain = x.chain }
+      r.meta.tv = { key = x.key, id = l.id, names = names, chain = x.chain, path = l.path or C.path }
       out[#out + 1] = r
     end
   end
@@ -351,7 +351,7 @@ local function fn_rows(out, C, f, cols, kept, top)
     end
   end
   light(C, r, key, 'l', names)
-  r.meta.tv = { key = key, id = 'l', names = names, chain = {}, fn = wkey }
+  r.meta.tv = { key = key, id = 'l', names = names, chain = {}, fn = wkey, path = node.path, fn_id = f.id }
   out[#out + 1] = r
   if is_written then
     local lines = {}
@@ -363,7 +363,7 @@ local function fn_rows(out, C, f, cols, kept, top)
     end
     render(out, C, lay(C, lines, wkey, { wkey }, {}))
     local cr = row():add(' ' .. close, 'SeamText')
-    cr.meta.tv = { key = wkey, chain = { wkey }, names = {} }
+    cr.meta.tv = { key = wkey, chain = { wkey }, names = {}, path = node.path, fn_id = f.id }
     out[#out + 1] = cr
   end
   local items = lay(C, { line }, key, {}, {})
@@ -557,6 +557,36 @@ M.typed = typed
 M.lay = lay
 --- The rows of laid-out items.
 M.render = render
+
+--- What is under the cursor in `win`, drawn as the Types view draws, as
+--- the foot tells it: a type named there, resolved in the file its line is
+--- from (`path` when the line does not say), a type's head, a name in a
+--- declaration's copied code, else the function whose line it is.
+---@param win integer
+---@param m table
+---@param path string|nil
+---@return table|nil
+function M.at_cursor(win, m, path)
+  local buf = api.nvim_win_get_buf(win)
+  local cur = api.nvim_win_get_cursor(win)
+  local meta = draw.meta(buf, cur[1])
+  local t = meta.tv
+  if not t then
+    return nil
+  end
+  path = t.path or path
+  local n = tv.at(t.names, cur[2])
+  if not n and meta.at then
+    -- the name a row is about: a type's head, a type declared in the code
+    local s = (api.nvim_buf_get_lines(buf, cur[1] - 1, cur[1], false)[1] or ''):find(meta.at.name, 1, true)
+    n = s and cur[2] >= s - 1 and cur[2] < s - 1 + #meta.at.name and { name = meta.at.name } or nil
+  end
+  local d = n and path and resolve(m, n.name, path)
+  if d then
+    return { kind = 'type', name = n.name, decl = d }
+  end
+  return require('seam.views.code').at_cursor(win, m) or (t.fn_id and { id = t.fn_id }) or nil
+end
 
 --- Why there are no types to show, said in one dim line.
 ---@return string
