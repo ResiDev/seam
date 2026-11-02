@@ -1,6 +1,7 @@
 -- The tree as data, on a graph written by hand: its rows, a file's
 -- functions, the calls each opens to and where they live, recursion, the
--- sorted orders and their counts, and finding a function or file.
+-- fan-in and fan-out of each row, the sorted orders, and finding a function
+-- or file.
 --   nvim -l tests/outline.lua
 -- Exits 0 when nothing failed.
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
@@ -117,41 +118,73 @@ eq({ outline.key(m, o, rows, 3, 'h'), o.cursor }, { 'move', 'd:pb' }, 'h on a cl
 eq(outline.key(m, o, rows, 1, 'h'), nil, 'h on a closed top folder: nothing')
 o.open['d:pa'] = nil
 
--- s: most used first, a flat list of functions with their counts, tests and
--- the top of a file not counted; then most calling first; then the tree
+-- fan-in and fan-out, one record a key: a function's callers and calls; a
+-- file's or folder's from outside it, tests and a file's top left out
+local fan = outline.fan(m)
+local function f(key)
+  return { outline.count(fan, key) }
+end
+eq({ f(A1), f(A2), f(B1), f(C1), f(D1) }, { { 1, 3 }, { 1, 1 }, { 2, 0 }, { 1, 0 }, { 0, 1 } }, "each function's used by and calls")
+eq(f 'f:pa/src/b.ts', { 2, 0 }, 'b.ts used by a1 and d1, from other files, not the tests')
+eq(f 'f:pa/src/a.ts', { 0, 2 }, "a.ts calls b1 and c1, not a2 in itself; main's top does not count as using it")
+eq(f 'd:pa/src', { 0, 1 }, 'pa/src: b1 is called only from inside it; it calls c1 outside')
+eq({ f 'd:pa/src/sub', f 'd:pb' }, { { 0, 1 }, { 1, 0 } }, 'sub calls b1 out of it; pb used by a1')
+eq(f 'f:pa/src/main.ts', { 0, 0 }, 'a file calling nothing outside, through its top alone: none')
+expect(outline.fan(m) == fan, 'the counts are made once a model and lens')
+
+-- s: most used first, the tree kept, each level sorted, every row with both
+-- counts; then most calling first; then the tree, nothing beside a name
+o = outline.new()
+local tree_keys = keys(outline.rows(m, o))
+local function counts(rs)
+  return vim.tbl_map(function(r)
+    return { r.key, r.used, r.calls }
+  end, rs)
+end
+expect(outline.rows(m, o)[1].used == nil, 'the tree: no counts')
 local _, ib = row(outline.rows(m, o), 'f:pa/src/b.ts')
-o.cursor = nil
 eq(outline.key(m, o, outline.rows(m, o), ib, 's'), 'redraw', 's')
 eq(o.order, 'used', 's: most used first')
 rows = outline.rows(m, o)
-local function ids(rs)
-  local out = {}
-  for _, r in ipairs(rs) do
-    if r.depth == 0 then
-      out[#out + 1] = { r.id, r.used, r.calls }
-    end
-  end
-  return out
-end
-eq(
-  ids(rows),
-  { { B1, 2, 0 }, { A1, 1, 3 }, { A2, 1, 1 }, { C1, 1, 0 }, { D1, 0, 1 } },
-  'most used: b1 by a1 and d1, not the test; a1 by a2, not main or the test'
-)
-eq(rows[1].key, k('f:pa/src/b.ts', B1), 'a function keeps its key in every order')
-outline.key(m, o, rows, 1, 's')
-eq(o.order, 'calls', 's again: most calling first')
-eq(ids(outline.rows(m, o))[1], { A1, 1, 3 }, 'a1 calls the most')
+eq(counts(rows), {
+  { 'd:pb', 1, 0 },
+  { 'f:pb/c.ts', 1, 0 },
+  { 'd:pa', 0, 1 },
+  { 'f:pa/src/b.ts', 2, 0 },
+  { 'd:pa/src/sub', 0, 1 },
+  { 'f:pa/src/a.ts', 0, 2 },
+  { 'f:pa/src/main.ts', 0, 0 },
+  { 'f:pa/src/types.ts', 0, 0 },
+}, 'most used: pb before pa, b.ts first in pa, the rest in the tree order, sub still closed')
+eq(o.cursor, 'f:pa/src/b.ts', 's keeps the cursor on its row')
+o.open['f:pa/src/a.ts'] = true
 rows = outline.rows(m, o)
+local _, ia1 = row(rows, 'f:pa/src/a.ts')
+eq({ rows[ia1 + 1].key, rows[ia1 + 2].key }, { k('f:pa/src/a.ts', A2), k('f:pa/src/a.ts', A1) }, "a file's functions used as much: in the file's order")
+outline.key(m, o, rows, ia1 + 2, 's')
+eq(o.order, 'calls', 's again: most calling first')
+rows = outline.rows(m, o)
+eq(
+  vim.list_slice(keys(rows), 1, 5),
+  { 'd:pa', 'f:pa/src/a.ts', k('f:pa/src/a.ts', A1), k('f:pa/src/a.ts', A2), 'd:pa/src/sub' },
+  'most calling: pa, a.ts calling two outside, a1 calling three'
+)
+eq({ row(rows, k('f:pa/src/a.ts', A1)).used, row(rows, k('f:pa/src/a.ts', A1)).calls }, { 1, 3 }, 'a function row has its counts')
 local _, ic = row(rows, k('f:pa/src/a.ts', A1))
 eq(outline.key(m, o, rows, ic, 'l'), 'redraw', 'a function opens in a sorted order too')
 rows = outline.rows(m, o)
-eq(row(rows, k('f:pa/src/a.ts', A1, C1)).where, 'pkg', 'its calls say where they live')
-_, ic = row(rows, k('f:pa/src/a.ts', A1, B1))
-outline.key(m, o, rows, ic, 's')
+eq(
+  { rows[ic + 1].key, rows[ic + 2].key, rows[ic + 3].key },
+  { k('f:pa/src/a.ts', A1, A2), k('f:pa/src/a.ts', A1, B1), k('f:pa/src/a.ts', A1, C1) },
+  'its calls, the most calling first: a2 calls one, b1 and c1 none, as written'
+)
+eq(rows[ic + 3].where, 'pkg', 'its calls say where they live')
+outline.key(m, o, rows, ic + 2, 's')
 eq(o.order, 'tree', 's a third time: the tree')
 rows = outline.rows(m, o)
-expect(row(rows, k('f:pa/src/a.ts', A1, B1)) ~= nil and o.cursor == k('f:pa/src/a.ts', A1, B1), 'back in the tree, the row the cursor was on, shown', o.cursor)
+expect(row(rows, k('f:pa/src/a.ts', A1, B1)) ~= nil and o.cursor == k('f:pa/src/a.ts', A1, B1), 'back in the tree, the row the cursor was on', o.cursor)
+o.open['f:pa/src/a.ts'], o.open[k('f:pa/src/a.ts', A1)] = nil, nil
+eq(keys(outline.rows(m, o)), tree_keys, 'the tree as it was')
 
 -- reveal: a function in a closed folder, its folder and file opened
 o = outline.new()
@@ -164,9 +197,11 @@ eq(o.cursor, 'f:pa/src/types.ts', 'the cursor on the file')
 eq(outline.reveal(m, o, T1), false, 'a test function has no row')
 eq(outline.reveal(m, o, MAIN), true, "a file's top: its file")
 eq(o.cursor, 'f:pa/src/main.ts', 'on main.ts')
+o = outline.new()
 o.order = 'used'
-eq({ outline.reveal(m, o, A2), o.order }, { true, 'used' }, 'in a sorted order a function stays there')
-eq({ outline.reveal(m, o, 'pb/c.ts'), o.order }, { true, 'tree' }, 'a file goes back to the tree')
+eq({ outline.reveal(m, o, D1), o.order }, { true, 'used' }, 'in a sorted order a function is shown there')
+expect(row(outline.rows(m, o), k('f:pa/src/sub/d.ts', D1)) ~= nil, 'd1 is a row, its folder opened', o.cursor)
+eq({ outline.reveal(m, o, 'pb/c.ts'), o.order, o.cursor }, { true, 'used', 'f:pb/c.ts' }, 'and a file')
 
 -- the lens: a folder hidden from contracts leaves the tree
 m.visible = function(path, col)
@@ -177,6 +212,11 @@ eq(
   { 'd:pa', 'd:pa/src/sub', 'f:pa/src/a.ts', 'f:pa/src/b.ts', 'f:pa/src/main.ts', 'f:pa/src/types.ts', 'd:pb' },
   'the lens hides c.ts, its package kept'
 )
+eq({ outline.count(outline.fan(m), 'f:pb/c.ts') }, { 0, 0 }, 'nothing counted into what the tree hides')
+m.visible = function(path, col)
+  return not (col == 'used' and path:find '^pa/src/sub/')
+end
+eq({ outline.count(outline.fan(m), 'f:pa/src/b.ts') }, { 1, 0 }, 'a caller the lens hides from used by is not counted')
 
 -- the call graph one level on (seam.graph): as written, a call made twice
 -- one kid; going up, tests apart; the lens's column each way

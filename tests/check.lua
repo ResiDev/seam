@@ -365,22 +365,37 @@ do
       end
       key 'l'
     end
-    -- s: most used first, most calling first, then the tree on the same row
+    -- s: the tree, each level most used first, then most calling first,
+    -- every row with both counts; then the tree on the same row
     where = 'tree s'
+    local tree_n = #st.orows
     for _, order in ipairs { 'used', 'calls' } do
       key 's'
       check_tree()
       if st.outline.order ~= order then
         fail('s did not go to ' .. order)
       end
-      local last
+      if #st.orows ~= tree_n then
+        fail(('%s has %d rows, the tree %d'):format(order, #st.orows, tree_n))
+      end
+      -- the last count at each depth, under the same parent
+      local last = {}
       for _, r in ipairs(st.orows) do
-        if r.depth == 0 then
-          if last and r[order] > last then
-            fail(order .. ' is not sorted most first')
+        if r.kind ~= 'gone' then
+          if not (r.used and r.calls) then
+            fail(order .. ': ' .. r.key:gsub('\n', ' ') .. ' has no counts')
             break
           end
-          last = r[order]
+          for d in pairs(last) do
+            if d > r.depth then
+              last[d] = nil
+            end
+          end
+          if last[r.depth] and r[order] > last[r.depth] then
+            fail(order .. ' is not sorted most first at ' .. r.key:gsub('\n', ' '))
+            break
+          end
+          last[r.depth] = r[order]
         end
       end
       if not vim.wo[st.owin.tree].winbar:find('used by', 1, true) then
