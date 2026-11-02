@@ -28,9 +28,25 @@ function M.under(m, from, to)
   return 'SeamUnder'
 end
 
+-- a type's name no repo type answers, written at byte `col` of line `l`:
+-- a package's, looked up where it is written
+local function written_type(path, l, col)
+  local root, src = names.tree(path)
+  local n = root and root:named_descendant_for_range(l - 1, col, l - 1, col)
+  local t = n and n:type()
+  if not (t == 'type_identifier' or t == 'identifier') then
+    return nil
+  end
+  local w = vim.treesitter.get_node_text(n, src)
+  if w:match '^%u' then
+    local _, sc = n:start()
+    return { kind = 'type', name = w, from = { path = path, line = l, col = sc } }
+  end
+end
+
 --- What the code copied under the cursor in `win` names, as the foot
 --- tells it: a repo function `{ id }`, a repo type `{ kind = 'type', name,
---- decl }`; nil off one.
+--- decl }`, a type of no repo's `{ kind = 'type', name, from }`; nil off one.
 ---@param win integer
 ---@param m table
 ---@return table|nil
@@ -38,12 +54,15 @@ function M.at_cursor(win, m)
   local cur = api.nvim_win_get_cursor(win)
   for _, c in ipairs(code.spans(api.nvim_win_get_buf(win), cur[1] - 1)) do
     if type(c[3]) == 'number' and cur[2] >= c[4] and cur[2] < c[4] + c[5] then
-      local n = names.at(m, c[1], c[2], c[3] + cur[2] - c[4])
-      if n and n.kind == 'call' then
+      local col = c[3] + cur[2] - c[4]
+      local n = names.at(m, c[1], c[2], col)
+      if not n then
+        return vim.uv.fs_stat(code.root .. '/' .. c[1]) and written_type(c[1], c[2], col) or nil
+      elseif n.kind == 'call' then
         return { id = n.id }
-      elseif n and n.kind == 'type' then
+      elseif n.kind == 'type' then
         return { kind = 'type', name = n.name, decl = n.decl }
-      elseif n and n.at and m.graph then
+      elseif n.at and m.graph then
         -- a function the file holds as a value, `const f = () => …`
         for _, node in ipairs(outline.by_file(m.graph)[c[1]] or {}) do
           if node.name == n.name and node.line == n.at.line and node.kind ~= 'module' then

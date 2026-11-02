@@ -24,7 +24,8 @@ end
 M.shown = shown
 
 --- What the name under the pane's cursor stands for on the Map: a row's
---- `meta.map`, or the thing a drawing's cell stood for, the nearest on its line.
+--- `meta.map`, or the thing a drawing's cell stood for, the nearest on its
+--- line off a type in a signature.
 ---@return table|nil
 function M.under()
   local pane = require 'seam.pane'
@@ -40,7 +41,11 @@ function M.under()
   local best, dist
   for _, h in ipairs(meta.hits or {}) do
     local d = cur[2] < h.s and h.s - cur[2] or cur[2] >= h.e and cur[2] - h.e + 1 or 0
-    if not dist or d < dist then
+    if d == 0 then
+      return h.item
+    end
+    -- off a name the row's function, not a type in its signature
+    if not h.item.sig and (not dist or d < dist) then
       best, dist = h.item, d
     end
   end

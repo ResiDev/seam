@@ -305,6 +305,7 @@ end
 ---------------------------------------------------------------- the tab
 
 function M.close()
+  require('seam.lookup').stop()
   if st.tab and api.nvim_tabpage_is_valid(st.tab) then
     if #api.nvim_list_tabpages() > 1 then
       api.nvim_set_current_tabpage(st.tab)
@@ -376,6 +377,15 @@ function M.open(root)
         paint()
         -- the cursor scrolled under the foot: it moves to the window's top
         require('seam.foot').update()
+      end
+    end,
+  })
+  -- seam's tab closed some other way than q: its server goes with it
+  api.nvim_create_autocmd('TabClosed', {
+    group = aug,
+    callback = function()
+      if not (st.tab and api.nvim_tabpage_is_valid(st.tab)) then
+        require('seam.lookup').stop()
       end
     end,
   })
