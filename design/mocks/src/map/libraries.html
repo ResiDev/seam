@@ -1,0 +1,109 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root { color-scheme: dark; }
+.page { display: flex; flex-direction: column; gap: 22px; font-family: var(--font-sans, sans-serif); }
+.card h3 { margin: 0 0 4px; font-size: 14px; } .card p { margin: 0 0 8px; font-size: 12.5px; color: #9aa; max-width: 680px; }
+pre { margin: 0; padding: 16px; border-radius: 8px; background: #1a1b26; color: #c0caf5; font: 10.4px/1.55 monospace; }
+.d { color: #565f89; } .t { color: #2ac3de; } .f { color: #7dcfff; } .l { color: #545c7e; } .x { color: #c0caf5; }
+.b { color: #7aa2f7; font-weight: 700; }
+</style></head><body><div class="page"><div class="card"><h3>A folder: element/src/</h3><p>Each name it takes from a library, the library after it, the libraries most used first; under each the functions using it, the file once, the line it is used on.</p><pre><span class="l">  ┌─ </span><span class="t">RoughGenerator</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:88</span>   <span class="f">ShapeCache</span>
+<span class="l">  │</span>            <span class="d">:300</span>  <span class="f">generateArrowheadCardinalityOne</span>
+<span class="l">  │</span>            <span class="d">:314</span>  <span class="f">generateArrowheadLinesToTip</span>
+<span class="l">  │</span>            <span class="d">:350</span>  <span class="f">generateArrowheadOutlineCircle</span>
+<span class="l">  │</span>            <span class="d">:406</span>  <span class="f">getArrowheadShapes</span>
+<span class="l">  │</span>            <span class="d">:657</span>  <span class="f">getFreedrawFillPolygon</span>
+<span class="l">  │</span>            <span class="d">:685</span>  <span class="f">generateLinearCollisionShape</span>
+<span class="l">  │</span>            <span class="d">:831</span>  <span class="f">_generateElementShape</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">Options</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:203</span>  <span class="f">generateRoughOptions</span>
+<span class="l">  │</span>            <span class="d">:302</span>  <span class="f">generateArrowheadCardinalityOne</span>
+<span class="l">  │</span>            <span class="d">:316</span>  <span class="f">generateArrowheadLinesToTip</span>
+<span class="l">  │</span>            <span class="d">:332</span>  <span class="f">getArrowheadLineOptions</span>
+<span class="l">  │</span>            <span class="d">:351</span>  <span class="f">generateArrowheadOutlineCircle</span>
+<span class="l">  │</span>            <span class="d">:407</span>  <span class="f">getArrowheadShapes</span>
+<span class="l">  │</span>            <span class="d">:686</span>  <span class="f">generateLinearCollisionShape</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">Drawable</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">bounds.ts</span><span class="d">:994</span>  <span class="f">getArrowheadPoints</span>
+<span class="l">  │</span>             <span class="d">:1169</span> <span class="f">generateLinearElementShape</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:159</span>   <span class="f">ShapeCache</span>
+<span class="l">  │</span>            <span class="d">:386</span>   <span class="f">fillArrowheadOutline</span>
+<span class="l">  │</span>            <span class="d">:403</span>   <span class="f">getArrowheadShapes</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">Point</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">bounds.ts</span><span class="d">:1184</span> <span class="f">generateLinearElementShape</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:725</span>   <span class="f">generateLinearCollisionShape</span>
+<span class="l">  │</span>            <span class="d">:986</span>   <span class="f">_generateElementShape</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">RoughCanvas</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">renderElement.ts</span><span class="d">:462</span>  <span class="f">drawElementOnCanvas</span>
+<span class="l">  │</span>                    <span class="d">:1024</span> <span class="f">renderElement</span>
+<span class="l">  │</span>                    <span class="d">:1072</span> <span class="f">drawElement</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">generator</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">bounds.ts</span><span class="d">:1170</span> <span class="f">generateLinearElementShape</span>
+<span class="l">  │</span>             <span class="d">:1328</span> <span class="f">getResizedElementAbsoluteCoords</span>
+<span class="l">  │</span>             <span class="d">:1354</span> <span class="f">getElementPointsCoords</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">Op</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">bounds.ts</span><span class="d">:634</span>  <span class="f">getMinMaxXYFromCurvePathOps</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">canvas</span>  <span class="d">roughjs</span>
+<span class="l">  │</span>    <span class="x">renderElement.ts</span><span class="d">:325</span>  <span class="f">generateElementCanvas</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">pointsOnBezierCurves</span>  <span class="d">points-on-curve</span>
+<span class="l">  │</span>    <span class="x">bounds.ts</span><span class="d">:319</span>      <span class="f">getElementLineSegments</span>
+<span class="l">  │</span>             <span class="d">:457</span>      <span class="f">getSegmentsOnCurve</span>
+<span class="l">  │</span>    <span class="x">bucketFill.ts</span><span class="d">:348</span>  <span class="f">lineElementIdealSegments</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:671</span>       <span class="f">getFreedrawFillPolygon</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">simplify</span>  <span class="d">points-on-curve</span>
+<span class="l">  │</span>    <span class="x">bucketFill.ts</span><span class="d">:1365</span> <span class="f">simplifyRing</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:638</span>       <span class="f">getFreedrawFillCurvePoints</span>
+<span class="l">  │</span>            <span class="d">:788</span>       <span class="f">generateLinearCollisionShape</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">Point</span>  <span class="d">points-on-curve</span>
+<span class="l">  │</span>    <span class="x">bucketFill.ts</span><span class="d">:349</span>  <span class="f">lineElementIdealSegments</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">curveToBezier</span>  <span class="d">points-on-curve</span>
+<span class="l">  │</span>    <span class="x">bucketFill.ts</span><span class="d">:349</span>  <span class="f">lineElementIdealSegments</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">getStroke</span>  <span class="d">perfect-freehand</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:1297</span> <span class="f">getVariableWidthFreedrawOutline</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">getStrokePoints</span>  <span class="d">perfect-freehand</span>
+<span class="l">  │</span>    <span class="x">shape.ts</span><span class="d">:1369</span> <span class="f">getFreedrawStrokeCenterPoints</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">vi</span>  <span class="d">vitest</span>
+<span class="l">  │</span>    <span class="x">__tests__/stickyNote.test.ts</span><span class="d">:696</span>  <span class="f">(top level)</span>
+<span class="l">  │</span>    <span class="x">__tests__/transform.test.ts</span><span class="d">:700</span>   <span class="f">(top level)</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">throttle</span>  <span class="d">lodash.throttle</span>
+<span class="l">  │</span>    <span class="x">Scene.ts</span><span class="d">:67</span>   <span class="f">(top level)</span>
+<span class="l">  │</span>
+<span class="l">  └──▶ </span><span class="b">element/src/</span></pre></div><div class="card"><h3>A function: LibraryMenuItems</h3><p>The same on one function: each name it takes, the lines it is used on after its file, the function not named again.</p><pre><span class="l">  ┌─ </span><span class="f">useCallback</span>  <span class="d">react</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:129</span> <span class="d">:188</span> <span class="d">:215</span> <span class="d">:230</span> <span class="d">:240</span> <span class="d">:244</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">useEffect</span>  <span class="d">react</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:88</span> <span class="d">:180</span> <span class="d">:260</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">useMemo</span>  <span class="d">react</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:105</span> <span class="d">:119</span> <span class="d">:124</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">useRef</span>  <span class="d">react</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:84</span> <span class="d">:259</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">useState</span>  <span class="d">react</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:95</span> <span class="d">:99</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">DragEvent</span>  <span class="d">react</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:216</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="t">MouseEvent</span>  <span class="d">react</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:130</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="f">clsx</span>  <span class="d">clsx</span>
+<span class="l">  │</span>    <span class="x">LibraryMenuItems.tsx</span>  <span class="d">:401</span>
+<span class="l">  │</span>
+<span class="l">  └──▶ </span><span class="b">LibraryMenuItems</span></pre></div></div></body></html>
