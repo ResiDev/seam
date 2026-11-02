@@ -9,7 +9,9 @@
 -- that calls it, and what that line sits in. A type: where it is declared,
 -- how many make and take it, and its declaration as written, comments left
 -- out, cut only where the foot ends. A type of no repo's, a package's: its
--- declaration where the server says it is (seam.lookup), once it has said.
+-- declaration where the server says it is (seam.lookup), once it has said;
+-- a value no type is written for, or a package's function: the server's
+-- type for it, and a value's type's declaration.
 local api = vim.api
 local code = require 'seam.code'
 local data = require 'seam.map.data'
@@ -205,10 +207,42 @@ local function package_rows(m, it)
   return decl_rows({ draw.row():add(' '):add(it.name, 'SeamTypeBold'):add('   type in ' .. where, 'SeamLabel') }, got.key, got.s, got.e)
 end
 
+-- a value no type is written for, a package's function: what the server
+-- says of it as code, where a function is, a value's type's declaration
+-- under it; once it has said, the foot drawn again then
+local function value_rows(m, it)
+  local got = lookup.value(it.from.path, it.from, function()
+    vim.schedule(M.update)
+  end)
+  if not got then
+    return nil
+  end
+  local rows = {}
+  for i = 1, #got.lines do
+    local r = draw.row { decl = true }
+    r:add ' '
+    code.add(r, got.key, i, i == 1 and got.pre or 0)
+    rows[#rows + 1] = r
+  end
+  if got.fn and got.pkg then
+    rows[1]:add('   in ' .. got.pkg, 'SeamLabel')
+  end
+  local d = got.def
+  if d then
+    local rel = d.path:sub(1, #st.root + 1) == st.root .. '/' and d.path:sub(#st.root + 2)
+    local where = d.pkg or ((rel and data.short(m, rel, rel) or d.path) .. ':' .. d.s)
+    rows[#rows + 1] = draw.row()
+    rows[#rows + 1] = draw.row():add(' '):add(d.name or '', 'SeamTypeBold'):add('   type in ' .. where, 'SeamLabel')
+    decl_rows(rows, d.key, d.s, d.e)
+  end
+  return rows
+end
+
 --- The foot's rows for `it`, what a view says is under its cursor: a repo
---- function `{ id, at? }`, `at` the line that calls it, or a type
+--- function `{ id, at? }`, `at` the line that calls it, a type
 --- `{ kind = 'type', name, decl?, from? }`, `from` the file it is written in
---- and where, `{ path, line?, col? }`, under a rule `W` wide; a declaration's
+--- and where, `{ path, line?, col? }`, or a value `{ kind = 'value', name,
+--- from }`, `from` where it is made, under a rule `W` wide; a declaration's
 --- rows marked `decl`, the ones cut when the foot is full. Nil when it has
 --- nothing to tell.
 ---@param m table
@@ -221,6 +255,8 @@ function M.rows(m, it, W)
     rows = fn_rows(m, it, W)
   elseif it and it.kind == 'type' then
     rows = type_rows(m, it) or package_rows(m, it)
+  elseif it and it.kind == 'value' then
+    rows = value_rows(m, it)
   end
   if not rows then
     return nil

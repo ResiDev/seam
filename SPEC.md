@@ -982,6 +982,7 @@ the server per field.
 | Change line | `git log -L` on the declaration range | per contract, on demand |
 | What a function takes and gives | `textDocument/hover` on each callable of the call graph, `scripts/types.lua` | one request a callable, once, in the background |
 | A package's type, at the foot | `textDocument/definition` where the name is written, then treesitter on the `.d.ts` it points at (`seam.lookup`) | one request a name and file, when the cursor rests on it, never waited on; cached for the session |
+| A value's type no one wrote, in the pane and at the foot | `textDocument/hover` and `textDocument/typeDefinition` where it is made, treesitter on the `.d.ts` (`seam.lookup`) | two requests a value, when the pane or the cursor is on it, never waited on; cached per place for the session |
 
 So treesitter answers everything inside one file and the language server
 answers everything across files. The only bulk work is references for every
@@ -1035,6 +1036,24 @@ file), its lines in their colours. A name's answer is kept per file for the
 session, and each file read once. A trial on excalidraw: about 200 ms the
 first time, the server starting, then 15 to 110 ms; no server, no lookup,
 and nothing said.
+
+A value no type is written for (`const root = createRoot(el)`,
+`const schema = z.object(…)`) is asked the same way, on demand and never
+indexed: `textDocument/hover` and `textDocument/typeDefinition` at the
+place it is made, so its every use shares one answer, kept per place for the
+session. The hover's code, `const root: Root`, gives its type, `Root` (a
+`const`'s, a `let`'s, a parameter's or a property's type; a function's
+signature whole); the type definition its type's declaration, read as a
+package type's is. The server gives no type definition for an
+intersection (jotai's `atom(false)`, `PrimitiveAtom<boolean> &
+WithInitialValue<boolean>`), so for one the first type is looked up where
+the function that made the value writes it. The pane's Types view of the
+name draws the type as a written one is drawn, under a dim `no type is
+written for it; the TypeScript server says`, `asking the TypeScript server`
+until the answer lands and the pane is drawn again; the foot shows the
+hover's code in its colours and the type's declaration under it. A
+package's function (`createRoot`) at the foot is its hover, the signature,
+and the package it is in. A trial on excalidraw: 15 to 120 ms.
 
 ## The swappable part
 
@@ -1176,14 +1195,14 @@ lua/seam/
   names.lua         what a name in the code is: a repo function, a type, an import's file, a value, a parameter, a field or method, its type and later uses
   codetypes.lua     the types the code does not write: after a value's name, after a function's parameters; the code's types display
   pane.lua          the pane beside the tree and the code: drawing it, its keys, the foot following its cursor
-  foot.lua          the foot: the repo function or type under the cursor in full, in every view and the code screen's code, over the window the cursor is in; a function's signature and the line that calls it, a type's declaration, a package's type once looked up
+  foot.lua          the foot: the repo function or type under the cursor in full, in every view and the code screen's code, over the window the cursor is in; a function's signature and the line that calls it, a type's declaration, a package's type once looked up, a value's type the server says
   screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane and at the foot, J K n N
-  views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names
+  views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names; a value's type the server says, where none is written
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
   lens_panel.lua    the lens float and its keys
   picker.lua        the / float on every screen: a prompt, a list of picks, fuzzy matching
   tsserver.lua      which TypeScript server seam asks: $SEAM_TS, the repo's, Mason's or the PATH's
-  lookup.lua        package types on demand: the session's server, a name's definition asked where it is written, the declaration read out of its .d.ts, the package it is in
+  lookup.lua        package types on demand: the session's server, a name's definition asked where it is written, the declaration read out of its .d.ts, the package it is in; a value's hover and type definition where it is made
   health.lua        :checkhealth seam: this copy, Neovim, the colours, the parsers and highlight queries, the keys and terminal, the server
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
   changes.lua       what changed in the range, from git: the files, each end's lines, each declaration new, gone, signature or body changed, where a name was used at from
@@ -1212,7 +1231,7 @@ tests/
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
   map.lua           the Map's layouts on graphs written by hand: the facts, both ways, the flow, which groups close to fit
-  lookup.lua        package types: the package from a path, the declaration around a position; for real on the trial excalidraw with node_modules, skipped without it or a server
+  lookup.lua        package types: the package from a path, the declaration around a position, a hover's code and type, the call that made a value; for real on the trial excalidraw with node_modules, skipped without it or a server
   check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder, its groups closed to fit and l opening one
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, the lens's range
   check.lua         every screen through its keys on a real repo, the foot on the Map, the Types view and the code
