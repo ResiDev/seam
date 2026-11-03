@@ -108,13 +108,21 @@ local function try(p)
   end
 end
 
--- workspace packages: a directory with a package.json is a package
-local workspace, pkgdirs = {}, {}
+-- workspace packages: a directory with a package.json is a package; and
+-- every package any of them depends on
+local workspace, pkgdirs, deps = {}, {}, {}
 for _, pj in ipairs(sh "find . -name package.json -not -path '*/node_modules/*' -not -path '*/.git/*' | sed 's|^./||'") do
   local j = jsonc(pj)
   local dir = dir_of(pj)
   if j and dir ~= '' then
     pkgdirs[#pkgdirs + 1] = dir
+  end
+  for _, field in ipairs { 'dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies' } do
+    if j and type(j[field]) == 'table' then
+      for name in pairs(j[field]) do
+        deps[name] = true
+      end
+    end
   end
   if j and j.name then
     local entries = {}
@@ -253,20 +261,65 @@ local function resolve_spec(from, spec)
   end
 end
 
--- the library an import names: `@scope/name` or `name`, its subpath left
--- off; nil for a relative path, a tsconfig path or a workspace package
-local function library_of(from, spec)
+-- Node's own modules, named with or without `node:`
+local BUILTIN = {}
+for _, n in ipairs {
+  'assert',
+  'async_hooks',
+  'buffer',
+  'child_process',
+  'cluster',
+  'crypto',
+  'dgram',
+  'dns',
+  'events',
+  'fs',
+  'http',
+  'http2',
+  'https',
+  'module',
+  'net',
+  'os',
+  'path',
+  'perf_hooks',
+  'process',
+  'querystring',
+  'readline',
+  'stream',
+  'string_decoder',
+  'timers',
+  'tls',
+  'tty',
+  'url',
+  'util',
+  'v8',
+  'vm',
+  'worker_threads',
+  'zlib',
+} do
+  BUILTIN[n] = true
+end
+local in_modules = {}
+
+-- the library an import that resolves to no repo file names: `@scope/name`
+-- or `name`, its subpath left off, when a package.json of the repo depends
+-- on it, it is in node_modules, or it is Node's own; nil else, a path the
+-- repo's own build resolves, or a workspace package
+local function library_of(spec)
   if spec:match '^[./]' then
     return nil
   end
-  for _, m in ipairs(paths_for(from)) do
-    local pre = m.pat:gsub('%*$', '')
-    if spec == m.pat or (m.pat:sub(-1) == '*' and spec:sub(1, #pre) == pre) then
-      return nil
-    end
+  if spec:match '^node:' then
+    return spec
   end
   local lib = spec:match '^(@[^/]+/[^/]+)' or spec:match '^([^/]+)'
-  return not workspace[lib] and lib or nil
+  if not lib or workspace[lib] then
+    return nil
+  end
+  if in_modules[lib] == nil then
+    in_modules[lib] = vim.uv.fs_stat(repo .. '/node_modules/' .. lib) ~= nil
+  end
+  return (deps[lib] or in_modules[lib] or BUILTIN[lib]) and lib or nil
 end
 
 local function text_of(node, src)
@@ -651,7 +704,7 @@ for path, f in pairs(F) do
   for localname, im in pairs(f.imports) do
     if im.spec then
       local target = resolve_spec(path, im.spec)
-      local lib = not target and library_of(path, im.spec)
+      local lib = not target and library_of(im.spec)
       if lib then
         libs[localname] = { lib, im.name }
       end
@@ -841,7 +894,7 @@ table.sort(NODES, function(a, b)
 end)
 fh:write(vim.json.encode {
   source = 'treesitter',
-  version = 4,
+  version = 5,
   repo = repo,
   ms = timing,
   packages = pkgs,

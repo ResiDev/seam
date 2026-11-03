@@ -715,9 +715,11 @@ head lists them, the one shown bold.
   third display, library, lists each name taken from a package outside the
   repo, grouped by that name with its library after it, and under it the
   functions using it. The treesitter index (format 4) keeps each library
-  import's name and every place it is named: an import that resolves to
-  no repo file through a relative path, a tsconfig path or a workspace
-  package, after a namespace or default import's dot where there is one.
+  import's name and every place it is named, after a namespace or default
+  import's dot where there is one. A library is an import that resolves to
+  no repo file and names a package a package.json of the repo depends on,
+  one in node_modules, or Node's own; not a tsconfig path (a catch-all
+  `"*"` there hid every library in synapse) nor a bundler's alias.
   Each use goes to the innermost function whose lines hold it. Package
   types are still never indexed; the foot asks the server of one when the
   cursor rests on it. `design/mocks/map12-libraries.png`, from

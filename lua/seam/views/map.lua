@@ -495,7 +495,8 @@ local function library_display(x, m, ctx, label, names)
       end)
       local prev
       for _, u in ipairs(firsts) do
-        local file = data.short(m, u.path, home)
+        -- in a folder from it, as the tree under it names it
+        local file = x.kind == 'dir' and u.path:sub(#dir_of(x) + 2) or data.short(m, u.path, home)
         local n = u.id and m.graph.nodes[u.id]
         local at = { ':' .. u.line, 'SeamLabel' }
         local where = u.path ~= prev and { { file, u.test and 'SeamLabel' or 'SeamText', { kind = 'file', path = u.path } }, at }
