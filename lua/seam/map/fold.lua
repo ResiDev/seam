@@ -10,8 +10,10 @@ local M = {}
 
 --- The groups closed so `groups` fit in `room` rows, a closed one a row:
 --- none when they fit; else the fewest names first, the later first among
---- equals, until they fit or none is left. One in `opened` is never closed
---- and counts as its one row, so opening it closes no other.
+--- equals, until they fit or none is left; then each closed one that fits
+--- in the rows left opens again, the last closed first, so one group too
+--- tall for the pane does not close all the others. One in `opened` is
+--- never closed and counts as its one row, so opening it closes no other.
 ---@param groups seam.FoldGroup[]
 ---@param room integer
 ---@param opened table<string, boolean>
@@ -35,12 +37,21 @@ function M.closed(groups, room, opened)
   table.sort(can, function(a, b)
     return a.g.n < b.g.n or (a.g.n == b.g.n and a.i > b.i)
   end)
+  local shut = {}
   for _, c in ipairs(can) do
     if total <= room then
       break
     end
     out[c.g.key] = true
+    shut[#shut + 1] = c.g
     total = total - c.g.lines + 1
+  end
+  for i = #shut, 1, -1 do
+    local g = shut[i]
+    if total + g.lines - 1 <= room then
+      out[g.key] = nil
+      total = total + g.lines - 1
+    end
   end
   return out
 end
