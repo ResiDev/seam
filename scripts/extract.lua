@@ -722,6 +722,16 @@ for path, f in pairs(F) do
     own[name] = f.exports[name] or { id = path .. ':' .. t.line .. ':' .. name, kind = t.kind }
   end
 
+  -- the top-level declaration holding a row, `export const list =
+  -- query({ ... })` or `interface Props`, for a use outside a function
+  local function top_at(r)
+    for name, t in pairs(f.top) do
+      if t.span[1] <= r and r <= t.span[3] then
+        return name
+      end
+    end
+  end
+
   local q = Q[f.lang]
   local ns_node
   for cid, node in q:iter_captures(f.root, f.src) do
@@ -757,7 +767,7 @@ for path, f in pairs(F) do
       local k = lb[1] .. '\n' .. name
       LIBS[k] = LIBS[k] or { library = lb[1], name = name, uses = {} }
       local r, c = node:start()
-      table.insert(LIBS[k].uses, { path = path, line = r + 1, col = c + 1 })
+      table.insert(LIBS[k].uses, { path = path, line = r + 1, col = c + 1, top = top_at(r) })
     end
   end
 
@@ -894,7 +904,7 @@ table.sort(NODES, function(a, b)
 end)
 fh:write(vim.json.encode {
   source = 'treesitter',
-  version = 5,
+  version = 6,
   repo = repo,
   ms = timing,
   packages = pkgs,

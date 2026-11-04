@@ -446,7 +446,8 @@ end
 --- library: each library the row takes from a head, the most used first,
 --- a line down through them into the row; under it each name taken from
 --- it, the name once, then the functions using it, the file once and the
---- line each first uses it on, tests dim and last; on a function each name
+--- line each first uses it on, tests dim and last, outside a function the
+--- declaration holding it; on a function each name
 --- and every line using it. Closed, a library is one line: how many names
 --- in how many files.
 local function library_display(x, m, ctx, label, names)
@@ -518,6 +519,9 @@ local function library_display(x, m, ctx, label, names)
                 { kind = 'fn', id = n.id, at = { path = u.path, line = u.line, inside = data.label(n) } },
               },
             }
+          -- outside a function, the declaration holding it: `export const
+          -- list = query({ ... })`, `interface Props`
+          or u.top and { { u.top, u.test and 'SeamLabel' or 'SeamText', { kind = 'file', path = u.path } } }
           or { { '(top level)', 'SeamLabel' } }
         g.items[#g.items + 1] = { cols = { i == 1 and name or { { '' } }, where, who } }
       end

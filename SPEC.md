@@ -642,7 +642,7 @@ head lists them, the one shown bold.
 |---|---|---|---|---|
 | **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under the middle of its name down a few rows, left, and on down under the row to its callers, so they stand apart from the row and do not read as what it gives, the row going on right of that line where it is too long, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
 | **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
-| **library** | each library it takes from a head, the most used first; a line down through them into the row; under it each name taken from it, used most first, tests last, and every line it uses it on (`design/mocks/map13-libraries-grouped.png`) | the same, each name once, then the functions using it, the file once and the line each first uses it on, tests dim | the same for a file | none |
+| **library** | each library it takes from a head, the most used first; a line down through them into the row; under it each name taken from it, used most first, tests last, and every line it uses it on (`design/mocks/map13-libraries-grouped.png`) | the same, each name once, then the functions using it, the file once and the line each first uses it on, tests dim; outside every function the declaration holding it | the same for a file | none |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
   `map9-type.png`, `map9-type-cursor-type.png`, rounds seven to nine in
@@ -737,6 +737,18 @@ head lists them, the one shown bold.
   how many names in how many files. `design/mocks/map13-libraries-grouped.png`,
   from `design/mocks/src/map/libraries_grouped.py` on excalidraw's
   TTDDialog folder.
+
+- **Outside a function, the declaration holding it** (2026-11-04, the
+  user on synapse: "what is with the top level thing"). A use outside
+  every function the index knows read `(top level)`, bright where the
+  file has a top level that calls and dim where not. In Convex code that
+  was nearly every use: `export const listMessages = query({ handler })`
+  is a const, not a function, so all of it is the file's top. The index
+  (format 6) keeps with each such use the top-level declaration holding
+  it, and the display names it, `listMessages`, `cardSchema`, `Props`;
+  plain, as it is no function the Map knows, `l` showing its file. Only a
+  bare statement, `export default defineSchema(…)`, is still `(top
+  level)`, always dim.
 
 - **The foot everywhere** (2026-11-02, the user: "would be nice to have
   in other parts like Types, so you could see the definition of the type

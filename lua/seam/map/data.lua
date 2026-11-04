@@ -263,7 +263,7 @@ end
 ---@class seam.LibName
 ---@field library string the package, `react`, `@codemirror/view`
 ---@field name string the name taken from it, `useState`
----@field uses { path: string, line: integer, col: integer, id: string|nil, test: boolean }[] by path then line, `id` the node each is in, `col` 1-based
+---@field uses { path: string, line: integer, col: integer, id: string|nil, top: string|nil, test: boolean }[] by path then line, `id` the function each is in, else `top` the top-level declaration holding it, `col` 1-based
 ---@field test boolean every use in a test
 
 --- The names taken from libraries where `inside(path, line)` says, each
@@ -280,7 +280,7 @@ function M.libraries(m, inside)
       if inside(u.path, u.line) then
         local n = M.owner(m, u.path, u.line)
         local t = index.is_test(u.path)
-        uses[#uses + 1] = { path = u.path, line = u.line, col = u.col, id = n and n.id, test = t }
+        uses[#uses + 1] = { path = u.path, line = u.line, col = u.col, id = n and n.kind ~= 'module' and n.id or nil, top = u.top, test = t }
         test = test and t
       end
     end
