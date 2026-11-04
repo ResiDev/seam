@@ -40,9 +40,11 @@ end
 
 --- The extractor's format: 3 adds the call graph, `nodes` and their calls;
 --- 4 the names taken from libraries, `libs`, and where each is named; 5
---- a library known by the repo's dependencies, not its tsconfig paths.
---- An index older than this is made again when seam opens.
-M.VERSION = 5
+--- a library known by the repo's dependencies, not its tsconfig paths;
+--- 6 each library use outside a function the top-level declaration
+--- holding it, `top`. An index older than this is made again when seam
+--- opens.
+M.VERSION = 6
 
 --- The format of the repo's treesitter index, 0 when there is none.
 ---@param root string

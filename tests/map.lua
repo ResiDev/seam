@@ -111,6 +111,7 @@ m.libs = {
       { path = 'pa/src/run/run.ts', line = 12, col = 3 },
       { path = 'pa/src/run/up.ts', line = 2, col = 5 },
       { path = 'pa/src/run/up.ts', line = 12, col = 1 },
+      { path = 'pa/src/run/up.ts', line = 100, col = 1, top = 'list' },
     },
   },
   { library = 'vitest', name = 'it', uses = { { path = 'pa/src/run/run.test.ts', line = 4, col = 1 } } },
@@ -127,7 +128,7 @@ eq(
   libs(function(p)
     return within_run(p)
   end),
-  { 'react useState 3', 'react useRef 1', 'clsx clsx 1', 'vitest it 1' },
+  { 'react useState 4', 'react useRef 1', 'clsx clsx 1', 'vitest it 1' },
   'a folder: react used most, its names used most first, a test last'
 )
 eq(
@@ -137,6 +138,8 @@ eq(
   { RUN, A, A1 },
   'each use with the function it is in'
 )
+local past = data.libraries(m, within_run)[1].uses[4]
+eq({ past.id, past.top }, { nil, 'list' }, 'outside every function, the declaration holding it')
 eq(
   libs(function(p, l)
     return p == 'pa/src/run/run.ts' and l >= 10 and l <= 18
