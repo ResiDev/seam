@@ -1,0 +1,185 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root { color-scheme: dark; }
+body { background: #11121a; margin: 0; padding: 20px; }
+.page { display: flex; flex-direction: column; gap: 22px; font-family: sans-serif; color: #c0caf5; }
+.card h3 { margin: 0 0 4px; font-size: 14px; } .card p { margin: 0 0 8px; font-size: 12.5px; color: #9aa; max-width: 680px; }
+pre { margin: 0; padding: 16px; border-radius: 8px; background: #1a1b26; color: #c0caf5; font: 12px/1.55 monospace; }
+.d { color: #565f89; } .t { color: #2ac3de; } .f { color: #7dcfff; } .l { color: #545c7e; } .x { color: #c0caf5; }
+.b { color: #c0caf5; font-weight: 700; } .bf { color: #7dcfff; font-weight: 700; }
+</style></head><body><div class="page"><div class="card"><h3>A folder: TTDDialog/</h3><p>Each library a head, the most used first; under it each name taken from it, the name once, then the functions using it: the file once, the line each first uses it on, tests dim and last.</p><pre><span class="l">  ┌─ </span><span class="x">react</span>
+<span class="l">  │</span>    <span class="f">useEffect</span>                   <span class="x">Chat/ChatInterface.tsx</span><span class="d">:62</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>                                <span class="x">Chat/ChatMessage.tsx</span><span class="d">:35</span>           <span class="f">ChatMessage</span>
+<span class="l">  │</span>                                <span class="x">CodeMirrorEditor.tsx</span><span class="d">:140</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>                                <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:103</span>       <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>                                <span class="x">TTDDialog.tsx</span><span class="d">:135</span>                 <span class="f"></span>
+<span class="l">  │</span>                                <span class="x">TTDDialogInput.tsx</span><span class="d">:47</span>             <span class="f">TTDDialogInput</span>
+<span class="l">  │</span>                                <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:45</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>                                <span class="x">hooks/useTextGeneration.ts</span><span class="d">:81</span>     <span class="f">useTextGeneration</span>
+<span class="l">  │</span>                                <span class="x">useTTDChatStorage.ts</span><span class="d">:78</span>           <span class="f">useTTDChatStorage</span>
+<span class="l">  │</span>    <span class="f">useRef</span>                      <span class="x">Chat/ChatInterface.tsx</span><span class="d">:55</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>                                <span class="x">CodeMirrorEditor.tsx</span><span class="d">:130</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>                                <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:94</span>        <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogInput.tsx</span><span class="d">:34</span>             <span class="f">TTDDialogInput</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTabs.tsx</span><span class="d">:17</span>              <span class="f">TTDDialogTabs</span>
+<span class="l">  │</span>                                <span class="x">TextToDiagram.tsx</span><span class="d">:56</span>              <span class="f">TextToDiagramContent</span>
+<span class="l">  │</span>                                <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:36</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>                                <span class="x">hooks/useTextGeneration.ts</span><span class="d">:46</span>     <span class="f">useTextGeneration</span>
+<span class="l">  │</span>                                <span class="x">useTTDChatStorage.ts</span><span class="d">:44</span>           <span class="f">useTTDChatStorage</span>
+<span class="l">  │</span>    <span class="f">useState</span>                    <span class="x">Chat/ChatMessage.tsx</span><span class="d">:33</span>           <span class="f">ChatMessage</span>
+<span class="l">  │</span>                                <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:78</span>        <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>                                <span class="x">TTDDialog.tsx</span><span class="d">:100</span>                 <span class="f"></span>
+<span class="l">  │</span>                                <span class="x">TTDDialogInput.tsx</span><span class="d">:39</span>             <span class="f">TTDDialogInput</span>
+<span class="l">  │</span>                                <span class="x">hooks/useChatManagement.ts</span><span class="d">:22</span>     <span class="f">useChatManagement</span>
+<span class="l">  │</span>                                <span class="x">hooks/useTextGeneration.ts</span><span class="d">:55</span>     <span class="f">useTextGeneration</span>
+<span class="l">  │</span>    <span class="t">ReactNode</span>                   <span class="x">TTDDialogPanel.tsx</span><span class="d">:13</span>             <span class="f">(top level)</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogPanels.tsx</span><span class="d">:3</span>             <span class="f">TTDDialogPanels</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTabs.tsx</span><span class="d">:12</span>              <span class="f">TTDDialogTabs</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTrigger.tsx</span><span class="d">:14</span>           <span class="f">TTDDialogTrigger</span>
+<span class="l">  │</span>    <span class="f">useCallback</span>                 <span class="x">TTDDialog.tsx</span><span class="d">:106</span>                 <span class="f"></span>
+<span class="l">  │</span>                                <span class="x">hooks/useChatManagement.ts</span><span class="d">:28</span>     <span class="f">useChatManagement</span>
+<span class="l">  │</span>                                <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:64</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>                                <span class="x">useTTDChatStorage.ts</span><span class="d">:51</span>           <span class="f">useTTDChatStorage</span>
+<span class="l">  │</span>    <span class="t">ChangeEvent</span>                 <span class="x">Chat/ChatInterface.tsx</span><span class="d">:68</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="t">ComponentType</span>               <span class="x">TTDDialogInput.tsx</span><span class="d">:22</span>             <span class="f">(top level)</span>
+<span class="l">  │</span>    <span class="t">FC</span>                          <span class="x">Chat/ChatMessage.tsx</span><span class="d">:10</span>           <span class="f">ChatMessage</span>
+<span class="l">  │</span>    <span class="t">FormEventHandler</span>            <span class="x">Chat/ChatInterface.tsx</span><span class="d">:104</span>        <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="t">Fragment</span>                    <span class="x">TTDDialogPanel.tsx</span><span class="d">:116</span>            <span class="f">TTDDialogPanel</span>
+<span class="l">  │</span>    <span class="t">JSX</span>                         <span class="x">TTDDialogTrigger.tsx</span><span class="d">:15</span>           <span class="f">TTDDialogTrigger</span>
+<span class="l">  │</span>    <span class="t">KeyboardEvent</span>               <span class="x">Chat/ChatInterface.tsx</span><span class="d">:88</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="f">useDeferredValue</span>            <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:83</span>        <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>    <span class="f">useLayoutEffect</span>             <span class="x">Chat/ChatInterface.tsx</span><span class="d">:58</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="f">useMemo</span>                     <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:38</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">vitest</span>
+<span class="l">  │</span>    <span class="f">describe</span>                    <span class="d">common.test.ts</span><span class="d">:36</span>                 <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/TTDstreamFetch.test.ts</span><span class="d">:38</span>   <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/mermaidAutoFix.test.ts</span><span class="d">:5</span>    <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/mermaidError.test.ts</span><span class="d">:13</span>     <span class="d"></span>
+<span class="l">  │</span>    <span class="f">expect</span>                      <span class="d">common.test.ts</span><span class="d">:53</span>                 <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/TTDstreamFetch.test.ts</span><span class="d">:71</span>   <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/mermaidAutoFix.test.ts</span><span class="d">:18</span>   <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/mermaidError.test.ts</span><span class="d">:20</span>     <span class="d"></span>
+<span class="l">  │</span>    <span class="f">it</span>                          <span class="d">common.test.ts</span><span class="d">:37</span>                 <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/TTDstreamFetch.test.ts</span><span class="d">:51</span>   <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/mermaidAutoFix.test.ts</span><span class="d">:6</span>    <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/mermaidError.test.ts</span><span class="d">:14</span>     <span class="d"></span>
+<span class="l">  │</span>    <span class="f">vi</span>                          <span class="d">common.test.ts</span><span class="d">:25</span>                 <span class="d">createConvertArgs</span>
+<span class="l">  │</span>                                              <span class="d">:41</span>                 <span class="d"></span>
+<span class="l">  │</span>                                <span class="d">utils/TTDstreamFetch.test.ts</span><span class="d">:47</span>   <span class="d"></span>
+<span class="l">  │</span>    <span class="f">afterEach</span>                   <span class="d">utils/TTDstreamFetch.test.ts</span><span class="d">:45</span>   <span class="d"></span>
+<span class="l">  │</span>    <span class="f">beforeEach</span>                  <span class="d">utils/TTDstreamFetch.test.ts</span><span class="d">:41</span>   <span class="d"></span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">@codemirror/view</span>
+<span class="l">  │</span>    <span class="t">EditorView</span>                  <span class="x">CodeMirrorEditor.tsx</span><span class="d">:35</span>           <span class="f">(top level)</span>
+<span class="l">  │</span>                                                    <span class="d">:105</span>          <span class="f">getErrorLineExtension</span>
+<span class="l">  │</span>                                                    <span class="d">:131</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="t">Decoration</span>                  <span class="x">CodeMirrorEditor.tsx</span><span class="d">:98</span>           <span class="f">(top level)</span>
+<span class="l">  │</span>                                                    <span class="d">:105</span>          <span class="f">getErrorLineExtension</span>
+<span class="l">  │</span>    <span class="f">drawSelection</span>               <span class="x">CodeMirrorEditor.tsx</span><span class="d">:174</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="f">keymap</span>                      <span class="x">CodeMirrorEditor.tsx</span><span class="d">:151</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="f">lineNumbers</span>                 <span class="x">CodeMirrorEditor.tsx</span><span class="d">:169</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="f">placeholder</span>                 <span class="x">CodeMirrorEditor.tsx</span><span class="d">:175</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">@codemirror/commands</span>
+<span class="l">  │</span>    <span class="f">defaultKeymap</span>               <span class="x">CodeMirrorEditor.tsx</span><span class="d">:168</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="f">history</span>                     <span class="x">CodeMirrorEditor.tsx</span><span class="d">:167</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="f">historyKeymap</span>               <span class="x">CodeMirrorEditor.tsx</span><span class="d">:168</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="f">redo</span>                        <span class="x">CodeMirrorEditor.tsx</span><span class="d">:160</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">clsx</span>
+<span class="l">  │</span>    <span class="f">clsx</span>                        <span class="x">Chat/ChatHistoryMenu.tsx</span><span class="d">:60</span>       <span class="f">ChatHistoryMenu</span>
+<span class="l">  │</span>                                <span class="x">Chat/ChatMessage.tsx</span><span class="d">:205</span>          <span class="f">ChatMessage</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogOutput.tsx</span><span class="d">:159</span>           <span class="f">TTDDialogOutput</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogPanel.tsx</span><span class="d">:50</span>             <span class="f">TTDDialogPanel</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">radix-ui</span>
+<span class="l">  │</span>    <span class="t">Tabs</span>                        <span class="x">TTDDialogTab.tsx</span><span class="d">:12</span>               <span class="f">TTDDialogTab</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTabTrigger.tsx</span><span class="d">:14</span>        <span class="f">TTDDialogTabTrigger</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTabTriggers.tsx</span><span class="d">:8</span>        <span class="f">TTDDialogTabTriggers</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTabs.tsx</span><span class="d">:21</span>              <span class="f">TTDDialogTabs</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">@codemirror/language</span>
+<span class="l">  │</span>    <span class="t">HighlightStyle</span>              <span class="x">CodeMirrorEditor.tsx</span><span class="d">:55</span>           <span class="f">(top level)</span>
+<span class="l">  │</span>    <span class="t">StreamLanguage</span>              <span class="x">mermaid-lang-lite.ts</span><span class="d">:3</span>            <span class="f">(top level)</span>
+<span class="l">  │</span>    <span class="f">syntaxHighlighting</span>          <span class="x">CodeMirrorEditor.tsx</span><span class="d">:117</span>          <span class="f">getThemeExtensions</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">@codemirror/state</span>
+<span class="l">  │</span>    <span class="t">Compartment</span>                 <span class="x">CodeMirrorEditor.tsx</span><span class="d">:134</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="t">EditorState</span>                 <span class="x">CodeMirrorEditor.tsx</span><span class="d">:148</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>    <span class="t">Extension</span>                   <span class="x">CodeMirrorEditor.tsx</span><span class="d">:103</span>          <span class="f">getErrorLineExtension</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">@excalidraw/mermaid-to-excalidraw</span>
+<span class="l">  │</span>    <span class="t">MermaidConfig</span>               <span class="x">types.ts</span><span class="d">:86</span>                       <span class="f">(top level)</span>
+<span class="l">  │</span>    <span class="t">MermaidToExcalidrawResult</span>   <span class="x">types.ts</span><span class="d">:87</span>                       <span class="f">(top level)</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="x">@lezer/highlight</span>
+<span class="l">  │</span>    <span class="f">tags</span>                        <span class="x">CodeMirrorEditor.tsx</span><span class="d">:56</span>           <span class="f">(top level)</span>
+<span class="l">  │</span>
+<span class="l">  └──▶ </span><span class="b">TTDDialog/</span></pre></div><div class="card"><h3>The same, the pane too short</h3><p>Whole libraries close, the fewest names first: the library and how many names in how many files; l opens it.</p><pre><span class="l">  ┌─ </span><span class="x">react</span>
+<span class="l">  │</span>    <span class="f">useEffect</span>                   <span class="x">Chat/ChatInterface.tsx</span><span class="d">:62</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>                                <span class="x">Chat/ChatMessage.tsx</span><span class="d">:35</span>           <span class="f">ChatMessage</span>
+<span class="l">  │</span>                                <span class="x">CodeMirrorEditor.tsx</span><span class="d">:140</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>                                <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:103</span>       <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>                                <span class="x">TTDDialog.tsx</span><span class="d">:135</span>                 <span class="f"></span>
+<span class="l">  │</span>                                <span class="x">TTDDialogInput.tsx</span><span class="d">:47</span>             <span class="f">TTDDialogInput</span>
+<span class="l">  │</span>                                <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:45</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>                                <span class="x">hooks/useTextGeneration.ts</span><span class="d">:81</span>     <span class="f">useTextGeneration</span>
+<span class="l">  │</span>                                <span class="x">useTTDChatStorage.ts</span><span class="d">:78</span>           <span class="f">useTTDChatStorage</span>
+<span class="l">  │</span>    <span class="f">useRef</span>                      <span class="x">Chat/ChatInterface.tsx</span><span class="d">:55</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>                                <span class="x">CodeMirrorEditor.tsx</span><span class="d">:130</span>          <span class="f">CodeMirrorEditor</span>
+<span class="l">  │</span>                                <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:94</span>        <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogInput.tsx</span><span class="d">:34</span>             <span class="f">TTDDialogInput</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTabs.tsx</span><span class="d">:17</span>              <span class="f">TTDDialogTabs</span>
+<span class="l">  │</span>                                <span class="x">TextToDiagram.tsx</span><span class="d">:56</span>              <span class="f">TextToDiagramContent</span>
+<span class="l">  │</span>                                <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:36</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>                                <span class="x">hooks/useTextGeneration.ts</span><span class="d">:46</span>     <span class="f">useTextGeneration</span>
+<span class="l">  │</span>                                <span class="x">useTTDChatStorage.ts</span><span class="d">:44</span>           <span class="f">useTTDChatStorage</span>
+<span class="l">  │</span>    <span class="f">useState</span>                    <span class="x">Chat/ChatMessage.tsx</span><span class="d">:33</span>           <span class="f">ChatMessage</span>
+<span class="l">  │</span>                                <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:78</span>        <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>                                <span class="x">TTDDialog.tsx</span><span class="d">:100</span>                 <span class="f"></span>
+<span class="l">  │</span>                                <span class="x">TTDDialogInput.tsx</span><span class="d">:39</span>             <span class="f">TTDDialogInput</span>
+<span class="l">  │</span>                                <span class="x">hooks/useChatManagement.ts</span><span class="d">:22</span>     <span class="f">useChatManagement</span>
+<span class="l">  │</span>                                <span class="x">hooks/useTextGeneration.ts</span><span class="d">:55</span>     <span class="f">useTextGeneration</span>
+<span class="l">  │</span>    <span class="t">ReactNode</span>                   <span class="x">TTDDialogPanel.tsx</span><span class="d">:13</span>             <span class="f">(top level)</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogPanels.tsx</span><span class="d">:3</span>             <span class="f">TTDDialogPanels</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTabs.tsx</span><span class="d">:12</span>              <span class="f">TTDDialogTabs</span>
+<span class="l">  │</span>                                <span class="x">TTDDialogTrigger.tsx</span><span class="d">:14</span>           <span class="f">TTDDialogTrigger</span>
+<span class="l">  │</span>    <span class="f">useCallback</span>                 <span class="x">TTDDialog.tsx</span><span class="d">:106</span>                 <span class="f"></span>
+<span class="l">  │</span>                                <span class="x">hooks/useChatManagement.ts</span><span class="d">:28</span>     <span class="f">useChatManagement</span>
+<span class="l">  │</span>                                <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:64</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>                                <span class="x">useTTDChatStorage.ts</span><span class="d">:51</span>           <span class="f">useTTDChatStorage</span>
+<span class="l">  │</span>    <span class="t">ChangeEvent</span>                 <span class="x">Chat/ChatInterface.tsx</span><span class="d">:68</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="t">ComponentType</span>               <span class="x">TTDDialogInput.tsx</span><span class="d">:22</span>             <span class="f">(top level)</span>
+<span class="l">  │</span>    <span class="t">FC</span>                          <span class="x">Chat/ChatMessage.tsx</span><span class="d">:10</span>           <span class="f">ChatMessage</span>
+<span class="l">  │</span>    <span class="t">FormEventHandler</span>            <span class="x">Chat/ChatInterface.tsx</span><span class="d">:104</span>        <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="t">Fragment</span>                    <span class="x">TTDDialogPanel.tsx</span><span class="d">:116</span>            <span class="f">TTDDialogPanel</span>
+<span class="l">  │</span>    <span class="t">JSX</span>                         <span class="x">TTDDialogTrigger.tsx</span><span class="d">:15</span>           <span class="f">TTDDialogTrigger</span>
+<span class="l">  │</span>    <span class="t">KeyboardEvent</span>               <span class="x">Chat/ChatInterface.tsx</span><span class="d">:88</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="f">useDeferredValue</span>            <span class="x">MermaidToExcalidraw.tsx</span><span class="d">:83</span>        <span class="f">MermaidToExcalidraw</span>
+<span class="l">  │</span>    <span class="f">useLayoutEffect</span>             <span class="x">Chat/ChatInterface.tsx</span><span class="d">:58</span>         <span class="f">ChatInterface</span>
+<span class="l">  │</span>    <span class="f">useMemo</span>                     <span class="x">hooks/useMermaidRenderer.ts</span><span class="d">:38</span>    <span class="f">useMermaidRenderer</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">vitest</span><span class="d">  6 names in 4 files</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">@codemirror/view</span><span class="d">  6 names in 1 file</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">@codemirror/commands</span><span class="d">  4 names in 1 file</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">clsx</span><span class="d">  1 name in 4 files</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">radix-ui</span><span class="d">  1 name in 4 files</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">@codemirror/language</span><span class="d">  3 names in 2 files</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">@codemirror/state</span><span class="d">  3 names in 1 file</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">@excalidraw/mermaid-to-excalidraw</span><span class="d">  2 names in 1 file</span>
+<span class="l">  │</span>
+<span class="l">  ├─ </span><span class="d">▸ </span><span class="x">@lezer/highlight</span><span class="d">  1 name in 1 file</span>
+<span class="l">  │</span>
+<span class="l">  └──▶ </span><span class="b">TTDDialog/</span></pre></div><div class="card"><h3>A function: TTDDialogInput</h3><p>Each name it takes, every line it is used on; its file is the row&#x27;s own and is not named.</p><pre><span class="l">  ┌─ </span><span class="x">react</span>
+<span class="l">  │</span>    <span class="f">useEffect</span>   <span class="d">:47</span> <span class="d">:78</span>
+<span class="l">  │</span>    <span class="f">useRef</span>      <span class="d">:34</span> <span class="d">:36</span>
+<span class="l">  │</span>    <span class="f">useState</span>    <span class="d">:39</span> <span class="d">:42</span>
+<span class="l">  │</span>
+<span class="l">  └──▶ </span><span class="bf">TTDDialogInput</span></pre></div></div></body></html>
