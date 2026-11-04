@@ -691,6 +691,18 @@ local function declares(node)
   end
   return false
 end
+-- a test's call: `it`, `test`, `describe` and the like, `it.only`,
+-- `test.each(rows)`
+local TESTS = { it = true, test = true, describe = true, bench = true, suite = true }
+local function test_callee(fn, src)
+  if fn and fn:type() == 'call_expression' then
+    fn = fn:field('function')[1]
+  end
+  while fn and fn:type() == 'member_expression' do
+    fn = fn:field('object')[1]
+  end
+  return fn and fn:type() == 'identifier' and text_of(fn, src) or nil
+end
 local NODES = {}
 local LIBS = {} -- `library\nname` -> { library, name, uses }
 
@@ -722,13 +734,25 @@ for path, f in pairs(F) do
     own[name] = f.exports[name] or { id = path .. ':' .. t.line .. ':' .. name, kind = t.kind }
   end
 
-  -- the top-level declaration holding a row, `export const list =
-  -- query({ ... })` or `interface Props`, for a use outside a function
-  local function top_at(r)
+  -- what holds a use outside a function: the top-level declaration,
+  -- `export const list = query({ ... })` or `interface Props`, else the
+  -- title of the test it is in, `'counts each day'`
+  local function top_at(node, r)
     for name, t in pairs(f.top) do
       if t.span[1] <= r and r <= t.span[3] then
         return name
       end
+    end
+    local p = node:parent()
+    while p do
+      if p:type() == 'call_expression' and TESTS[test_callee(p:field('function')[1], f.src) or ''] then
+        local a = p:field('arguments')[1]
+        local title = a and a:named_child(0)
+        if title and (title:type() == 'string' or title:type() == 'template_string') then
+          return (text_of(title, f.src):gsub('%s+', ' '))
+        end
+      end
+      p = p:parent()
     end
   end
 
@@ -767,7 +791,7 @@ for path, f in pairs(F) do
       local k = lb[1] .. '\n' .. name
       LIBS[k] = LIBS[k] or { library = lb[1], name = name, uses = {} }
       local r, c = node:start()
-      table.insert(LIBS[k].uses, { path = path, line = r + 1, col = c + 1, top = top_at(r) })
+      table.insert(LIBS[k].uses, { path = path, line = r + 1, col = c + 1, top = top_at(node, r) })
     end
   end
 
@@ -904,7 +928,7 @@ table.sort(NODES, function(a, b)
 end)
 fh:write(vim.json.encode {
   source = 'treesitter',
-  version = 6,
+  version = 7,
   repo = repo,
   ms = timing,
   packages = pkgs,

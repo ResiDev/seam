@@ -42,9 +42,9 @@ end
 --- 4 the names taken from libraries, `libs`, and where each is named; 5
 --- a library known by the repo's dependencies, not its tsconfig paths;
 --- 6 each library use outside a function the top-level declaration
---- holding it, `top`. An index older than this is made again when seam
+--- holding it, `top`; 7 else the title of the test holding it. An index older than this is made again when seam
 --- opens.
-M.VERSION = 6
+M.VERSION = 7
 
 --- The format of the repo's treesitter index, 0 when there is none.
 ---@param root string
