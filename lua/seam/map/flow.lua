@@ -29,6 +29,7 @@ M.DROP = 2
 ---@field items seam.FlowItem[]
 ---@field key string|nil what it is opened by, else its head's text
 ---@field files integer|nil the files its items are in, for its closed line
+---@field names integer|nil the names it holds, for its closed line and its fold, else its items
 
 local function width(segs)
   local n = 0
@@ -193,7 +194,7 @@ local function put_closed(cv, g, k, x, y)
   for _, s in ipairs(g.head) do
     segs[#segs + 1] = { s[1], s[2], hit }
   end
-  local count = draw.plural(#g.items, 'name') .. (g.files and (' in ' .. draw.plural(g.files, 'file')) or '')
+  local count = draw.plural(g.names or #g.items, 'name') .. (g.files and (' in ' .. draw.plural(g.files, 'file')) or '')
   segs[#segs + 1] = { '  ' .. count, 'SeamLabel', hit }
   cv:seg(segs, x, y)
 end
@@ -240,7 +241,7 @@ function M.draw(top, centre, bottom, o)
   local function measure(list, side, ws_, x)
     for _, g in ipairs(list) do
       keys[g] = side .. ':' .. key_of(g)
-      gs[#gs + 1] = { key = keys[g], lines = rows_of(g, ws_, x, o.width), n = #g.items }
+      gs[#gs + 1] = { key = keys[g], lines = rows_of(g, ws_, x, o.width), n = g.names or #g.items }
     end
   end
   measure(top, 'left', ws, G + 5)

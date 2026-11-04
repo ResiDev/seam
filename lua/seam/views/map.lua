@@ -2,7 +2,7 @@
 -- what the row calls above, the row, its callers below (seam.map.flow),
 -- drawn from the call graph and the types; folder with T off today's both
 -- ways, names only (seam.map.both); and on a function, a file or a folder
--- a third, library: each name it takes from a library above, where. Each row's groups opened by hand and T
+-- a third, library: each library it takes from above, its names, where. Each row's groups opened by hand and T
 -- kept in st.map; the keys that act on it, l T J, and what is under the cursor
 -- (seam.map.keys); the name under the cursor told at the foot (seam.foot).
 local api = vim.api
@@ -443,18 +443,28 @@ local function holds(x, m)
   end
 end
 
---- library: each name the row takes from a library a head, its library
---- after it, a line down through them into the row; under each the
---- functions using it, the file once and the line each first uses it on,
---- tests dim and last; on a function, its file and every line using it.
+--- library: each library the row takes from a head, the most used first,
+--- a line down through them into the row; under it each name taken from
+--- it, the name once, then the functions using it, the file once and the
+--- line each first uses it on, tests dim and last; on a function each name
+--- and every line using it. Closed, a library is one line: how many names
+--- in how many files.
 local function library_display(x, m, ctx, label, names)
   local flow = require 'seam.map.flow'
   local home = home_of(x, m)
   local fn = x.kind == 'fn'
-  local groups = {}
+  -- the names gathered under their library, in the order they come
+  local groups, of = {}, {}
   for _, l in ipairs(names) do
+    local g = of[l.library]
+    if not g then
+      g = { head = { { l.library, 'SeamText' } }, items = {}, key = l.library, names = 0, paths = {} }
+      of[l.library] = g
+      groups[#groups + 1] = g
+    end
+    g.names = g.names + 1
     local u1 = l.uses[1]
-    local head = {
+    local name = {
       {
         l.name,
         l.name:match '^%u' and 'SeamType' or 'SeamMapFn',
@@ -464,11 +474,9 @@ local function library_display(x, m, ctx, label, names)
           from = { path = u1.path, line = u1.line, col = u1.col - 1 },
         },
       },
-      { '  ' .. l.library, 'SeamLabel' },
     }
-    local items, files = {}, {}
     for _, u in ipairs(l.uses) do
-      files[u.path] = true
+      g.paths[u.path] = true
     end
     if fn then
       local tail = {}
@@ -476,7 +484,7 @@ local function library_display(x, m, ctx, label, names)
         tail[#tail + 1] =
           { (i > 1 and ' ' or '') .. ':' .. u.line, 'SeamLabel', { kind = 'fn', id = x.id, at = { path = u.path, line = u.line, inside = label } } }
       end
-      items[1] = { cols = { { { u1.path:match '[^/]+$', 'SeamText', { kind = 'file', path = u1.path } } } }, tail = tail }
+      g.items[#g.items + 1] = { cols = { name }, tail = tail }
     else
       -- each function once, at its first use; tests last
       local firsts, seen = {}, {}
@@ -494,7 +502,7 @@ local function library_display(x, m, ctx, label, names)
         return a.path < b.path or (a.path == b.path and a.line < b.line)
       end)
       local prev
-      for _, u in ipairs(firsts) do
+      for i, u in ipairs(firsts) do
         -- in a folder from it, as the tree under it names it
         local file = x.kind == 'dir' and u.path:sub(#dir_of(x) + 2) or data.short(m, u.path, home)
         local n = u.id and m.graph.nodes[u.id]
@@ -511,10 +519,12 @@ local function library_display(x, m, ctx, label, names)
               },
             }
           or { { '(top level)', 'SeamLabel' } }
-        items[#items + 1] = { cols = { where, who } }
+        g.items[#g.items + 1] = { cols = { i == 1 and name or { { '' } }, where, who } }
       end
     end
-    groups[#groups + 1] = { head = head, items = items, key = l.library .. ' ' .. l.name, files = vim.tbl_count(files) }
+  end
+  for _, g in ipairs(groups) do
+    g.files, g.paths = vim.tbl_count(g.paths), nil
   end
   local hl = fn and 'SeamMapFnBold' or 'SeamBold'
   return flow.draw(groups, { segs = { { label, hl } } }, {}, { width = ctx.width - 2, height = budget(ctx), open = M.state(x).open })

@@ -642,7 +642,7 @@ head lists them, the one shown bold.
 |---|---|---|---|---|
 | **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under the middle of its name down a few rows, left, and on down under the row to its callers, so they stand apart from the row and do not read as what it gives, the row going on right of that line where it is too long, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
 | **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
-| **library** | each name it takes from a library a head, the library dim after it, the libraries used most first, then their names used most, tests last; a line down through them into the row; under each the file and every line it uses it on (`design/mocks/map12-libraries.png`) | the same, under each the functions using it, the file once and the line each first uses it on, tests dim | the same for a file | none |
+| **library** | each library it takes from a head, the most used first; a line down through them into the row; under it each name taken from it, used most first, tests last, and every line it uses it on (`design/mocks/map13-libraries-grouped.png`) | the same, each name once, then the functions using it, the file once and the line each first uses it on, tests dim | the same for a file | none |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
   `map9-type.png`, `map9-type-cursor-type.png`, rounds seven to nine in
@@ -690,7 +690,10 @@ head lists them, the one shown bold.
   side of both ways on its own, the flow's above and below together),
   whole groups close, the fewest names first, each to one line, `▸` its
   head and how many names in how many files; every group stays named. `l`
-  opens one for the row, and it is never closed again to fit.
+  opens one for the row, and it is never closed again to fit. Then each
+  closed group that fits in the rows left opens again (2026-11-04): one
+  group taller than the pane, React in a folder's libraries, closed every
+  other with it.
 
 - **Nothing cut on the right** (2026-11-02, the user: "just removing the
   truncation is at least better"). In both ways a long file name or
@@ -724,6 +727,16 @@ head lists them, the one shown bold.
   types are still never indexed; the foot asks the server of one when the
   cursor rests on it. `design/mocks/map12-libraries.png`, from
   `design/mocks/src/map/libraries.py` on excalidraw.
+
+- **Libraries grouped by library** (2026-11-04, the user on a folder of
+  pdf-plus: "group all of these from the same library like actually
+  group"). A head for each name, its library after it, made a folder taking
+  fifteen names from React fifteen heads, all closed to one line each. Now
+  each library is the head and its names are under it, each name once
+  with the functions using it beside it; closed, a library is one line,
+  how many names in how many files. `design/mocks/map13-libraries-grouped.png`,
+  from `design/mocks/src/map/libraries_grouped.py` on excalidraw's
+  TTDDialog folder.
 
 - **The foot everywhere** (2026-11-02, the user: "would be nice to have
   in other parts like Types, so you could see the definition of the type
@@ -1245,7 +1258,7 @@ lua/seam/
   map/data.lua      the Map's facts from the graph and the flows: what a function calls and reaches, the calls across an edge, the names from src/, a type's makers and takers, the names taken from libraries and the function each use is in
   map/flow.lua      the flow: calls above under their heads, a line down into the row, on to its callers below, each side in columns, groups closed to fit
   map/both.lua      folder with T off, names only: calls left, callers right, each side by folder and file, groups closed to fit
-  map/fold.lua      which of the Map's groups close to a line so a side fits the pane: the fewest names first, never one opened with l
+  map/fold.lua      which of the Map's groups close to a line so a side fits the pane: the fewest names first, never one opened with l, reopening any that fits after
   map/keys.lua      the Map's keys in the pane, l T J, where each acts, and the name under the cursor for the status line
 scripts/
   extract.lua       the treesitter index, in a headless nvim of its own
