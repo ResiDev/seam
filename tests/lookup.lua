@@ -1,5 +1,6 @@
 -- Package types on demand: the package a declaration's file is in, the
 -- declaration a definition lands in, a hover's code and the type it says,
+-- a type's hover flat,
 -- on source written here; then, when the trial copy of excalidraw with its
 -- node_modules and a TypeScript server are here, a few names and values
 -- looked up for real.
@@ -119,6 +120,38 @@ eq(lookup.maker(mtree, 1, 6), { line = 2, col = 20 }, 'a method’s name, throug
 eq(lookup.maker(mtree, 2, 6), nil, 'no call')
 eq(lookup.maker(mtree, 3, 7), nil, 'a name destructured')
 
+-- a type flat, as the server says `type __seam_shape = …`
+eq(
+  lookup.shaped(
+    'Offsets',
+    'type __seam_shape = {\n    top?: number | undefined;\n    a: string | undefined;\n    onDock?: ((docked: boolean) => void) | undefined;\n}'
+  ),
+  { 'type Offsets = {', '    top?: number;', '    a: string | undefined;', '    onDock?: (docked: boolean) => void;', '}' },
+  'named its own, | undefined left out after a ?: alone, a function out of its parentheses'
+)
+eq(
+  lookup.shaped(
+    'V',
+    'type __seam_shape = {\n    ui?: true | {\n        reserve?: {\n            a?: boolean | undefined;\n        } | undefined;\n        b: {\n            c: 1;\n        } | undefined;\n    } | undefined;\n}'
+  ),
+  {
+    'type V = {',
+    '    ui?: true | {',
+    '        reserve?: {',
+    '            a?: boolean;',
+    '        };',
+    '        b: {',
+    '            c: 1;',
+    '        } | undefined;',
+    '    };',
+    '}',
+  },
+  'an object a ?: opens, closed without | undefined; one a plain field opens, kept'
+)
+eq(lookup.shaped('F', 'type __seam_shape = {}'), nil, 'no object: a function’s type, flat')
+eq(lookup.shaped('F', 'type F = {}'), nil, 'not the alias asked')
+eq(lookup.shaped('F', nil), nil, 'no hover')
+
 -- for real: the trial copy of excalidraw, its node_modules, a server
 local REPO = '/tmp/seam-npm-trial/excalidraw'
 local cmd = vim.uv.fs_stat(REPO .. '/node_modules/roughjs') and require('seam.tsserver').command(REPO)
@@ -174,6 +207,28 @@ else
       c[1] .. ':' .. c[2] .. ' asked: ' .. tostring(got.type) .. ' ' .. first
     )
     io.stdout:write(('%s:%d in %.0f ms: %s\n'):format(c[1], c[2], (vim.uv.hrtime() - t) / 1e6, tostring(got.code)))
+  end
+  -- a repo type flat, and in full
+  local SHAPES = {
+    { 'ViewportOffsets', 'packages/excalidraw/types.ts', '    ui?: true | ViewportOffsetsOptions;', '        reserve?: {' },
+    { 'UnsubscribeCallback', 'packages/excalidraw/types.ts' },
+  }
+  for _, c in ipairs(SHAPES) do
+    local landed, t = false, vim.uv.hrtime()
+    local got, asking = lookup.shape(c[1], c[2], function()
+      landed = true
+    end)
+    eq({ got, asking }, { nil, true }, c[1] .. ': nothing the first time, the server asked')
+    vim.wait(30000, function()
+      return landed
+    end, 5)
+    got = lookup.shape(c[1], c[2], function() end)
+    if c[3] then
+      eq({ got and vim.tbl_contains(got.flat, c[3]), got and vim.tbl_contains(got.full, c[4]) }, { true, true }, c[1] .. ' flat and in full')
+    else
+      eq(got, false, c[1] .. ': a function’s type, no object')
+    end
+    io.stdout:write(('%s flat in %.0f ms\n'):format(c[1], (vim.uv.hrtime() - t) / 1e6))
   end
   -- at the position given: the import specifier of DialogActionButton.tsx
   local landed = false

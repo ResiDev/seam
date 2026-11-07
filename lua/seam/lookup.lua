@@ -27,7 +27,7 @@ local WRAP = { export_statement = true, ambient_declaration = true }
 local STARTS = 3
 
 -- the session: its client, what it was asked and what it said, the files read
-local S = { got = {}, vals = {}, asking = {}, opened = {}, starts = 0 }
+local S = { got = {}, vals = {}, shapes = {}, asking = {}, opened = {}, starts = 0 }
 
 ---------------------------------------------------------------- pure
 
@@ -157,6 +157,74 @@ function M.maker(root, row, col)
   end
 end
 
+-- the alias a type is asked of the server as, flat: type-fest's Simplify
+M.SHAPE = '__seam_shape'
+
+-- `(T)` as `T`, when the parentheses hold the whole of it
+local function unwrap(t)
+  if t:sub(1, 1) ~= '(' or t:sub(-1) ~= ')' then
+    return t
+  end
+  local depth = 0
+  for i = 1, #t do
+    local c = t:sub(i, i)
+    depth = depth + (c == '(' and 1 or c == ')' and -1 or 0)
+    if depth == 0 and i < #t then
+      return t
+    end
+  end
+  return t:sub(2, -2)
+end
+
+-- an optional property's line, `a?: T` or `readonly a?: T`
+local function optional(l)
+  return l:match '^%s*readonly%s+[%w_$]+%?:' or l:match '^%s*[%w_$]+%?:' or l:match '^%s*"[^"]*"%?:'
+end
+
+--- The hover of `type __seam_shape = …` as `name`'s: its lines, the alias
+--- named `name`, and `| undefined` left out after a `?:`, the `?` saying
+--- it, across the lines of an object the property opens too. Nil when the
+--- server says no object, a function's or a class's type, `{}`.
+---@param name string
+---@param text string|nil the hover's code
+---@return string[]|nil
+function M.shaped(name, text)
+  if not text then
+    return nil
+  end
+  local lines = vim.split(text, '\n')
+  local pre = 'type ' .. M.SHAPE
+  if lines[1]:sub(1, #pre) ~= pre then
+    return nil
+  end
+  lines[1] = 'type ' .. name .. lines[1]:sub(#pre + 1)
+  if #lines == 1 and lines[1]:match '=%s*{%s*}%s*;?$' then
+    return nil
+  end
+  -- each object opened, whether a `?:` opened it
+  local opened = {}
+  for i, l in ipairs(lines) do
+    local closes = l:match '^%s*[}%]]'
+    if closes and #opened > 0 then
+      local opt = table.remove(opened)
+      if opt then
+        l = l:gsub(' | undefined;$', ';')
+      end
+    end
+    if optional(l) and not l:match '[{%[(]$' then
+      local head, t = l:match '^(.-%?:%s*)(.-) | undefined;$'
+      if head then
+        l = head .. unwrap(t) .. ';'
+      end
+    end
+    if l:match '[{%[]$' then
+      opened[#opened + 1] = optional(l) ~= nil
+    end
+    lines[i] = l
+  end
+  return lines
+end
+
 ---------------------------------------------------------------- the server
 
 --- The session's server stopped, and all it said forgotten.
@@ -166,7 +234,21 @@ function M.stop()
     -- asked to shut down, not killed: killed, Neovim reports it quit
     c:stop()
   end
-  S = { got = {}, vals = {}, asking = {}, opened = {}, starts = 0 }
+  S = { got = {}, vals = {}, shapes = {}, asking = {}, opened = {}, starts = 0 }
+end
+
+--- Is there a server to ask, or one to start? Its command looked for once
+--- a root.
+---@return boolean
+function M.available()
+  if S.root ~= st.root then
+    M.stop()
+    S.root = st.root
+  end
+  if S.has == nil then
+    S.has = require('seam.tsserver').command(st.root) ~= nil
+  end
+  return S.has and S.starts < STARTS
 end
 
 -- the client, started on the first lookup; requests wait in `S.queue`
@@ -198,6 +280,12 @@ local function client()
     name = 'seam-lookup',
     cmd = cmd,
     root_dir = st.root,
+    -- a hover whole, as the types pass asks: cut, a type says `... 10 more ...`
+    init_options = { maximumHoverLength = 100000 },
+    settings = { typescript = { unstable = { maximumHoverLength = 100000 } } },
+    -- what it finds wrong in a file is not seam's to show, and a file of
+    -- its never written to disk (M.shape) is no buffer to make
+    handlers = { ['textDocument/publishDiagnostics'] = function() end },
     on_init = function()
       S.ready = true
       local q = S.queue or {}
@@ -332,6 +420,84 @@ function M.get(name, path, at, done)
     S.queue[#S.queue + 1] = ask
   end
   return nil
+end
+
+--- What the server says the repo type `name`, declared in `path` (relative
+--- to the root), is as one object: `{ flat, full }`, the hover's lines of
+--- `{ [K in keyof name]: name[K] } & {}` (type-fest's Simplify) the names it
+--- uses kept, and at verbosity 1 every alias spelled out (seam.lookup's
+--- M.shaped each). Asked in a copy of the file with that alias at its end,
+--- never written to disk, beside it so its tsconfig takes it and its own
+--- types are in reach, closed once the server has said. Cached for the
+--- session per name and file; the first time nil and true, the server
+--- asked, and `done` called once it has answered; false when it says no
+--- object; nil alone with no server, or for a file no type alias can be
+--- written in.
+--- `done` nil: only what was said before, never asking.
+---@param name string
+---@param path string
+---@param done fun()|nil
+---@return { flat: string[], full: string[] }|false|nil, boolean|nil asking
+function M.shape(name, path, done)
+  local k = name .. '\0' .. path
+  if S.root == st.root then
+    if S.shapes[k] ~= nil then
+      return S.shapes[k]
+    end
+    if S.asking['shape\0' .. k] then
+      return nil, true
+    end
+  end
+  local stem, ext = path:match '^(.-)(%.[cm]?tsx?)$'
+  local c = stem and done and client()
+  if not c then
+    return nil
+  end
+  local session = S
+  S.asking['shape\0' .. k] = true
+  local function ask()
+    local lines = vim.list_extend(vim.deepcopy(code.file(path).lines), {
+      -- a module, so the copy's declarations are its own, not the original's again
+      'export {};',
+      ('type %s = { [K in keyof %s]: %s[K] } & {};'):format(M.SHAPE, name, name),
+    })
+    local uri = vim.uri_from_fname(('%s/%s.%s_%s%s'):format(st.root, stem, M.SHAPE, name, ext))
+    c:notify('textDocument/didOpen', {
+      textDocument = { uri = uri, languageId = ext:match 'x$' and 'typescriptreact' or 'typescript', version = 0, text = table.concat(lines, '\n') },
+    })
+    local said, left = {}, 2
+    for level, key in ipairs { 'flat', 'full' } do
+      c:request('textDocument/hover', {
+        textDocument = { uri = uri },
+        position = { line = #lines - 1, character = 5 },
+        verbosityLevel = level - 1,
+      }, function(err, result)
+        vim.schedule(function()
+          said[key] = not err and result and M.hover_code(result.contents) or nil
+          left = left - 1
+          if left > 0 then
+            return
+          end
+          if not c:is_stopped() then
+            c:notify('textDocument/didClose', { textDocument = { uri = uri } })
+          end
+          if S ~= session then
+            return
+          end
+          S.asking['shape\0' .. k] = nil
+          local flat, full = M.shaped(name, said.flat), M.shaped(name, said.full)
+          S.shapes[k] = flat and { flat = flat, full = full or flat } or false
+          done()
+        end)
+      end)
+    end
+  end
+  if S.ready then
+    ask()
+  else
+    S.queue[#S.queue + 1] = ask
+  end
+  return nil, true
 end
 
 -- the position the server is asked at: `at`'s byte as UTF-16
