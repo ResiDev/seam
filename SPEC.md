@@ -319,6 +319,18 @@ run/
   called from that file, so its calls are never underlined, and Used by
   lists only that file. (Decided 2026-11-01; `design/mocks/tree-file-kept.png` was
   not needed.)
+- **What a file lists: functions, types, values, each on or off.** Decided
+  2026-11-07 from `design/mocks/tree15-kinds.png`. A file's rows are what
+  it declares at its top, in the file's order: its functions, components
+  and classes, `name()`; its types, interfaces and enums, in the code's
+  type colour; its values, a `const` or `let` holding no function, plain.
+  `f` `t` `v` turn each on or off for the session, functions alone by
+  default, the tree as it was. Anything else, the status line's left says
+  what is on, `types · values`. A value is a node of the call graph as a
+  function is: `l` opens what it calls (`register()` under each of
+  excalidraw's actions), its Code, Types and Map are a function's, and
+  what it calls is no longer its file's top's. A type does not open; its
+  views are a type's from `/`. In the sorted orders a type has no counts.
 - **`l` on a function** opens what it calls, in the order they run. `h`
   closes it. Each call has all the views and opens with `l` again.
 - **Where a call lives: underlined.** Decided 2026-10-31 from six marks
