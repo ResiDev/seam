@@ -771,6 +771,23 @@ head lists them, the one shown bold.
   What the foot told there that the pane did not, a package type's own
   declaration under a value's type, the pane now shows in full.
 
+- **A type at three levels, `=`** (2026-11-07, the user: "is there some
+  way that we can prettify them all like you can with typefest", then
+  "some way to change the verbosity level of types too";
+  `design/mocks/foot14-levels.png`). As written, a type is often half
+  somewhere else: `Offsets & { ui?: … }`, `Omit<BinaryFileData,
+  "dataURL">`. The foot tells a repo type alias or interface with no type
+  parameters at three levels, named at the right of its head: as written;
+  flat, the server's hover of type-fest's `Simplify` on it, one object,
+  the names it uses kept; in full, the same hover at `verbosityLevel` 1,
+  every alias spelled out. tsgo takes `verbosityLevel` as on or off (0
+  names, 1 and up spells every alias out, at every depth, not one level a
+  press), so it is one level, not a dial; flat is the one in between.
+  `| undefined` after a `?:` is left out, the `?` says it. `=` steps them,
+  round, and the level stays for the session. A generic is left as
+  written (flat needs its arguments), a class and an enum too, and a type
+  the server says is no object (a function's type flattens to `{}`).
+
 - **Tree and folders are gone** (2026-11-01). Both ways says what a row
   is built from and who uses it, by folder and file, in one picture; the
   tree repeated the Built from tab a level at a time, and folders drew the
@@ -1034,6 +1051,7 @@ the server per field.
 | Change line | `git log -L` on the declaration range | per contract, on demand |
 | What a function takes and gives | `textDocument/hover` on each callable of the call graph, `scripts/types.lua` | one request a callable, once, in the background |
 | A package's type, at the foot | `textDocument/definition` where the name is written, then treesitter on the `.d.ts` it points at (`seam.lookup`) | one request a name and file, when the cursor rests on it, never waited on; cached for the session |
+| A repo type flat and in full, at the foot | `textDocument/hover` at `verbosityLevel` 0 and 1 on `{ [K in keyof T]: T[K] } & {}`, in a copy of its file never written to disk (`seam.lookup`) | two requests a type, once `=` is past as written, never waited on; cached for the session |
 | A value's type no one wrote, in the pane and at the foot | `textDocument/hover` and `textDocument/typeDefinition` where it is made, treesitter on the `.d.ts` (`seam.lookup`) | two requests a value, when the pane or the cursor is on it, never waited on; cached per place for the session |
 
 So treesitter answers everything inside one file and the language server
@@ -1108,6 +1126,19 @@ the foot beside the tree shows the hover's code in its colours and the
 type's declaration under it. A
 package's function (`createRoot`) at the foot is its hover, the signature,
 and the package it is in. A trial on excalidraw: 15 to 120 ms.
+
+A repo type flat or in full (the foot's `=`, 2026-11-07) is asked the same
+way, on demand, never indexed, and only once `=` is past as written: a copy
+of the type's file, never written to disk, opened beside it
+(`types.__seam_shape_ViewportOffsets.ts`) so its tsconfig takes it and the
+file's own types, exported or not, are in reach, with `export {}` (a module,
+so the copy's declarations are its own) and `type __seam_shape = { [K in
+keyof T]: T[K] } & {}` at its end; `textDocument/hover` on that alias at
+`verbosityLevel` 0 and 1 together, the copy closed once both have answered.
+The alias is named the type's own again, and kept per type and file for the
+session. The session's server is started with `maximumHoverLength` as the
+types pass is, or a big type ends `... 10 more ...`. A trial on excalidraw:
+20 to 90 ms.
 
 ## The swappable part
 
@@ -1249,14 +1280,14 @@ lua/seam/
   names.lua         what a name in the code is: a repo function, a type, an import's file, a value, a parameter, a field or method, its type and later uses
   codetypes.lua     the types the code does not write: after a value's name, after a function's parameters; the code's types display
   pane.lua          the pane beside the tree and the code: drawing it, its keys, the foot following its cursor
-  foot.lua          the foot: the name under the pane's cursor in full, beside the tree only, in every view; a function's signature and the line that calls it, a type's declaration, a package's type once looked up, a value's type the server says
+  foot.lua          the foot: the name under the pane's cursor in full, beside the tree only, in every view; a function's signature and the line that calls it, a type's declaration as written, flat or in full (`=`), a package's type once looked up, a value's type the server says
   screen_code.lua   the code screen: the trail, the code or its types (views/codetypes.lua), the name under the cursor answered in the pane, J K n N
   views/names.lua   the Types view of a name in the code: a method's line, the type it is in, the types it names; a value's type the server says, where none is written
   types.lua         types as data: a hover to what a function takes and gives, each repo type's flow, a signature fitted to a row
   lens_panel.lua    the lens float and its keys
   picker.lua        the / float on every screen: a prompt, a list of picks, fuzzy matching
   tsserver.lua      which TypeScript server seam asks: $SEAM_TS, the repo's, Mason's or the PATH's
-  lookup.lua        package types on demand: the session's server, a name's definition asked where it is written, the declaration read out of its .d.ts, the package it is in; a value's hover and type definition where it is made
+  lookup.lua        package types on demand: the session's server, a name's definition asked where it is written, the declaration read out of its .d.ts, the package it is in; a value's hover and type definition where it is made; a repo type's hover flat and in full, asked in a copy of its file never written to disk
   health.lua        :checkhealth seam: this copy, Neovim, the colours, the parsers and highlight queries, the keys and terminal, the server
   screen.lua        the tab page, its windows, keys, status line, cursor to redraw
   changes.lua       what changed in the range, from git: the files, each end's lines, each declaration new, gone, signature or body changed, where a name was used at from
@@ -1285,7 +1316,7 @@ tests/
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
   map.lua           the Map's layouts on graphs written by hand: the facts, both ways, the flow, which groups close to fit
-  lookup.lua        package types: the package from a path, the declaration around a position, a hover's code and type, the call that made a value; for real on the trial excalidraw with node_modules, skipped without it or a server
+  lookup.lua        package types: the package from a path, the declaration around a position, a hover's code and type, the call that made a value, a type's hover flat; for real on the trial excalidraw with node_modules, skipped without it or a server
   check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder, its groups closed to fit and l opening one
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, the lens's range
   check.lua         every screen through its keys on a real repo, the foot on the Map and the Types view beside the tree, none on the code screen

@@ -190,7 +190,40 @@ function M.declared(m, d, name, rows)
   return decl_rows(rows, d.key, d.s, d.e)
 end
 
-local function type_rows(m, it)
+--- The levels the foot tells a repo type at, `=` the next, for the
+--- session: its declaration as its file writes it; flat, one object, the
+--- names it uses kept; in full, every alias spelled out. The two last are
+--- the TypeScript server's (seam.lookup's M.shape).
+M.LEVELS = { 'as written', 'flat', 'in full' }
+M.level = 1
+
+-- the type the foot tells at its levels now, and whether it is still asking
+local told, pending
+
+-- can the repo type `name`, declared at `e`, be told flat: a type alias or
+-- an interface, with no type parameters, in TypeScript
+local function shapeable(e, name)
+  local kind = e.kind or 'type'
+  if (kind ~= 'type' and kind ~= 'interface') or not e.path:match '%.[cm]?tsx?$' then
+    return false
+  end
+  local first = code.file(e.path).lines[e.line] or ''
+  return not first:find('%f[%w_$]' .. vim.pesc(name) .. '%s*<')
+end
+
+-- `r` with the levels after it, the one told bold, as far right as `W` lets
+local function levels(r, used, W)
+  local words = table.concat(M.LEVELS, '  ')
+  r:add(string.rep(' ', math.max(3, W - 2 - used - vim.fn.strdisplaywidth(words))))
+  for i, w in ipairs(M.LEVELS) do
+    r:add(w, i == M.level and 'SeamTypeBold' or 'SeamLabel')
+    if i < #M.LEVELS then
+      r:add '  '
+    end
+  end
+end
+
+local function type_rows(m, it, W)
   local f = m.flows and m.flows[it.name]
   local e = it.decl or (it.from and names.type_decl(m, it.name, it.from.path)) or (f and f.decls[1])
   if not e then
@@ -203,7 +236,48 @@ local function type_rows(m, it)
     local makers, takers = data.flow(m, it.name)
     where = where .. ('   made by %d, taken by %d'):format(#makers, #takers)
   end
-  return decl_rows({ draw.row():add(' '):add(it.name, 'SeamTypeBold'):add(where, 'SeamLabel') }, e.path, e.line, e.end_line)
+  local head = draw.row():add(' '):add(it.name, 'SeamTypeBold'):add(where, 'SeamLabel')
+  local used = 1 + vim.fn.strdisplaywidth(it.name .. where)
+  -- as written, the server is not asked: only whether it said no object before
+  local got, asking
+  if shapeable(e, it.name) and lookup.available() then
+    got, asking = lookup.shape(it.name, e.path, M.level > 1 and function()
+      vim.schedule(M.update)
+    end or nil)
+    if got == nil and not asking and M.level == 1 then
+      got = true
+    end
+  end
+  if not (got or asking) then
+    return decl_rows({ head }, e.path, e.line, e.end_line)
+  end
+  told = it.name
+  levels(head, used, W)
+  if M.level == 1 then
+    return decl_rows({ head }, e.path, e.line, e.end_line)
+  elseif asking then
+    pending = true
+    return { head, draw.row():add(' asking the TypeScript server', 'SeamLabel') }
+  end
+  local lines = M.level == 2 and got.flat or got.full
+  local key = ('foot-shape:%d:%s:%s'):format(M.level, e.path, it.name)
+  code.virtual(key, e.path, lines)
+  return decl_rows({ head }, key, 1, #lines)
+end
+
+--- The next level's name, where the foot tells a type at its levels.
+---@return string|nil
+function M.next_level()
+  return M.shown() and F.told and M.LEVELS[M.level % #M.LEVELS + 1] or nil
+end
+
+--- `=`: the foot's type at its next level, for the session.
+function M.step_level()
+  if M.next_level() then
+    M.level = M.level % #M.LEVELS + 1
+    M.update()
+    vim.cmd 'redrawstatus'
+  end
 end
 
 -- a type of no repo's: its declaration where the server says it is, once
@@ -258,11 +332,12 @@ end
 ---@param W integer
 ---@return table[]|nil
 function M.rows(m, it, W)
+  told, pending = nil, false
   local rows
   if it and it.id and m.graph and m.graph.nodes[it.id] then
     rows = fn_rows(m, it, W)
   elseif it and it.kind == 'type' then
-    rows = type_rows(m, it) or package_rows(m, it)
+    rows = type_rows(m, it, W) or package_rows(m, it)
   elseif it and it.kind == 'value' then
     rows = value_rows(m, it)
   end
@@ -280,7 +355,7 @@ function M.close()
   if F.win and api.nvim_win_is_valid(F.win) then
     api.nvim_win_close(F.win, true)
   end
-  F.win, F.key = nil, nil
+  F.win, F.key, F.told = nil, nil, nil
 end
 
 --- What is under the cursor in `win`, as the foot tells it: in the tree's
@@ -328,13 +403,14 @@ function M.update()
   local it = M.under(win)
   local W = api.nvim_win_get_width(win)
   local H = api.nvim_win_get_height(win)
-  local key = it and vim.inspect(it) .. ':' .. win .. ':' .. W .. 'x' .. H
-  if key and key == F.key and F.win and api.nvim_win_is_valid(F.win) then
+  local key = it and vim.inspect(it) .. ':' .. win .. ':' .. W .. 'x' .. H .. ':' .. M.level
+  if key and key == F.key and not F.pending and F.win and api.nvim_win_is_valid(F.win) then
     return place(win, F.h)
   end
   local m = index.model()
   local rows = it and m and M.rows(m, it, W)
   local least = math.ceil(H * M.SHARE)
+  F.pending, F.told = pending, told
   if not rows or H < least + 4 then
     return M.close()
   end

@@ -331,6 +331,10 @@ end
 function M.hints(back)
   local x = M.subject()
   local row = require('seam.map.keys').hints()
+  local lv = require('seam.foot').next_level()
+  if lv then
+    row[#row + 1] = { '=', lv }
+  end
   local o, c = opening.keys()
   if o then
     row[#row + 1] = opening.is_more(o) and { '+', 'more' } or '+'
@@ -369,6 +373,7 @@ function M.all_keys(back)
       {
         { '+', 'open the type under the cursor, or a function as written; on ⋯ N more, the rest' },
         { '-', 'close the one the cursor is in; on a place it showed, hide the rest again' },
+        { '=', 'the type at the foot as written, flat, or in full; the choice stays' },
         { ']c [c', 'the next and previous change, with the diff on' },
         { '<Tab>', st.screen == 'code' and 'Code or Types; from a view aside, back' or 'the next tab' },
         { 'gm', 'the Map, and back' },
@@ -412,6 +417,9 @@ function M.keys(buf)
   end, o(buf))
   vim.keymap.set('n', '-', function()
     opening.minus(M.redraw)
+  end, o(buf))
+  vim.keymap.set('n', '=', function()
+    require('seam.foot').step_level()
   end, o(buf))
   vim.keymap.set('n', ']c', function()
     M.next_place(1, 'change')

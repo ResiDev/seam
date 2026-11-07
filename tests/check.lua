@@ -1228,6 +1228,24 @@ do
             fail('no foot on ' .. n.name)
           elseif not fl:find(n.name, 1, true) or not fl:find(first:sub(1, 20), 1, true) then
             fail(('the foot on %s does not show its declaration: %s'):format(n.name, fl))
+          elseif foot.next_level() == 'flat' then
+            -- = there: the level named bold at the foot's head, flat or the
+            -- server asked (tests/lookup.lua asks it for real; here it is
+            -- busy with every value the check has walked past), then in
+            -- full, then as written again
+            where = 'types view foot ='
+            foot.step_level()
+            fl = table.concat(lines(foot.shown() or 0), '\n')
+            if not (fl:find('type ' .. n.name .. ' = ', 1, true) or fl:find('asking the TypeScript server', 1, true)) then
+              fail(('= on %s neither told it flat nor asked: %s'):format(n.name, fl))
+            elseif foot.next_level() ~= 'in full' then
+              fail(('= on %s: the next level is %s, not in full'):format(n.name, tostring(foot.next_level())))
+            end
+            foot.step_level()
+            foot.step_level()
+            if foot.level ~= 1 or not table.concat(lines(foot.shown() or 0), '\n'):find(first:sub(1, 20), 1, true) then
+              fail '= three times did not come back to as written'
+            end
           end
           break
         end
