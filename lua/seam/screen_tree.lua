@@ -341,6 +341,7 @@ function M.all_keys()
       {
         { 's', 'order: by folder, most used, most calling' },
         { 'f t v', 'what a file lists: its functions, types, values, each on or off' },
+        { 'e', "a file's exports only, or all it declares" },
         { '/', 'search the names' },
         { 'gc', 'only what changed, and back' },
         { ']c [c', 'the next and previous change' },
@@ -437,7 +438,7 @@ local function tree_keys(buf)
     S().close()
   end, o(buf))
   S().goto_keys(buf)
-  for _, k in ipairs { 'l', 'h', 's', 'f', 't', 'v' } do
+  for _, k in ipairs { 'l', 'h', 's', 'f', 't', 'v', 'e' } do
     vim.keymap.set('n', k, press(k), o(buf))
   end
   for _, k in ipairs { '<C-d>', '<C-u>', '<C-e>', '<C-y>' } do

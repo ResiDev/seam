@@ -1,0 +1,111 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root { --foreground:#c0caf5; --muted-foreground:#787c99; --border:#3b4261; --secondary:#24283b; --radius:8px; --font-sans: system-ui, sans-serif; --font-mono: monospace; }
+body { background:#16161e; margin:0; padding:20px; }
+/* Shared look for every mock: tokyonight-night, the user's colorscheme. Inline this whole file. */
+.mock { font-family: var(--font-sans); color: var(--foreground); }
+.mock h2 { font-size: 20px; margin: 0 0 6px; }
+.mock .lede { color: var(--muted-foreground); margin: 0 0 18px; line-height: 1.5; font-size: 14px; }
+.mock .cap { font-size: 13px; color: var(--muted-foreground); margin: 22px 0 8px; line-height: 1.45; }
+.mock .cap b { color: var(--foreground); }
+.mock kbd { font-family: var(--font-mono); font-size: 12px; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--secondary); color: var(--foreground); }
+
+/* A Neovim screen. Write its rows in a <pre class="nv">, 100 columns wide. */
+.nv { background: #1a1b26; color: #c0caf5; border-radius: var(--radius); padding: 16px;
+  margin: 0; overflow-x: auto; line-height: 1.32; white-space: pre;
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+  font-size: min(12.5px, calc((100vw - 34px) / 61)); }
+.nv span { white-space: pre; }
+/* tokyonight-night */
+.nv .fg  { color: #c0caf5; } .nv .fd { color: #a9b1d6; }
+.nv .c   { color: #565f89; } .nv .d3 { color: #3b4261; }   /* comment, gutter */
+.nv .b   { color: #7aa2f7; } .nv .cy { color: #7dcfff; } .nv .t { color: #1abc9c; }
+.nv .m   { color: #bb9af7; } .nv .o  { color: #ff9e64; } .nv .y { color: #e0af68; }
+.nv .g   { color: #9ece6a; } .nv .r  { color: #f7768e; } .nv .rr { color: #db4b4b; }
+.nv .bold { font-weight: 700; } .nv .it { font-style: italic; } .nv .ul { text-decoration: underline; }
+.nv .st  { text-decoration: line-through; }
+.nv .sel { background: #292e42; }                /* cursor line / selection */
+.nv .vis { background: #283457; }                /* visual / lit item */
+.nv .fl  { background: #16161e; }                /* float body */
+.nv .sl  { background: #16161e; color: #a9b1d6; } /* statusline */
+.nv .mode { background: #7aa2f7; color: #15161e; font-weight: 700; }
+.nv .bg-r { background: #3f2430; } .nv .bg-y { background: #3a3326; } .nv .bg-g { background: #273326; }
+.nv .bg-b { background: #22304d; }
+
+.row { display:flex; gap:18px; align-items:flex-start; }
+.shot { width: 470px; }
+.nv { font-size: 12.5px; }
+code { color:#c0caf5; }
+</style></head><body class="mock"><h2>The tree by kind, b: <kbd>e</kbd> exports only</h2><p class="lede">Round fifteen, b. excalidraw, packages/element/src/transformHandles.ts.</p><div class="row"><div class="shot"><pre class="nv"><span class="c"> Seams   </span><span class="fg bold">by folder</span>
+<span class="d3">──────────────────────────────────────────────────────────</span>
+<span class="c"> </span> <span class="b">packages/</span>                                               
+<span class="c"> </span>   <span class="b">element/src/</span>                                          
+<span class="c"> </span>     <span class="fg">transformHandles.ts</span>                                 
+<span class="c"> </span>       <span class="cy">TransformHandleDirection</span>                          
+<span class="c"> </span>       <span class="cy">TransformHandleType</span>                               
+<span class="c"> </span>       <span class="cy">TransformHandle</span>                                   
+<span class="c"> </span>       <span class="cy">TransformHandles</span>                                  
+<span class="c"> </span>       <span class="cy">MaybeTransformHandleType</span>                          
+<span class="c"> </span>       <span class="fg">transformHandleSizes</span>                              
+<span class="c"> </span>       <span class="fg">ROTATION_RESIZE_HANDLE_GAP</span>                        
+<span class="c"> </span>       <span class="fg">DEFAULT_OMIT_SIDES</span>                                
+<span class="c"> </span>       <span class="fg">OMIT_SIDES_FOR_MULTIPLE_ELEMENTS</span>                  
+<span class="c"> </span>       <span class="fg">OMIT_SIDES_FOR_FRAME</span>                              
+<span class="c"> </span>       <span class="fg">OMIT_SIDES_FOR_LINE_SLASH</span>                         
+<span class="c"> </span>       <span class="fg">OMIT_SIDES_FOR_LINE_BACKSLASH</span>                     
+<span class="c"> </span>       <span class="fg">generateTransformHandle</span><span class="c">()</span>                         
+<span class="c"> </span>       <span class="fg">canResizeFromSides</span><span class="c">()</span>                              
+<span class="c"> </span>       <span class="fg">getOmitSidesForEditorInterface</span><span class="c">()</span>                  
+<span class="c"> </span>       <span class="fg">getTransformHandlesFromCoords</span><span class="c">()</span>                   
+<span class="c"> </span>       <span class="fg">getTransformHandles</span><span class="c">()</span>                             
+<span class="c"> </span>       <span class="fg">hasBoundingBox</span><span class="c">()</span>                                  
+<span class="c"> </span>     <span class="fg">typeChecks.ts</span>                                       
+<span class="sl"> functions · types · values   TransformHandles   </span><span class="sl"><span class="b bold">h</span> <span class="c">close</span></span></pre><p class="cap"><b>A.</b> <kbd>t</kbd> <kbd>v</kbd>, as round fifteen: everything the file declares at its top.</p></div><div class="shot"><pre class="nv"><span class="c"> Seams   </span><span class="fg bold">by folder</span>
+<span class="d3">──────────────────────────────────────────────────────────</span>
+<span class="c"> </span> <span class="b">packages/</span>                                               
+<span class="c"> </span>   <span class="b">element/src/</span>                                          
+<span class="c"> </span>     <span class="fg">transformHandles.ts</span>                                 
+<span class="c"> </span>       <span class="cy">TransformHandleDirection</span>                          
+<span class="c"> </span>       <span class="cy">TransformHandleType</span>                               
+<span class="c"> </span>       <span class="cy">TransformHandle</span>                                   
+<span class="sel"><span class="c"> </span>       <span class="cy">TransformHandles</span>                                  </span>
+<span class="c"> </span>       <span class="cy">MaybeTransformHandleType</span>                          
+<span class="c"> </span>       <span class="fg">DEFAULT_OMIT_SIDES</span>                                
+<span class="c"> </span>       <span class="fg">OMIT_SIDES_FOR_MULTIPLE_ELEMENTS</span>                  
+<span class="c"> </span>       <span class="fg">OMIT_SIDES_FOR_FRAME</span>                              
+<span class="c"> </span>       <span class="fg">canResizeFromSides</span><span class="c">()</span>                              
+<span class="c"> </span>       <span class="fg">getOmitSidesForEditorInterface</span><span class="c">()</span>                  
+<span class="c"> </span>       <span class="fg">getTransformHandlesFromCoords</span><span class="c">()</span>                   
+<span class="c"> </span>       <span class="fg">getTransformHandles</span><span class="c">()</span>                             
+<span class="c"> </span>       <span class="fg">hasBoundingBox</span><span class="c">()</span>                                  
+<span class="c"> </span>     <span class="fg">typeChecks.ts</span>                                       
+<span class="c"> </span>     <span class="fg">types.ts</span>                                            
+                                                          
+                                                          
+                                                          
+                                                          
+<span class="sl"> functions · types · values · exports only   TransformHandles </span><span class="sl"><span class="b bold">h</span> <span class="c">close</span></span></pre><p class="cap"><b>B.</b> <kbd>e</kbd>: its exports alone. What it keeps to itself goes: five of eighteen. Another <kbd>e</kbd> brings them back.</p></div><div class="shot"><pre class="nv"><span class="c"> Seams   </span><span class="fg bold">by folder</span>
+<span class="d3">──────────────────────────────────────────────────────────</span>
+<span class="c"> </span> <span class="b">packages/</span>                                               
+<span class="c"> </span>   <span class="b">element/src/</span>                                          
+<span class="c"> </span>     <span class="fg">transformHandles.ts</span>                                 
+<span class="c"> </span>       <span class="fg">canResizeFromSides</span><span class="c">()</span>                              
+<span class="sel"><span class="c"> </span>       <span class="fg">getOmitSidesForEditorInterface</span><span class="c">()</span>                  </span>
+<span class="c"> </span>       <span class="fg">getTransformHandlesFromCoords</span><span class="c">()</span>                   
+<span class="c"> </span>       <span class="fg">getTransformHandles</span><span class="c">()</span>                             
+<span class="c"> </span>       <span class="fg">hasBoundingBox</span><span class="c">()</span>                                  
+<span class="c"> </span>     <span class="fg">typeChecks.ts</span>                                       
+<span class="c"> </span>     <span class="fg">types.ts</span>                                            
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+                                                          
+<span class="sl"> functions · exports only   getOmitSidesForEditorInterface() </span><span class="sl"><span class="b bold">l</span> <span class="c">open</span>  <span class="b bold">J</span> <span class="c">code</span></span></pre><p class="cap"><b>C.</b> <kbd>e</kbd> with functions alone: the file's exported functions. A function's calls, opened with <kbd>l</kbd>, are all of them, exported or not.</p></div></div></body></html>
