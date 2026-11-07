@@ -342,6 +342,11 @@ do
   eq(outline.shows_word(ko), 'nothing', 'all off')
   eq(row(outline.rows(mk, ko), 'f:pk/k.ts').can_open, false, 'a file listing nothing does not open')
   eq(#outline.functions(mk, 'pk/k.ts'), 1, 'its functions are not its values')
+  -- a value revealed by name (/, the Map) while values are off: listed, the cursor on it
+  local ro = outline.new()
+  eq(outline.reveal(mk, ro, KV), true, 'reveal a value')
+  eq(outline.find(outline.rows(mk, ro), ro.cursor) ~= nil, true, 'a revealed value has its row')
+  eq(outline.shows_word(ro), 'functions · values', 'values listed from then on')
   package.loaded['seam.written'] = nil
 end
 

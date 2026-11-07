@@ -145,7 +145,7 @@ local function heads(m, e)
     local node = m.graph.nodes[e.id]
     local s0 = c.b
     code.add_name(c, node.path, node.line, node.name, 'SeamName', 60)
-    c:add('()', 'SeamPunct')
+    c:add(node.kind == 'value' and '' or '()', 'SeamPunct')
     c.h[#c.h + 1] = { s0, c.b, 'SeamBold', 80 }
     c:add('   ' .. node.kind .. ' in ', 'SeamLabel')
     draw.path(c, node.path, math.max(1, node.line))

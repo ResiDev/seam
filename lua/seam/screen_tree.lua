@@ -122,7 +122,7 @@ function M.redraw(keep)
     return
   end
   local m, o = index.model(), st.outline
-  st.orows = signs.decorate(m, outline.rows(m, o), o.only_changed)
+  st.orows = signs.decorate(m, outline.rows(m, o), o.only_changed, o.shows)
   local w = st.owin.tree
   st.drawing = true
   vim.wo[w].winbar = odraw.titles(o)
