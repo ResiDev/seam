@@ -597,6 +597,10 @@ function M.count(m, x)
     return nil
   end
   if x.kind == 'fn' then
+    -- a value is read, never called: only what it calls
+    if m.graph.nodes[x.id].kind == 'value' then
+      return ('calls %d'):format(#data.calls(m, x.id))
+    end
     local callers, tests = data.callers(m, x.id)
     return ('called by %d, calls %d'):format(#callers + #tests, #data.calls(m, x.id))
   elseif x.kind == 'type' then

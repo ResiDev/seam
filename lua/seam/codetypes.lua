@@ -153,6 +153,11 @@ local function fn_at(path, line)
     if FN[x:type()] then
       return x
     end
+    -- a value is no function, whatever functions it holds, as in seam.written
+    if x:type() == 'variable_declarator' then
+      local v = field(x, 'value')
+      return fn_value(v) and v or nil
+    end
     for ch in x:iter_children() do
       if ch:named() then
         local f = first(ch)
@@ -165,9 +170,56 @@ local function fn_at(path, line)
   return n and first(n), src
 end
 
+-- the declarator of value `name` on `line`
+local function value_at(path, line, name)
+  local root, src = names.tree(path)
+  if not root then
+    return nil
+  end
+  for c in root:iter_children() do
+    local d = c:type() == 'export_statement' and field(c, 'declaration') or c
+    if d and (d:type() == 'lexical_declaration' or d:type() == 'variable_declaration') then
+      for v in d:iter_children() do
+        local nm = v:type() == 'variable_declarator' and field(v, 'name')
+        if nm and nm:start() + 1 == line and text(nm, src) == name then
+          return v, src
+        end
+      end
+    end
+  end
+end
+
+-- a value's display: `name  Type`, then each function it holds by its key,
+-- `perform` of `register({ perform() {} })`, the same way as inside a function
+local function value_rows(m, path, out, d, src)
+  local nm = field(d, 'name')
+  local l, c = nm:start()
+  local t = names.binding_type(m, path, l + 1, c)
+  out[#out + 1] = { kind = 'value', depth = 0, name = text(nm, src), type = t and t.text, line = l + 1, col = c }
+  local function walk(n)
+    for ch in n:iter_children() do
+      local v = ch:type() == 'pair' and field(ch, 'value')
+      if v and fn_value(v) then
+        out[#out + 1] = { kind = 'blank', depth = 1 }
+        fn_rows(m, path, out, v, text(field(ch, 'key'), src), 1)
+      elseif ch:type() == 'method_definition' and field(ch, 'name') then
+        out[#out + 1] = { kind = 'blank', depth = 1 }
+        fn_rows(m, path, out, ch, text(field(ch, 'name'), src), 1)
+      elseif not FN[ch:type()] and ch:named_child_count() > 0 then
+        walk(ch)
+      end
+    end
+  end
+  local v = field(d, 'value')
+  if v then
+    walk(v)
+  end
+end
+
 --- The types display of the function declared on `line` of `path`: its
 --- line, then each value it makes with its type in the order made, then
---- each function inside, a blank line before it, the same way.
+--- each function inside, a blank line before it, the same way. A value's:
+--- its `name  Type`, then each function it holds.
 ---@param m table
 ---@param path string
 ---@param line integer
@@ -178,6 +230,11 @@ function M.fn(m, path, line, name)
   local out = {}
   if f then
     fn_rows(m, path, out, f, name, 0)
+  else
+    local d, src = value_at(path, line, name)
+    if d then
+      value_rows(m, path, out, d, src)
+    end
   end
   return out
 end

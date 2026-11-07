@@ -78,8 +78,9 @@ local function block_end(rows, i)
   return j
 end
 
--- the functions gone from an open file, each after the one before it at `from`
-local function gone_fns(m, rows, i, C, put)
+-- the functions gone from an open file, each after the one before it at
+-- `from`, when the files list functions
+local function gone_fns(m, rows, i, C, put, shows)
   local x = rows[i]
   local f = changes.file(C, x.path)
   if not f then
@@ -97,7 +98,7 @@ local function gone_fns(m, rows, i, C, put)
     local c = f.by[d.name]
     if at[d.name] then
       after = at[d.name]
-    elseif c.state == 'gone' and (d.kind == 'fn' or d.kind == 'class') then
+    elseif c.state == 'gone' and (d.kind == 'fn' or d.kind == 'class') and shows.f then
       put(after, {
         key = x.key .. '\n-' .. d.name,
         kind = 'gone',
@@ -149,8 +150,9 @@ end
 ---@param m table
 ---@param rows seam.ORow[]
 ---@param only? boolean
+---@param shows table<string, boolean> what a file lists (seam.outline), a gone function only when it lists functions
 ---@return seam.ORow[]
-function M.decorate(m, rows, only)
+function M.decorate(m, rows, only, shows)
   local C = changes.get()
   if not (C and #C.list > 0) then
     return only and {} or rows
@@ -164,7 +166,7 @@ function M.decorate(m, rows, only)
   if tree then
     for i, x in ipairs(rows) do
       if x.kind == 'file' and x.open then
-        gone_fns(m, rows, i, C, put)
+        gone_fns(m, rows, i, C, put, shows)
       end
     end
     for _, p in ipairs(C.list) do

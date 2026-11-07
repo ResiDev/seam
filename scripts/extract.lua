@@ -412,6 +412,10 @@ for _, path in ipairs(files) do
     if kind == 'function' and lang == 'tsx' and name:match '^%u' then
       kind = 'component'
     end
+    -- `const Status = {…}; type Status = …`: the value keeps the name, its calls its own
+    if f.top[name] and (kind == 'type' or kind == 'interface') then
+      return
+    end
     f.top[name] = { node = n, decl = decl, kind = kind, span = span or decl }
   end
 

@@ -489,7 +489,8 @@ function M.find(rows, key)
 end
 
 --- Open the folders and the file down to `target`, a node id or a file's
---- path, and put the cursor on it, in whichever order. False when the tree
+--- path, and put the cursor on it, in whichever order; a function or value
+--- of a kind the files do not list, that kind listed too. False when the tree
 --- has no row for it.
 ---@param m table
 ---@param o seam.Outline
@@ -513,6 +514,8 @@ function M.reveal(m, o, target)
   end
   if node then
     o.open['f:' .. path] = true
+    -- asked for by name, its kind is listed from now on
+    o.shows[KIND_KEY[node.kind]] = true
   end
   o.cursor = key
   return true
