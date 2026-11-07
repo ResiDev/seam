@@ -227,6 +227,12 @@ end
 
 ---------------------------------------------------------------- the displays
 
+-- what each side of the folder and type displays is to the row, over it:
+-- above or left, below or right
+local function side_labels(x)
+  return x.kind == 'type' and { 'made by', 'taken by' } or { 'calls', 'called by' }
+end
+
 -- folder with T off: today's both ways, names only, each side by folder
 -- and file
 local function names_display(x, m, ctx, top, bottom, centre)
@@ -266,7 +272,7 @@ local function names_display(x, m, ctx, top, bottom, centre)
   local rl, rr = both.rooms(need(left), need(right), w, cw)
   local L = both.side(left, rl, { budget = budget(ctx), open = s.open, side = 'left' })
   local R = both.side(right, rr, { budget = budget(ctx), open = s.open, side = 'right' })
-  return both.draw(L, R, centre)
+  return both.draw(L, R, centre, side_labels(x))
 end
 
 -- what a type's head stands for: the first type of the repo it names
@@ -376,9 +382,9 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
       end)
       local head
       if by == 'type' then
-        head = grp.key == 'void' and { { 'nothing', 'SeamLabel' } }
-          or grp.key == '?' and { { '?', 'SeamLabel' } }
-          or tsegs(grp.key, false, type_hit(m, grp.key))
+        head = grp.key == 'void' and { { 'gives nothing', 'SeamLabel' } }
+          or grp.key == '?' and { { 'gives what no signature says', 'SeamLabel' } }
+          or cat({ { 'gives ', 'SeamLabel', type_hit(m, grp.key) } }, tsegs(grp.key, false, type_hit(m, grp.key)))
       else
         head = { { folder_text(grp.key), 'SeamBold', grp.dir and { kind = 'dir', path = grp.dir } or nil } }
       end
@@ -425,7 +431,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   else
     centre = { segs = { { centre_name, x.kind == 'type' and 'SeamTypeBold' or 'SeamBold' } } }
   end
-  return flow.draw(groups(top, true), centre, groups(bottom, false), { width = ctx.width - 2, height = budget(ctx), open = s.open })
+  return flow.draw(groups(top, true), centre, groups(bottom, false), { width = ctx.width - 2, height = budget(ctx), open = s.open, labels = side_labels(x) })
 end
 
 -- where a row holds a line of the code: in a function's lines, in its

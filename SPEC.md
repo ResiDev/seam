@@ -866,6 +866,13 @@ Filled 2026-11-01, drawn to be looked at (`design/mocks/src/map/ideas.py`, round
   slow on a big type and not worth it.
 - **A type's tree opens its boxes with `+`** (`mapz-type-tree-open.png`).
 
+- **Each side says what it is to the row** (decided 2026-11-07; drawn
+  in seam and kept as the pictures, `design/mocks/map16-labels-*.png`).
+  Over the left side, or above, `calls`, a type's `made by`; over the
+  right, or below, `called by`, a type's `taken by`; the words the pane's
+  head counts with. In type, each head says `gives` before its type,
+  `gives nothing`, so a head is never a bare type to guess at.
+
 ### 7. The Code view and the code screen
 
 7a. **A value's type where none is written.**
