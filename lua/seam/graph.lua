@@ -6,7 +6,7 @@ local M = {}
 ---@class seam.Node
 ---@field id string 'path:line:name'; a file's top is 'path:0:'
 ---@field name string
----@field kind 'function'|'component'|'class'|'module'
+---@field kind 'function'|'component'|'class'|'value'|'module'
 ---@field path string
 ---@field line integer
 ---@field end_line integer

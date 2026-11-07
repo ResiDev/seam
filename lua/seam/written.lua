@@ -34,6 +34,11 @@ local function first_fn(n)
   if FN[n:type()] then
     return n
   end
+  -- a value is no function, whatever functions it holds: `register({ perform() {} })`
+  if n:type() == 'variable_declarator' then
+    local v = field(n, 'value')
+    return v and FN[v:type()] and v or nil
+  end
   for c in n:iter_children() do
     if c:named() then
       local f = first_fn(c)

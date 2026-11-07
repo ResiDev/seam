@@ -296,5 +296,54 @@ do
   eq(ids(picker.fuzzy(all, 'zzz')), {}, 'nothing matches')
 end
 
+-- f t v: what a file lists. k.ts declares a type T on line 1, a value v on
+-- line 3 that calls kf, and kf on line 5; functions alone at first
+do
+  local KV, KF = 'pk/k.ts:3:v', 'pk/k.ts:5:kf'
+  local mk = {
+    graph = index.graph { node(KV, 'value', { { KF, 3, 12 } }), node(KF) },
+    exports = {},
+    ispkg = { pk = true },
+    pkgsorted = { 'pk' },
+    pkgcache = {},
+  }
+  package.loaded['seam.written'] = {
+    types = function(path)
+      return path == 'pk/k.ts' and { { name = 'T', kind = 'type', path = path, line = 1, end_line = 1 } } or {}
+    end,
+  }
+  local ko = outline.new()
+  ko.open['f:pk/k.ts'] = true
+  local function listed()
+    return keys(outline.rows(mk, ko))
+  end
+  eq(listed(), { 'd:pk', 'f:pk/k.ts', k('f:pk/k.ts', KF) }, 'functions alone: the tree as it was')
+  eq(outline.shows_word(ko), nil, 'functions alone says nothing')
+  local krows = outline.rows(mk, ko)
+  eq(outline.key(mk, ko, krows, 3, 't'), 'redraw', 't redraws')
+  eq(listed(), { 'd:pk', 'f:pk/k.ts', k('f:pk/k.ts', 'type:T'), k('f:pk/k.ts', KF) }, 't: the type, in the file order')
+  outline.key(mk, ko, outline.rows(mk, ko), 3, 'v')
+  krows = outline.rows(mk, ko)
+  eq(keys(krows), { 'd:pk', 'f:pk/k.ts', k('f:pk/k.ts', 'type:T'), k('f:pk/k.ts', KV), k('f:pk/k.ts', KF) }, 'v: the value too')
+  eq(outline.shows_word(ko), 'functions · types · values', 'what is on, in words')
+  local t = row(krows, k('f:pk/k.ts', 'type:T'))
+  eq({ t.kind, t.can_open, t.name, t.decl_kind }, { 'type', false, 'T', 'type' }, 'a type row does not open')
+  local vr, vi = row(krows, k('f:pk/k.ts', KV))
+  eq({ vr.kind, vr.can_open }, { 'fn', true }, 'a value opens, as a function does')
+  outline.key(mk, ko, krows, vi, 'l')
+  eq(keys(outline.rows(mk, ko))[5], k('f:pk/k.ts', KV, KF), 'a value opens to what it calls')
+  -- v off with the cursor on the value's call: back to the file
+  krows = outline.rows(mk, ko)
+  local _, ci = row(krows, k('f:pk/k.ts', KV, KF))
+  outline.key(mk, ko, krows, ci, 'v')
+  eq(ko.cursor, 'f:pk/k.ts', 'a row no longer shown leaves the cursor on the nearest above it')
+  outline.key(mk, ko, outline.rows(mk, ko), 1, 'f')
+  outline.key(mk, ko, outline.rows(mk, ko), 1, 't')
+  eq(outline.shows_word(ko), 'nothing', 'all off')
+  eq(row(outline.rows(mk, ko), 'f:pk/k.ts').can_open, false, 'a file listing nothing does not open')
+  eq(#outline.functions(mk, 'pk/k.ts'), 1, 'its functions are not its values')
+  package.loaded['seam.written'] = nil
+end
+
 io.stdout:write(('outline: %d checks, %d failures\n'):format(checks, #failures))
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')

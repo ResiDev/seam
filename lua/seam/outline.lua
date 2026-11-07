@@ -1,5 +1,6 @@
--- The tree as data, no windows: folders, files, each file's functions in
--- the file's order, and what each function calls, opened a level at a time
+-- The tree as data, no windows: folders, files, what each file declares at
+-- its top in the file's order, its functions, types and values as `shows`
+-- has them, and what each function or value calls, opened a level at a time
 -- in the order first written; or the same tree with each level the most used
 -- or the most calling first. The state is `st.outline`.
 local data = require 'seam.map.data'
@@ -12,10 +13,11 @@ local M = {}
 ---@field order 'tree'|'used'|'calls'
 ---@field open table<string, boolean> a row's key -> opened (true) or closed (false); nil is its default
 ---@field cursor string|nil the key of the row under the cursor
+---@field shows table<string, boolean> what a file lists, by M.KINDS key: `f` functions, `t` types, `v` values
 
 ---@class seam.ORow
 ---@field key string 'd:<path>' | 'f:<path>' | 'f:<path>\n<id>\n<id>...' (the node ids from the file down)
----@field kind 'dir'|'file'|'fn'
+---@field kind 'dir'|'file'|'fn'|'type' a function's or value's node is 'fn', a type the file declares 'type'
 ---@field depth integer
 ---@field path string
 ---@field item table|nil the tree.walk item of a folder or file
@@ -33,9 +35,36 @@ local M = {}
 
 M.ORDERS = { 'tree', 'used', 'calls' }
 
+--- What a file can list, each on or off on its key: its functions,
+--- components and classes; the types it declares; its values.
+M.KINDS = {
+  { key = 'f', word = 'functions' },
+  { key = 't', word = 'types' },
+  { key = 'v', word = 'values' },
+}
+-- a node's kind -> its M.KINDS key
+local KIND_KEY = { ['function'] = 'f', component = 'f', class = 'f', value = 'v' }
+
 ---@return seam.Outline
 function M.new()
-  return { order = 'tree', open = {} }
+  return { order = 'tree', open = {}, shows = { f = true } }
+end
+
+--- What `o` lists, in words, when it is not functions alone: `types ·
+--- values`, `nothing`; nil for functions alone.
+---@param o seam.Outline
+---@return string|nil
+function M.shows_word(o)
+  local on = {}
+  for _, k in ipairs(M.KINDS) do
+    if o.shows[k.key] then
+      on[#on + 1] = k.word
+    end
+  end
+  if #on == 1 and o.shows.f then
+    return nil
+  end
+  return #on == 0 and 'nothing' or table.concat(on, ' · ')
 end
 
 --- Each file's nodes by line, the file's top (a module node) first.
@@ -65,9 +94,39 @@ end
 function M.functions(m, path)
   local out = {}
   for _, n in ipairs(m.graph and M.by_file(m.graph)[path] or {}) do
-    if n.kind ~= 'module' then
+    if KIND_KEY[n.kind] == 'f' then
       out[#out + 1] = n
     end
+  end
+  return out
+end
+
+---@class seam.Listed
+---@field node table|nil a function's or value's node
+---@field type table|nil a type the file declares (seam.written.types)
+---@field line integer
+
+--- What a file lists under `shows`, in the file's order.
+---@param m table
+---@param path string
+---@param shows table<string, boolean>
+---@return seam.Listed[]
+function M.listed(m, path, shows)
+  local out = {}
+  for _, n in ipairs(m.graph and M.by_file(m.graph)[path] or {}) do
+    if shows[KIND_KEY[n.kind]] then
+      out[#out + 1] = { node = n, line = n.line }
+    end
+  end
+  if shows.t then
+    for _, d in ipairs(require('seam.written').types(path)) do
+      if d.kind ~= 'class' then
+        out[#out + 1] = { type = d, line = d.line }
+      end
+    end
+    table.sort(out, function(a, b)
+      return a.line < b.line
+    end)
   end
   return out
 end
@@ -353,11 +412,11 @@ function M.rows(m, o)
       skip = nil
       local key = (it.kind == 'dir' and 'd:' or 'f:') .. it.path
       local row = { key = key, kind = it.kind, depth = it.depth, path = it.path, item = it, seen = false }
-      local fns = it.kind == 'file' and M.functions(m, it.path) or {}
+      local fns = it.kind == 'file' and M.listed(m, it.path, o.shows) or {}
       if fan then
         row.used, row.calls = M.count(fan, fan_key(it))
-        fns = most_first(fns, fan, o.order, function(n)
-          return n.id
+        fns = most_first(fns, fan, o.order, function(e)
+          return e.node and e.node.id or ''
         end)
       end
       if it.kind == 'dir' then
@@ -378,8 +437,25 @@ function M.rows(m, o)
       if not row.open then
         skip = it.depth
       else
-        for _, n in ipairs(fns) do
-          fn_rows(out, m, o, key .. '\n' .. n.id, n.id, it.depth + 1, nil, {})
+        for _, e in ipairs(fns) do
+          if e.node then
+            fn_rows(out, m, o, key .. '\n' .. e.node.id, e.node.id, it.depth + 1, nil, {})
+          else
+            local d = e.type
+            out[#out + 1] = {
+              key = key .. '\ntype:' .. d.name,
+              kind = 'type',
+              depth = it.depth + 1,
+              path = d.path,
+              name = d.name,
+              line = d.line,
+              end_line = d.end_line,
+              decl_kind = d.kind,
+              can_open = false,
+              open = false,
+              seen = false,
+            }
+          end
         end
       end
     end
@@ -444,16 +520,29 @@ end
 
 --- What a key does to the outline, the cursor on row `i` of `rows`: `l`
 --- opens the row, or goes into it when open; `h` closes it, or goes to the
---- row it hangs from; `s` the next order. Says what the screen does next:
+--- row it hangs from; `s` the next order; `f` `t` `v` a kind a file lists
+--- on or off (M.KINDS). Says what the screen does next:
 --- draw the rows again, or move the cursor to `o.cursor`.
 ---@param m table
 ---@param o seam.Outline
 ---@param rows seam.ORow[]
 ---@param i integer
----@param k 'l'|'h'|'s'
+---@param k 'l'|'h'|'s'|'f'|'t'|'v'
 ---@return 'redraw'|'move'|nil
 function M.key(m, o, rows, i, k)
   local row = rows[i]
+  for _, kd in ipairs(M.KINDS) do
+    if k == kd.key then
+      o.shows[k] = not o.shows[k]
+      -- the cursor on its row, else on the nearest above it still shown
+      local after, j = M.rows(m, o), row and i
+      while j and not M.find(after, rows[j].key) do
+        j = M.parent(rows, j)
+      end
+      o.cursor = j and rows[j].key or o.cursor
+      return 'redraw'
+    end
+  end
   if k == 's' then
     local at = vim.fn.index(M.ORDERS, o.order) + 1
     o.order = M.ORDERS[at % #M.ORDERS + 1]

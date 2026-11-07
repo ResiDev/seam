@@ -75,7 +75,13 @@ end
 local function name_row(m, e, n)
   if n.kind == 'call' then
     local node = m.graph.nodes[n.id]
-    return { kind = 'fn', id = n.id, path = node.path, key = 'f:' .. node.path .. '\n' .. n.id, note = not n.declares and ('called at line ' .. n.line) or nil }
+    return {
+      kind = 'fn',
+      id = n.id,
+      path = node.path,
+      key = 'f:' .. node.path .. '\n' .. n.id,
+      note = not n.declares and ((node.kind == 'value' and 'used' or 'called') .. ' at line ' .. n.line) or nil,
+    }
   elseif n.kind == 'type' then
     return type_row(n.decl)
   elseif n.kind == 'file' then

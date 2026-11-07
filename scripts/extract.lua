@@ -2,8 +2,8 @@
 -- The treesitter index of a TypeScript repo: every export, the files that
 -- use it and the names it is built from, resolved through relative paths,
 -- every tsconfig's `paths` and workspace packages by name; and the call
--- graph: each function, component and class, and each file's top, with the
--- callables it names; and each name taken from a library, a package from
+-- graph: each function, component and class, each top-level value, and each
+-- file's top, with the callables it names; and each name taken from a library, a package from
 -- outside the repo, with every place it is named.
 local repo, out = arg[1], arg[2]
 local site = vim.fn.stdpath 'data' .. '/site/parser/'
@@ -841,13 +841,14 @@ for path, f in pairs(F) do
     return out
   end
   for name, t in pairs(f.top) do
-    if CALLABLE[t.kind] then
+    local kind = CALLABLE[t.kind] and t.kind or t.kind == 'const' and 'value'
+    if kind then
       local s = t.span
       local id = path .. ':' .. t.line .. ':' .. name
       NODES[#NODES + 1] = {
         id = id,
         name = name,
-        kind = t.kind,
+        kind = kind,
         path = path,
         line = t.line,
         end_line = t.end_line,
@@ -856,13 +857,15 @@ for path, f in pairs(F) do
       }
     end
   end
-  -- the file's top: what runs when it loads, outside every callable
+  -- the file's top: what runs when it loads, outside every callable and
+  -- every value; a destructuring's calls are its own
   local calls = {}
   local function owns(decl)
     if decl:type() == 'lexical_declaration' or decl:type() == 'variable_declaration' then
       for d in decl:iter_children() do
-        local v = d:type() == 'variable_declarator' and d:field('value')[1]
-        if v and not (v:type() == 'arrow_function' or v:type() == 'function_expression' or v:type() == 'function') then
+        local n = d:type() == 'variable_declarator' and d:field('name')[1]
+        local v = n and n:type() ~= 'identifier' and d:field('value')[1]
+        if v then
           calls_in(v, calls)
         end
       end
@@ -928,7 +931,7 @@ table.sort(NODES, function(a, b)
 end)
 fh:write(vim.json.encode {
   source = 'treesitter',
-  version = 7,
+  version = 8,
   repo = repo,
   ms = timing,
   packages = pkgs,

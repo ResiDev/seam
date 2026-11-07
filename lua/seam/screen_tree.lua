@@ -340,6 +340,7 @@ function M.all_keys()
       'The tree',
       {
         { 's', 'order: by folder, most used, most calling' },
+        { 'f t v', 'what a file lists: its functions, types, values, each on or off' },
         { '/', 'search the names' },
         { 'gc', 'only what changed, and back' },
         { ']c [c', 'the next and previous change' },
@@ -371,6 +372,10 @@ function M.status()
     if v then
       left = left .. '  ' .. v.name:lower() .. (#views.displays(v, px) > 1 and ' · ' .. d or '') .. require('seam.map.keys').status(pane.inside())
     end
+  end
+  local shows = outline.shows_word(st.outline)
+  if shows then
+    left = shows .. '   ' .. left
   end
   if st.outline.only_changed then
     left = 'only what changed   ' .. left
@@ -432,7 +437,7 @@ local function tree_keys(buf)
     S().close()
   end, o(buf))
   S().goto_keys(buf)
-  for _, k in ipairs { 'l', 'h', 's' } do
+  for _, k in ipairs { 'l', 'h', 's', 'f', 't', 'v' } do
     vim.keymap.set('n', k, press(k), o(buf))
   end
   for _, k in ipairs { '<C-d>', '<C-u>', '<C-e>', '<C-y>' } do

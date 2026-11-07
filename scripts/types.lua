@@ -37,7 +37,7 @@ end
 
 local byfile = {}
 for _, n in ipairs(nodes) do
-  if n.kind ~= 'module' then
+  if n.kind ~= 'module' and n.kind ~= 'value' then
     byfile[n.path] = byfile[n.path] or {}
     table.insert(byfile[n.path], n)
   end
