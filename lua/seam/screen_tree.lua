@@ -199,6 +199,19 @@ function M.show_type(name, view)
   return true
 end
 
+--- Back from a type shown in the pane to the tree's row, drawn now:
+--- false when none is shown.
+---@return boolean
+function M.back()
+  if not st.ptype then
+    return false
+  end
+  st.ptype = nil
+  moved()
+  pane.flush()
+  return true
+end
+
 --- `gc`: only the rows that changed in the range, and the folders and
 --- files above them; again, every row.
 function M.only_changed()

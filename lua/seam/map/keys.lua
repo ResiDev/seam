@@ -1,6 +1,6 @@
 -- The Map's keys in the pane: l opens a group closed to fit, or shows a name
--- in the tree; T each signature or names only, by folder; J the code
--- screen on the name. What
+-- in the tree; h on the head of one l opened closes it again, else from a
+-- type l showed back to the row; T each signature or names only, by folder; J the code screen on the name. What
 -- is under the cursor, for them and the status line.
 local api = vim.api
 local data = require 'seam.map.data'
@@ -76,7 +76,7 @@ local function typed_display(_, d)
 end
 
 --- What each of the Map's keys would do where the pane's cursor is, nil where nothing.
----@return { l: string|nil, T: boolean, J: table|nil }
+---@return { l: string|nil, h: 'close'|'back'|nil, T: boolean, J: table|nil }
 function M.acts()
   local x, d = shown()
   local out = { T = false }
@@ -86,6 +86,7 @@ function M.acts()
   local m = index.model()
   out.T = typed_display(x, d)
   local it = M.under()
+  out.h = st.screen == 'tree' and st.ptype and st.ptype.pane_at and 'back' or nil
   if not it then
     return out
   end
@@ -94,6 +95,7 @@ function M.acts()
   elseif it.kind == 'fn' or it.kind == 'file' or (it.kind == 'dir' and it.path) or (it.kind == 'type' and m.flows[it.name]) then
     out.l = 'show'
   end
+  out.h = it.opened and 'close' or out.h
   if it.id and m.graph.nodes[it.id] and m.graph.nodes[it.id].kind ~= 'module' then
     out.J = { kind = 'fn', id = it.id }
   elseif it.kind == 'file' and it.path then
@@ -102,20 +104,39 @@ function M.acts()
   return out
 end
 
--- the row the thing under the cursor has in the tree, shown there
+-- the row the thing under the cursor has in the tree, shown there; a
+-- type in the pane, h going back to where the pane's cursor was
 local function show_in_tree(it)
   local scr = require 'seam.screen_tree'
   if st.screen ~= 'tree' then
     return
   end
   if it.kind == 'type' then
-    scr.show_type(it.name, 'Map')
+    local at = api.nvim_win_get_cursor(require('seam.pane').wins().pane)
+    if scr.show_type(it.name, 'Map') then
+      st.ptype.pane_at = at
+    end
   else
     scr.reveal(it.id or it.path)
   end
 end
 
---- A Map key, `l` `T` or `J`, where the pane's cursor is: true when it acted.
+-- the pane's cursor on the piece standing for `field` = `key` after a
+-- redraw, which moves a group when both ways centre on the row
+local function cursor_to(field, key)
+  local w = require('seam.pane').wins()
+  local buf = api.nvim_win_get_buf(w.pane)
+  for l = 1, api.nvim_buf_line_count(buf) do
+    for _, h in ipairs(draw.meta(buf, l).hits or {}) do
+      if h.item[field] == key then
+        api.nvim_win_set_cursor(w.pane, { l, h.s })
+        return
+      end
+    end
+  end
+end
+
+--- A Map key, `l` `h` `T` or `J`, where the pane's cursor is: true when it acted.
 ---@param k string
 ---@return boolean
 function M.key(k)
@@ -128,6 +149,20 @@ function M.key(k)
   local it = M.under() or {}
   if k == 'l' and a.l == 'open' then
     s.open[it.fold] = true
+    require('seam.pane').redraw()
+    cursor_to('opened', it.fold)
+    return true
+  elseif k == 'h' and a.h == 'close' then
+    s.open[it.opened] = nil
+    require('seam.pane').redraw()
+    cursor_to('fold', it.opened)
+    return true
+  elseif k == 'h' and a.h == 'back' then
+    local at = st.ptype.pane_at
+    require('seam.screen_tree').back()
+    local w = require('seam.pane').wins()
+    pcall(api.nvim_win_set_cursor, w.pane, at)
+    return true
   elseif k == 'l' and a.l == 'show' then
     show_in_tree(it)
     return true
@@ -154,6 +189,9 @@ function M.hints()
   local a, out = M.acts(), {}
   if a.l then
     out[#out + 1] = a.l == 'open' and { 'l', 'open' } or { 'l', 'show' }
+  end
+  if a.h then
+    out[#out + 1] = { 'h', a.h }
   end
   if a.T then
     out[#out + 1] = 'T'

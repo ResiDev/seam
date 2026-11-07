@@ -1,6 +1,6 @@
 -- Which of the Map's groups close, each to its one line, so a side fits
 -- the room it has: the ones with the fewest names first, never one opened
--- by hand. Pure.
+-- by hand; and the head of one opened by hand, which h closes. Pure.
 local M = {}
 
 ---@class seam.FoldGroup
@@ -52,6 +52,23 @@ function M.closed(groups, room, opened)
       out[g.key] = nil
       total = total + g.lines - 1
     end
+  end
+  return out
+end
+
+--- The head of a group opened by hand: its pieces, each standing also for
+--- closing it with h, by `key`.
+---@param segs table[]
+---@param key string
+---@return table[]
+function M.head(segs, key)
+  local out = {}
+  for i, s in ipairs(segs) do
+    local hit = { opened = key }
+    for k, v in pairs(s[3] or {}) do
+      hit[k] = v
+    end
+    out[i] = { s[1], s[2], hit }
   end
   return out
 end
