@@ -13,7 +13,7 @@ local M = {}
 ---@field order 'tree'|'used'|'calls'
 ---@field open table<string, boolean> a row's key -> opened (true) or closed (false); nil is its default
 ---@field cursor string|nil the key of the row under the cursor
----@field shows table<string, boolean> what a file lists, by M.KINDS key: `f` functions, `t` types, `v` values
+---@field shows table<string, boolean> what a file lists, by M.SHOWS key: `f` functions, `t` types, `v` values, `e` its exports alone
 
 ---@class seam.ORow
 ---@field key string 'd:<path>' | 'f:<path>' | 'f:<path>\n<id>\n<id>...' (the node ids from the file down)
@@ -36,13 +36,15 @@ local M = {}
 M.ORDERS = { 'tree', 'used', 'calls' }
 
 --- What a file can list, each on or off on its key: its functions,
---- components and classes; the types it declares; its values.
-M.KINDS = {
+--- components and classes; the types it declares; its values; and of
+--- those, its exports alone.
+M.SHOWS = {
   { key = 'f', word = 'functions' },
   { key = 't', word = 'types' },
   { key = 'v', word = 'values' },
+  { key = 'e', word = 'exports only' },
 }
--- a node's kind -> its M.KINDS key
+-- a node's kind -> its M.SHOWS key
 local KIND_KEY = { ['function'] = 'f', component = 'f', class = 'f', value = 'v' }
 
 ---@return seam.Outline
@@ -50,21 +52,35 @@ function M.new()
   return { order = 'tree', open = {}, shows = { f = true } }
 end
 
---- What `o` lists, in words, when it is not functions alone: `types ·
---- values`, `nothing`; nil for functions alone.
+--- What `o` lists, in words, when it is not every function: `types ·
+--- values`, `functions · exports only`, `nothing`; nil for every function.
 ---@param o seam.Outline
 ---@return string|nil
 function M.shows_word(o)
+  local sh = o.shows
+  if not (sh.f or sh.t or sh.v) then
+    return 'nothing'
+  end
   local on = {}
-  for _, k in ipairs(M.KINDS) do
-    if o.shows[k.key] then
+  for _, k in ipairs(M.SHOWS) do
+    if sh[k.key] then
       on[#on + 1] = k.word
     end
   end
-  if #on == 1 and o.shows.f then
-    return nil
+  return not (#on == 1 and sh.f) and table.concat(on, ' · ') or nil
+end
+
+-- the names each file exports, path -> name -> true, once for a model
+local function exported(m)
+  if not m.exported_by_path then
+    local t = {}
+    for _, e in ipairs(m.exports or {}) do
+      t[e.path] = t[e.path] or {}
+      t[e.path][e.name] = true
+    end
+    m.exported_by_path = t
   end
-  return #on == 0 and 'nothing' or table.concat(on, ' · ')
+  return m.exported_by_path
 end
 
 --- Each file's nodes by line, the file's top (a module node) first.
@@ -114,13 +130,14 @@ end
 function M.listed(m, path, shows)
   local out = {}
   for _, n in ipairs(m.graph and M.by_file(m.graph)[path] or {}) do
-    if shows[KIND_KEY[n.kind]] then
+    if shows[KIND_KEY[n.kind]] and (n.exported or not shows.e) then
       out[#out + 1] = { node = n, line = n.line }
     end
   end
   if shows.t then
+    local ex = exported(m)[path] or {}
     for _, d in ipairs(require('seam.written').types(path)) do
-      if d.kind ~= 'class' then
+      if d.kind ~= 'class' and (d.exported or ex[d.name] or not shows.e) then
         out[#out + 1] = { type = d, line = d.line }
       end
     end
@@ -490,7 +507,8 @@ end
 
 --- Open the folders and the file down to `target`, a node id or a file's
 --- path, and put the cursor on it, in whichever order; a function or value
---- of a kind the files do not list, that kind listed too. False when the tree
+--- of a kind the files do not list, that kind listed too, and one kept to
+--- its file, not exports only. False when the tree
 --- has no row for it.
 ---@param m table
 ---@param o seam.Outline
@@ -514,8 +532,11 @@ function M.reveal(m, o, target)
   end
   if node then
     o.open['f:' .. path] = true
-    -- asked for by name, its kind is listed from now on
+    -- asked for by name, its kind is listed from now on, and kept ones too
     o.shows[KIND_KEY[node.kind]] = true
+    if not node.exported then
+      o.shows.e = nil
+    end
   end
   o.cursor = key
   return true
@@ -524,17 +545,17 @@ end
 --- What a key does to the outline, the cursor on row `i` of `rows`: `l`
 --- opens the row, or goes into it when open; `h` closes it, or goes to the
 --- row it hangs from; `s` the next order; `f` `t` `v` a kind a file lists
---- on or off (M.KINDS). Says what the screen does next:
+--- on or off, or exports only (M.SHOWS). Says what the screen does next:
 --- draw the rows again, or move the cursor to `o.cursor`.
 ---@param m table
 ---@param o seam.Outline
 ---@param rows seam.ORow[]
 ---@param i integer
----@param k 'l'|'h'|'s'|'f'|'t'|'v'
+---@param k 'l'|'h'|'s'|'f'|'t'|'v'|'e'
 ---@return 'redraw'|'move'|nil
 function M.key(m, o, rows, i, k)
   local row = rows[i]
-  for _, kd in ipairs(M.KINDS) do
+  for _, kd in ipairs(M.SHOWS) do
     if k == kd.key then
       o.shows[k] = not o.shows[k]
       -- the cursor on its row, else on the nearest above it still shown

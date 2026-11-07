@@ -350,5 +350,50 @@ do
   package.loaded['seam.written'] = nil
 end
 
+-- e: a file's exports only. x.ts exports xf (line 1), which calls kf, and
+-- type XT (by an export list, `export { XT }`); keeps kf (line 5) and type
+-- KT to itself
+do
+  local XF, KF = 'px/x.ts:1:xf', 'px/x.ts:5:kf'
+  local xf, kf = node(XF, nil, { { KF, 2, 3 } }), node(KF)
+  xf.exported = true
+  local mx = {
+    graph = index.graph { xf, kf },
+    exports = { { name = 'xf', path = 'px/x.ts', line = 1 }, { name = 'XT', path = 'px/x.ts', line = 3 } },
+    ispkg = { px = true },
+    pkgsorted = { 'px' },
+    pkgcache = {},
+  }
+  package.loaded['seam.written'] = {
+    types = function()
+      return {
+        { name = 'XT', kind = 'type', path = 'px/x.ts', line = 3, end_line = 3 },
+        { name = 'KT', kind = 'type', path = 'px/x.ts', line = 8, end_line = 8 },
+      }
+    end,
+  }
+  local xo = outline.new()
+  xo.open['f:px/x.ts'] = true
+  xo.shows.t = true
+  outline.key(mx, xo, outline.rows(mx, xo), 1, 'e')
+  local xrows = outline.rows(mx, xo)
+  eq(keys(xrows), { 'd:px', 'f:px/x.ts', k('f:px/x.ts', XF), k('f:px/x.ts', 'type:XT') }, 'e: the exports alone, an export list counted')
+  eq(outline.shows_word(xo), 'functions · types · exports only', 'e in words')
+  xo.shows.t = false
+  eq(outline.shows_word(xo), 'functions · exports only', 'e with functions alone says so')
+  outline.key(mx, xo, outline.rows(mx, xo), 1, 'e')
+  eq(outline.shows_word(xo), nil, 'e again: every function, nothing said')
+  -- a kept function revealed by name while exports only: all of the file again
+  xo.shows.e = true
+  outline.reveal(mx, xo, KF)
+  eq(outline.find(outline.rows(mx, xo), xo.cursor) ~= nil, true, 'a kept function revealed has its row')
+  eq(xo.shows.e, nil, 'and exports only is off')
+  -- under an exported function, its calls are all of them
+  xo.shows.e = true
+  xo.open[k('f:px/x.ts', XF)] = true
+  eq(keys(outline.rows(mx, xo)), { 'd:px', 'f:px/x.ts', k('f:px/x.ts', XF), k('f:px/x.ts', XF, KF) }, 'exports only: xf, and kf under it as its call')
+  package.loaded['seam.written'] = nil
+end
+
 io.stdout:write(('outline: %d checks, %d failures\n'):format(checks, #failures))
 vim.cmd(#failures == 0 and 'qa!' or 'cquit 1')
