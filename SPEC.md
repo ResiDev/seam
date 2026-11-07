@@ -1317,7 +1317,7 @@ tests/
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded
   map.lua           the Map's layouts on graphs written by hand: the facts, both ways, the flow, which groups close to fit
   lookup.lua        package types: the package from a path, the declaration around a position, a hover's code and type, the call that made a value, a type's hover flat; for real on the trial excalidraw with node_modules, skipped without it or a server
-  check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder, its groups closed to fit and l opening one
+  check_map.lua     the Map on a real repo: each display on a function, a file, a folder and a type, T on folder, its groups closed to fit, l opening one and h closing it
   check_changed.lua what changed on a real repo, in a git directory of its own that reads the repo's objects: the signs, gc, ]c [c, D's diff in Code and Types on both screens, the lens's range
   check.lua         every screen through its keys on a real repo, the foot on the Map and the Types view beside the tree, none on the code screen
 ```

@@ -270,7 +270,7 @@ function M.draw(top, centre, bottom, o)
         put_closed(cv, g, keys[g], x + 3, y)
         y = y + 1
       else
-        cv:seg(g.head, x + 3, y)
+        cv:seg((o.open or {})[keys[g]] and fold.head(g.head, keys[g]) or g.head, x + 3, y)
         y = y + 1
         for _, it in ipairs(g.items) do
           y = put_item(cv, it, ws_, x + 5, y, o.width)

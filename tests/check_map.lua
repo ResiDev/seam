@@ -98,10 +98,14 @@ return function(t)
     end
   end
   -- a side taller than its room: its smallest groups closed to a line, ▸,
-  -- each named; l on one opens it, and it stays open for the row. The room
+  -- each named; l on one opens it, it stays open for the row, and h on its
+  -- head closes it again; on a type's head l shows its Map, h comes back.
+  -- The room
   -- made small by the foot's share
+  local showed_type = false
   local function folds(what)
     t.where('map folds ' .. what)
+
     local foot = require 'seam.foot'
     local share = foot.SHARE
     foot.SHARE = 0.95
@@ -136,6 +140,29 @@ return function(t)
         end
         if after ~= n - 1 or not shown_open then
           fail(('%s %s: l on ▸ %s did not open it (%d closed, then %d)'):format(what, d, name, n, after))
+        end
+        -- the cursor follows the group, so h then l toggle it where it is
+        key 'h'
+        if closed() ~= n then
+          fail(('%s %s: h on the head of %s did not close it'):format(what, d, name))
+        end
+        key 'l'
+        if closed() ~= after then
+          fail(('%s %s: l after h did not open %s again'):format(what, d, name))
+        end
+        -- on a repo type's head, l shows its own Map and h comes back to it
+        local it = require('seam.map.keys').under()
+        if it and it.kind == 'type' and it.opened then
+          local back = api.nvim_win_get_cursor(st.owin.pane)
+          key 'l'
+          if not st.ptype then
+            fail(('%s %s: l on the head %s did not show its Map'):format(what, d, it.name))
+          end
+          key 'h'
+          if st.ptype or api.nvim_win_get_cursor(st.owin.pane)[1] ~= back[1] or closed() ~= after then
+            fail(('%s %s: h on %s did not come back to the row, on its head'):format(what, d, it.name))
+          end
+          showed_type = true
         end
         tree_win()
         key 'j'
@@ -182,6 +209,9 @@ return function(t)
         key 'k'
         displays('folder ' .. st.orows[j].key)
         folds('folder ' .. st.orows[j].key)
+        if not showed_type then
+          fail('folder ' .. st.orows[j].key .. ': no repo type head in its type display to show with l and come back from with h')
+        end
         break
       end
     end

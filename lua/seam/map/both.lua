@@ -115,7 +115,8 @@ function M.side(items, room, o)
     if shut[g.key] then
       out[#out + 1] = closed_line(g)
     else
-      out[#out + 1] = { segs = { { g.title, 'SeamBold', g.dir and { kind = 'dir', path = g.dir } or nil } }, join = false }
+      local head = { { g.title, 'SeamBold', g.dir and { kind = 'dir', path = g.dir } or nil } }
+      out[#out + 1] = { segs = (o.open or {})[g.key] and fold.head(head, g.key) or head, join = false }
       vim.list_extend(out, g.body)
     end
   end

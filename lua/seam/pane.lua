@@ -385,6 +385,7 @@ function M.all_keys(back)
       'The Map',
       {
         { 'l', 'open a group closed to fit, ▸; on a name, show it in the tree' },
+        { 'h', 'on the head of a group l opened, close it again; on a type l showed, back' },
         { 'T', 'folder: names only, or each signature; the choice stays' },
         { 'J', 'the code screen on the name under the cursor' },
       },
@@ -435,11 +436,11 @@ function M.keys(buf)
       require('seam.screen_code').back(vim.v.count1)
     end
   end, o(buf))
-  -- the Map's keys; elsewhere l moves as it does
+  -- the Map's keys; elsewhere h and l move as they do
   local mk = require 'seam.map.keys'
-  for _, k in ipairs { 'l', 'T', 'J' } do
+  for _, k in ipairs { 'l', 'h', 'T', 'J' } do
     vim.keymap.set('n', k, function()
-      if not mk.key(k) and k == 'l' then
+      if not mk.key(k) and (k == 'l' or k == 'h') then
         vim.cmd('normal! ' .. vim.v.count1 .. k)
       end
     end, o(buf))
