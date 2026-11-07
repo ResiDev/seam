@@ -133,6 +133,8 @@ local function tree_row(m, x)
   if x.kind == 'fn' then
     local node = m.graph.nodes[x.id]
     return row { at = { path = node.path, line = math.max(1, node.line), name = node.name } }
+  elseif x.kind == 'type' then
+    return row { at = { path = x.path, line = x.line, name = x.name } }
   end
   return row { kind = x.kind, path = x.path }
 end
@@ -163,6 +165,8 @@ function M.rows(buf, m, o, rows)
       fn_name(r, node, room, under, x.seen)
     elseif x.kind == 'gone' then
       r:add(trunc(M.name(m, x), room), 'SeamGone')
+    elseif x.kind == 'type' then
+      code.add_name(r, x.path, x.line, x.name, 'SeamType', room)
     else
       if x.can_open and not x.open then
         r:add('▸ ', 'SeamText')

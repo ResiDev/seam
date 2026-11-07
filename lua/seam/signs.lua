@@ -59,6 +59,9 @@ function M.of(m, x, C)
     return SIGN[C.files[x.path] or '']
   elseif x.kind == 'dir' then
     return dir_sign(m, C, outline.full(x.item))
+  elseif x.kind == 'type' then
+    local d = changes.decl(C, x.path, x.name)
+    return d and SIGN[d.state]
   end
   local id = M.top_id(x)
   local n = id and m.graph.nodes[id]

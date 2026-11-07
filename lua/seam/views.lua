@@ -55,6 +55,19 @@ local function typed(row)
   return row.kind ~= 'name' or row.as_type ~= nil
 end
 
+-- a value's row seen as its name where it is declared, as the code screen
+-- sees a name: its type as written, else as the TypeScript server says
+local function as_name(row, m)
+  local node = row.kind == 'fn' and m.graph and m.graph.nodes[row.id]
+  if not (node and node.kind == 'value') then
+    return row
+  end
+  local l = require('seam.code').file(node.path).lines[node.line] or ''
+  local s = l:find('%f[%w_$]' .. vim.pesc(node.name) .. '%f[^%w_$]')
+  local n = s and require('seam.names').at(m, node.path, node.line, s - 1)
+  return n and { kind = 'name', key = row.key, n = n, from = node.path, path = node.path } or row
+end
+
 ---@type seam.View[]
 M.list = {
   {
@@ -95,6 +108,7 @@ M.list = {
     end,
     draw = function(out, row, m, _, ctx)
       ctx.diff = changed_view.on()
+      row = as_name(row, m)
       if row.kind == 'name' then
         names_view.draw(out, row, m, ctx)
       else
