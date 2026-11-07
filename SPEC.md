@@ -331,6 +331,12 @@ run/
   excalidraw's actions), its Code, Types and Map are a function's, and
   what it calls is no longer its file's top's. A type does not open; its
   views are a type's from `/`. In the sorted orders a type has no counts.
+- **`e`: a file's exports only,** whichever kinds are on, the rest in the
+  file's order (decided 2026-11-07, `design/mocks/tree15b-exports.png`).
+  What it keeps to itself goes from the file's rows, not from under a
+  function: a function's calls are all of them. The status line's left
+  ends `exports only`. A name found with `/` or the Map that a file does
+  not list, its kind or its file keeping it, is listed from then on.
 - **`l` on a function** opens what it calls, in the order they run. `h`
   closes it. Each call has all the views and opens with `l` again.
 - **Where a call lives: underlined.** Decided 2026-10-31 from six marks
