@@ -151,13 +151,14 @@ end
 ---@param right seam.BothLine[]
 ---@param centre table[] pieces
 ---@return table[]
-function M.draw(left, right, centre)
+function M.draw(left, right, centre, labels)
   local lw = 0
   for _, l in ipairs(left) do
     lw = math.max(lw, (l.indent or 0) + width(l.segs))
   end
   local n = math.max(#left, #right, 1)
-  local mid = math.floor(n / 2)
+  -- room over the sides for what each is to the row
+  local mid = math.floor(n / 2) + (labels and 2 or 0)
   local cv = canvas.new()
   local l0, r0 = mid - math.floor(#left / 2), mid - math.floor(#right / 2)
   local bus = lw + 2
@@ -191,6 +192,12 @@ function M.draw(left, right, centre)
   if #right > 0 then
     cv:h(bx, bx + 3, mid)
     cv:v(bx + 3, lo, hi)
+  end
+  if labels and #left > 0 then
+    cv:seg({ { labels[1], 'SeamSection' } }, 0, l0 - 2)
+  end
+  if labels and #right > 0 then
+    cv:seg({ { labels[2], 'SeamSection' } }, bx + 6, r0 - 2)
   end
   return cv:rows(1)
 end

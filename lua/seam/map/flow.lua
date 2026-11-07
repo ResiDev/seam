@@ -247,6 +247,9 @@ function M.draw(top, centre, bottom, o)
   measure(top, 'left', ws, G + 5)
   measure(bottom, 'right', bws, bx + 5)
   local fixed = #lines + #top + (#bottom > 0 and M.DROP + #bottom or 0)
+  if o.labels then
+    fixed = fixed + (#top > 0 and 2 or 0) + (#bottom > 0 and 2 or 0)
+  end
   local shut = fold.closed(gs, (o.height or math.huge) - fixed, o.open or {})
   -- the columns as wide as the open groups need; narrower, they take no
   -- more rows than measured
@@ -281,9 +284,15 @@ function M.draw(top, centre, bottom, o)
   end
   local y = 0
   if #top > 0 then
-    -- a row of the line alone between the calls and the row
-    y = select(2, side(top, ws, G, 0)) + 1
-    cv:v(G, 0, y)
+    -- what the side is to the row over it, then a row of the line alone
+    -- between the calls and the row
+    local y0 = 0
+    if o.labels then
+      cv:seg({ { o.labels[1], 'SeamSection' } }, G, 0)
+      y0 = 2
+    end
+    y = select(2, side(top, ws, G, y0)) + 1
+    cv:v(G, y0, y)
     cv:bit(G, y, 2, 'SeamMapLine')
     cv:put(G + 1, y, '──▶', 'SeamMapLine')
   end
@@ -315,6 +324,10 @@ function M.draw(top, centre, bottom, o)
       cv:put(e + 1, y, '──', 'SeamMapLine')
       cv:bit(bx, y, 8, 'SeamMapLine')
       y = y + M.DROP
+    end
+    if o.labels then
+      cv:seg({ { o.labels[2], 'SeamSection' } }, bx + 3, y + 1)
+      y = y + 2
     end
     local last = side(bottom, bws, bx, y + 1)
     cv:v(bx, top_y, last)
