@@ -26,6 +26,11 @@ local SIGN_HL = { ['+'] = 'SeamSignAdd', ['~'] = 'SeamSignChange' }
 function M.draw(out, m, e, width)
   local node = e.kind == 'fn' and m.graph.nodes[e.id]
   local list = node and codetypes.fn(m, e.path, node.line, node.name) or codetypes.file(m, e.path)
+  if e.kind == 'type' then
+    list = vim.tbl_filter(function(r)
+      return r.kind == 'type' and r.name == e.name and r.line == e.decl.line
+    end, list)
+  end
   st.copens = st.copens or {}
   st.copens[e.path .. (e.id or '')] = st.copens[e.path .. (e.id or '')] or {}
   st.cctx = { open = st.copens[e.path .. (e.id or '')], width = width, diff = changed.on() }

@@ -9,6 +9,11 @@ local index = require 'seam.index'
 local tree = require 'seam.tree'
 local M = {}
 
+-- the file a node's or declaration's id is in
+local function path_of(id)
+  return id:match '^(.*):%d+:'
+end
+
 ---@class seam.Outline
 ---@field order 'tree'|'used'|'calls'
 ---@field open table<string, boolean> a row's key -> opened (true) or closed (false); nil is its default
@@ -279,7 +284,7 @@ function M.fan(m)
     local top, up = graph.visible(m, 'top'), graph.visible(m, 'up')
     for id, n in pairs(g.nodes) do
       if n.kind ~= 'module' and not n.test then
-        fan[id] = { used = M.used_by(g, id, up), calls = #data.calls(m, id) }
+        fan[id] = { used = n.kind == 'value' and #M.users(m, id, up) or M.used_by(g, id, up), calls = #data.calls(m, id) }
       end
     end
     local into, outof, dirs = {}, {}, {}
@@ -310,6 +315,24 @@ function M.fan(m)
           add(into, 'f:' .. b.path, e.from)
           for _, d in ipairs(apart(b.path, a.path)) do
             add(into, 'd:' .. d, e.from)
+          end
+        end
+      end
+    end
+    for id in pairs(m.users) do
+      local p = path_of(id)
+      local users = M.users(m, id, up)
+      if not g.nodes[id] then
+        fan[id] = { used = #users, calls = 0 }
+      end
+      if top(p) then
+        for _, h in ipairs(users) do
+          local hp = path_of(h)
+          if hp ~= p then
+            add(into, 'f:' .. p, h)
+            for _, d in ipairs(apart(p, hp)) do
+              add(into, 'd:' .. d, h)
+            end
           end
         end
       end
@@ -400,6 +423,34 @@ local function fn_rows(out, m, o, key, id, depth, under, chain)
   return row
 end
 
+--- The declarations at a file's top naming the value or type `id`, tests
+--- and what `visible` keeps out left out; a value's, its functions and
+--- values alone, as a function's callers are.
+---@param m table
+---@param id string
+---@param visible fun(path: string): boolean
+---@return string[]
+function M.users(m, id, visible)
+  local out, g = {}, m.graph
+  local value = g.nodes[id] ~= nil
+  for _, h in ipairs(m.users[id] or {}) do
+    local p = path_of(h)
+    if (not value or g.nodes[h]) and not index.is_test(p) and visible(p) then
+      out[#out + 1] = h
+    end
+  end
+  return out
+end
+
+--- The id the index knows the type `name` declared in `path` by.
+---@param m table
+---@param path string
+---@param name string
+---@return string|nil
+function M.type_id(m, path, name)
+  return m.user_ids[path .. '\n' .. name]
+end
+
 --- The functions calling `id`, each once, tests and a file's top left out.
 ---@param g seam.Graph
 ---@param id string
@@ -433,7 +484,7 @@ function M.rows(m, o)
       if fan then
         row.used, row.calls = M.count(fan, fan_key(it))
         fns = most_first(fns, fan, o.order, function(e)
-          return e.node and e.node.id or ''
+          return e.node and e.node.id or M.type_id(m, e.type.path, e.type.name) or ''
         end)
       end
       if it.kind == 'dir' then
@@ -459,7 +510,9 @@ function M.rows(m, o)
             fn_rows(out, m, o, key .. '\n' .. e.node.id, e.node.id, it.depth + 1, nil, {})
           else
             local d = e.type
+            local used = fan and M.count(fan, M.type_id(m, d.path, d.name) or '')
             out[#out + 1] = {
+              used = used or nil,
               key = key .. '\ntype:' .. d.name,
               kind = 'type',
               depth = it.depth + 1,

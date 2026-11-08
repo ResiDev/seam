@@ -42,6 +42,8 @@ local m = {
     node(T1, nil, { { B1, 5, 3 } }),
   },
   exports = { { id = 'pa/src/types.ts:1:T', name = 'T', path = 'pa/src/types.ts', line = 1 } },
+  users = {},
+  user_ids = {},
   ispkg = { pa = true, pb = true },
   pkgsorted = { 'pa', 'pb' },
   pkgcache = {},
@@ -298,6 +300,47 @@ do
   eq(ids(got), { 'start 4', 'stash 0', 'startRun 2' }, 'sta: the best match first, used by between equals')
   eq(got[1].pos, { 0, 1, 2 }, 'the letters matched')
   eq(ids(picker.fuzzy(all, 'zzz')), {}, 'nothing matches')
+end
+
+-- used by for values and types: the declarations naming each, from the
+-- index's users. T is named by v, kf, a test and a type Q in another file;
+-- v by kf, a test and Q's `typeof v`, a value's users being functions and
+-- values alone
+do
+  local KV, KF, KT, Q = 'pk/k.ts:3:v', 'pk/k.ts:5:kf', 'pk/k.ts:1:T', 'pq/q.ts:4:Q'
+  local mu = {
+    graph = index.graph { node(KV, 'value', { { KF, 3, 12 } }), node(KF), node 'pq/q.ts:9:qf' },
+    exports = {},
+    users = { [KT] = { KV, KF, 'pk/k.test.ts:2:t', Q }, [KV] = { KF, 'pk/k.test.ts:2:t', Q } },
+    user_ids = { ['pk/k.ts\nT'] = KT, ['pk/k.ts\nv'] = KV },
+    ispkg = { pk = true, pq = true },
+    pkgsorted = { 'pk', 'pq' },
+    pkgcache = {},
+  }
+  package.loaded['seam.written'] = {
+    types = function(path)
+      return path == 'pk/k.ts' and { { name = 'T', kind = 'type', path = path, line = 1, end_line = 1 } } or {}
+    end,
+  }
+  local all = function()
+    return true
+  end
+  eq(outline.users(mu, KT, all), { KV, KF, Q }, "a type's users: functions, values and types, tests left out")
+  eq(outline.users(mu, KV, all), { KF }, "a value's: functions and values alone")
+  local uo = outline.new()
+  uo.shows.t, uo.shows.v, uo.order = true, true, 'used'
+  uo.open['d:pk'], uo.open['f:pk/k.ts'] = true, true
+  local rows = outline.rows(mu, uo)
+  local t, v = row(rows, k('f:pk/k.ts', 'type:T')), row(rows, k('f:pk/k.ts', KV))
+  eq({ t.used, t.calls }, { 3, nil }, 'a type counts its users, and calls nothing')
+  eq({ v.used, v.calls }, { 1, 1 }, 'a value its users and its calls')
+  eq(
+    keys(rows),
+    { 'd:pk', 'f:pk/k.ts', k('f:pk/k.ts', 'type:T'), k('f:pk/k.ts', KV), k('f:pk/k.ts', KF), 'd:pq', 'f:pq/q.ts' },
+    'most used first, the type before the value'
+  )
+  eq(row(rows, 'f:pk/k.ts').used, 1, 'a file is used by what names its types from elsewhere: Q')
+  package.loaded['seam.written'] = nil
 end
 
 -- f t v: what a file lists. k.ts declares a type T on line 1, a value v on

@@ -3,7 +3,8 @@
 -- use it and the names it is built from, resolved through relative paths,
 -- every tsconfig's `paths` and workspace packages by name; and the call
 -- graph: each function, component and class, each top-level value, and each
--- file's top, with the callables it names; and each name taken from a library, a package from
+-- file's top, with the callables it names; each value and type with the
+-- declarations naming it; and each name taken from a library, a package from
 -- outside the repo, with every place it is named.
 local repo, out = arg[1], arg[2]
 local site = vim.fn.stdpath 'data' .. '/site/parser/'
@@ -708,6 +709,10 @@ local function test_callee(fn, src)
   return fn and fn:type() == 'identifier' and text_of(fn, src) or nil
 end
 local NODES = {}
+-- a value's or type's id -> the set of ids of the declarations at a file's
+-- top that name it, itself left out
+local USERS = {}
+local NAMED = { const = true, type = true, interface = true, enum = true }
 local LIBS = {} -- `library\nname` -> { library, name, uses }
 
 local nuses = 0
@@ -735,7 +740,13 @@ for path, f in pairs(F) do
   end
   local own = {} -- same-file top-level names -> the export, or where it is declared
   for name, t in pairs(f.top) do
-    own[name] = f.exports[name] or { id = path .. ':' .. t.line .. ':' .. name, kind = t.kind }
+    own[name] = f.exports[name] or { id = path .. ':' .. t.line .. ':' .. name, kind = t.kind, path = path }
+  end
+  local at_row = {}
+  for name, t in pairs(f.top) do
+    for r = t.span[1], t.span[3] do
+      at_row[r] = own[name].id
+    end
   end
 
   -- what holds a use outside a function: the top-level declaration,
@@ -767,7 +778,7 @@ for path, f in pairs(F) do
     local txt = text_of(node, f.src)
     local hit
     if cap == 'id' then
-      hit = bound[txt]
+      hit = bound[txt] or own[txt]
     elseif cap == 'ns' then
       ns_node = ns[txt] and txt or nil
     elseif cap == 'prop' and ns_node then
@@ -778,6 +789,13 @@ for path, f in pairs(F) do
       local r, c = node:start()
       hit.uses[#hit.uses + 1] = { path = path, line = r + 1, col = c + 1, role = role(node) }
       nuses = nuses + 1
+    end
+    if hit and NAMED[hit.kind] and not excluded(node) then
+      local by = at_row[(node:start())]
+      if by and by ~= hit.id then
+        USERS[hit.id] = USERS[hit.id] or {}
+        USERS[hit.id][by] = true
+      end
     end
     -- a library's name: as imported, or after a namespace or default
     -- import's dot, else the local name a default or namespace has
@@ -929,18 +947,24 @@ for _, l in ipairs(libs) do
     return a.path < b.path or (a.path == b.path and (a.line < b.line or (a.line == b.line and a.col < b.col)))
   end)
 end
+local users = {}
+for id, set in pairs(USERS) do
+  users[id] = vim.tbl_keys(set)
+  table.sort(users[id])
+end
 local fh = assert(io.open(out, 'w'))
 table.sort(NODES, function(a, b)
   return a.id < b.id
 end)
 fh:write(vim.json.encode {
   source = 'treesitter',
-  version = 8,
+  version = 9,
   repo = repo,
   ms = timing,
   packages = pkgs,
   exports = exports,
   nodes = NODES,
+  users = users,
   libs = libs,
   notes = { 'imports resolved by relative path and tsconfig paths only; a local that shadows an imported or top-level name still counts' },
 })

@@ -18,6 +18,7 @@ local row, trunc, shape = draw.row, draw.trunc, draw.shape
 M.LW = 46
 local USED_END, CALLS_END = 37, 44
 local WORDS = { used = 'most used first', calls = 'most calling first' }
+local LIT = { f = '%#SeamShowF#', t = '%#SeamShowT#', v = '%#SeamShowV#' }
 
 --- What a sorted order is called; nil for the tree.
 ---@param o seam.Outline
@@ -113,19 +114,34 @@ function M.head(buf, m, o, x)
   draw.put(buf, { M.range(r) })
 end
 
---- The tree's bar over its rows: blank in the tree, the counts' titles in
---- a sorted order, the one it sorts by lit.
+--- The tree's bar over its rows: `f t v e`, the keys of what a file lists,
+--- each lit when on in the colour its names have in code, `e` a key's;
+--- in a sorted order the counts' titles, the one it sorts by lit.
 ---@param o seam.Outline
 ---@return string
 function M.titles(o)
+  local bar, w = '', 0
+  for i, k in ipairs(outline.SHOWS) do
+    -- `e` apart: it narrows the others
+    local gap = (i == 1 or k.key == 'e') and '  ' or ' '
+    bar = bar .. '%#SeamLabel#' .. gap .. (o.shows[k.key] and (LIT[k.key] or '%#SeamKey#') or '%#SeamDim#') .. k.key
+    w = w + #gap + 1
+  end
   if not WORDS[o.order] then
-    return ' '
+    return bar
   end
   local function hl(which)
     return o.order == which and '%#SeamBold#' or '%#SeamLabel#'
   end
   local used, calls = 'used by', 'calls'
-  return '%#SeamLabel#' .. string.rep(' ', USED_END - #used) .. hl 'used' .. used .. string.rep(' ', CALLS_END - USED_END - #calls) .. hl 'calls' .. calls
+  return bar
+    .. '%#SeamLabel#'
+    .. string.rep(' ', USED_END - #used - w)
+    .. hl 'used'
+    .. used
+    .. string.rep(' ', CALLS_END - USED_END - #calls)
+    .. hl 'calls'
+    .. calls
 end
 
 -- a row of the tree, saying where it is for gf
@@ -181,7 +197,9 @@ function M.rows(buf, m, o, rows)
     end
     if sorted and x.used then
       r:to(USED_END - #tostring(x.used)):add(tostring(x.used), lit)
-      r:to(CALLS_END - #tostring(x.calls)):add(tostring(x.calls), dim)
+      if x.calls then
+        r:to(CALLS_END - #tostring(x.calls)):add(tostring(x.calls), dim)
+      end
     end
     out[#out + 1] = r
   end

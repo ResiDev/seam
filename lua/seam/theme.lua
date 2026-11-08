@@ -72,6 +72,10 @@ function M.setup()
   s('SeamMapFn', { link = '@function' })
   local fn = api.nvim_get_hl(0, { name = '@function', link = false }).fg
   s('SeamMapFnBold', { fg = fn, bold = true })
+  -- the bar over the tree: `f t v` lit in the colour their names have in code
+  s('SeamShowF', { fg = fn, bold = true })
+  s('SeamShowT', { fg = ty, bold = true })
+  s('SeamShowV', { fg = api.nvim_get_hl(0, { name = '@variable', link = false }).fg, bold = true })
   s('SeamMapCount', { fg = '#ff9e64' })
   s('SeamMapBar', { bg = '#3d59a1' })
   s('SeamMapLine', { link = 'SeamLabel' })

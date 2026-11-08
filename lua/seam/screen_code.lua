@@ -55,20 +55,24 @@ end
 local function label(m, e)
   if e.kind == 'fn' then
     return draw.shape(m.graph.nodes[e.id])
+  elseif e.kind == 'type' then
+    return e.name
   end
   return e.path:match '[^/]+$'
 end
 
--- what the pane shows off a name: the function or file itself
+local function type_row(d)
+  return { kind = 'type', key = 'type:' .. d.name, name = d.name, path = d.path, line = d.line, end_line = d.end_line, decl_kind = d.kind }
+end
+
+-- what the pane shows off a name: the function, type or file itself
 local function entry_row(e)
   if e.kind == 'fn' then
     return { kind = 'fn', id = e.id, path = e.path, key = 'f:' .. e.path .. '\n' .. e.id }
+  elseif e.kind == 'type' then
+    return type_row(e.decl)
   end
   return { kind = 'file', path = e.path, key = 'f:' .. e.path }
-end
-
-local function type_row(d)
-  return { kind = 'type', key = 'type:' .. d.name, name = d.name, path = d.path, line = d.line, end_line = d.end_line, decl_kind = d.kind }
 end
 
 -- what the pane shows for a name in the code
@@ -149,6 +153,12 @@ local function heads(m, e)
     c.h[#c.h + 1] = { s0, c.b, 'SeamBold', 80 }
     c:add('   ' .. node.kind .. ' in ', 'SeamLabel')
     draw.path(c, node.path, math.max(1, node.line))
+  elseif e.kind == 'type' then
+    local s0 = c.b
+    code.add_name(c, e.path, e.decl.line, e.name, 'SeamType', 60)
+    c.h[#c.h + 1] = { s0, c.b, 'SeamBold', 80 }
+    c:add('   ' .. e.decl.kind .. ' in ', 'SeamLabel')
+    draw.path(c, e.path, e.decl.line)
   else
     c:add(label(m, e), 'SeamBold'):add('   file in ', 'SeamLabel')
     draw.path(c, e.path:match '^(.*/)' or '')
@@ -289,7 +299,7 @@ local function show()
   local w = st.cwin.code
   local c = e.cursor
   if not c then
-    local node = e.kind == 'fn' and m.graph.nodes[e.id]
+    local node = e.kind == 'fn' and m.graph.nodes[e.id] or e.kind == 'type' and e.decl
     local l = node and M.row_of(math.max(1, node.line)) or 1
     local meta = draw.meta(st.cbuf.code, l)
     local src = node and code.file(e.path).lines[node.line] or ''
@@ -332,7 +342,14 @@ function M.open(e)
   show()
 end
 
---- `J` on a name: its function or file on the code screen, on the trail.
+--- A type's place on the code screen, from its declaration.
+---@param d { name: string, path: string, line: integer, end_line?: integer, kind: string }
+---@return seam.CodeAt
+function M.type_at(d)
+  return { kind = 'type', path = d.path, name = d.name, decl = d }
+end
+
+--- `J` on a name: its function, type or file on the code screen, on the trail.
 ---@param e seam.CodeAt
 function M.go(e)
   local m = index.model()
@@ -435,6 +452,8 @@ local function j_target()
   local n = st.code and st.code.n
   if n and n.kind == 'call' then
     return { kind = 'fn', id = n.id }
+  elseif n and n.kind == 'type' and n.decl then
+    return M.type_at(n.decl)
   elseif n and n.kind == 'file' then
     return { kind = 'file', path = n.path }
   end

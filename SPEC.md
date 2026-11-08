@@ -330,7 +330,13 @@ run/
   function is: `l` opens what it calls (`register()` under each of
   excalidraw's actions), its Code, Types and Map are a function's, and
   what it calls is no longer its file's top's. A type does not open; its
-  views are a type's from `/`. In the sorted orders a type has no counts.
+  views are a type's from `/`, and `J` opens its declaration on the code
+  screen.
+- **The bar over the tree says what a file lists** (decided 2026-11-07,
+  drawn in seam, `design/mocks/tree17-bar.png`): `f t v  e`, each key lit
+  when on in the colour its names have in code, the colour scheme's
+  function, type and variable, `e` in the key colour, each dim when off,
+  `e` apart as it narrows the others; in a sorted order the counts' titles to its right.
 - **`e`: a file's exports only,** whichever kinds are on, the rest in the
   file's order (decided 2026-11-07, `design/mocks/tree15b-exports.png`).
   What it keeps to itself goes from the file's rows, not from under a
@@ -359,8 +365,14 @@ run/
   tree's order between equals, so the biggest fan-in or fan-out is on top
   at every level. Every row has two counts, used by and calls, the one it
   sorts by lit. A function's: the functions and values calling it, and those it
-  calls. A file's or a folder's: the functions outside it that call into
-  it, and those outside it that it calls, a call inside it not counted.
+  calls. A value's: the functions and values naming it, and what it calls.
+  A type's: the functions, values and types naming it, and no calls
+  (decided 2026-11-07, `design/mocks/tree17-used.png`); who names a value
+  or type is the index's `users`, each use in the repo, its own file too,
+  held by the declaration at a file's top it sits in. A file's or a
+  folder's: the functions outside it that call into it, or name its values
+  and types, and those outside it that it calls, a call inside it not
+  counted.
   Each counted once; tests and a file's top don't count; the lens is kept.
   Counted once a model and lens, from the same calls the Map's folder and
   file read across their edge. The cursor stays on its row.
@@ -869,8 +881,9 @@ Filled 2026-11-01, drawn to be looked at (`design/mocks/src/map/ideas.py`, round
 - **Each side says what it is to the row** (decided 2026-11-07; drawn
   in seam and kept as the pictures, `design/mocks/map16-labels-*.png`).
   Over the left side, or above, `calls`, a type's `made by`; over the
-  right, or below, `called by`, a type's `taken by`; the words the pane's
-  head counts with. In type, each head says `gives` before its type,
+  right, or below, `called by`, a type's `taken by`, a value's `used by`,
+  the functions and values naming it (`design/mocks/map17-value-used.png`);
+  the words the pane's head counts with. In type, each head says `gives` before its type,
   `gives nothing`, so a head is never a bare type to guess at.
 
 ### 7. The Code view and the code screen

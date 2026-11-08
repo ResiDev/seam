@@ -43,9 +43,10 @@ end
 --- a library known by the repo's dependencies, not its tsconfig paths;
 --- 6 each library use outside a function the top-level declaration
 --- holding it, `top`; 7 else the title of the test holding it; 8 each
---- top-level value its own node, `kind = 'value'`, with what it calls. An
---- index older than this is made again when seam opens.
-M.VERSION = 8
+--- top-level value its own node, `kind = 'value'`, with what it calls; 9
+--- each value's and type's `users`, the declarations at a file's top naming
+--- it. An index older than this is made again when seam opens.
+M.VERSION = 9
 
 --- The format of the repo's treesitter index, 0 when there is none.
 ---@param root string
@@ -118,7 +119,13 @@ function M.read(file, lens)
     ispkg = {},
     pkgsorted = {},
     graph = d.nodes and M.graph(d.nodes) or nil,
+    users = d.users or {},
+    user_ids = {},
   }
+  for id in pairs(m.users) do
+    local p, name = id:match '^(.*):%d+:(.*)$'
+    m.user_ids[p .. '\n' .. name] = id
+  end
   for _, p in ipairs(m.packages) do
     if p ~= '.' and p ~= '' then
       m.pkgsorted[#m.pkgsorted + 1] = p

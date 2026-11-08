@@ -177,6 +177,9 @@ local function subject()
   if st.screen == 'code' and st.code and st.code.trail[1] then
     local e = st.code.trail[#st.code.trail]
     local node = e.id and index.model().graph.nodes[e.id]
+    if e.decl then
+      return { path = e.path, line = e.decl.line, name = e.name }
+    end
     return node and { path = node.path, line = math.max(1, node.line), name = node.name } or { path = e.path, line = 1 }
   end
   if st.screen == 'tree' then
@@ -184,6 +187,9 @@ local function subject()
     local node = x and x.id and index.model().graph.nodes[x.id]
     if node then
       return { path = node.path, line = math.max(1, node.line), name = node.name }
+    end
+    if x and x.kind == 'type' then
+      return { path = x.path, line = x.line, name = x.name }
     end
     return x and x.kind == 'file' and { path = x.path, line = 1 } or nil
   end

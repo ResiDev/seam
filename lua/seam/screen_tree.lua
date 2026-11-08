@@ -250,7 +250,8 @@ function M.search(query, on)
   local top, up = graph.visible(m, 'top'), graph.visible(m, 'up')
   for id, n in pairs(g and g.nodes or {}) do
     if n.kind ~= 'module' and not n.test and top(n.path) then
-      items[#items + 1] = { id = id, name = n.name, used_by = outline.used_by(g, id, up) }
+      local used = n.kind == 'value' and #outline.users(m, id, up) or outline.used_by(g, id, up)
+      items[#items + 1] = { id = id, name = n.name, used_by = used }
       nodes[id] = n
     end
   end
@@ -264,7 +265,8 @@ function M.search(query, on)
     local e = f.decls[1]
     if e and top(e.path) and not index.is_test(e.path) then
       local id = 'type:' .. name
-      items[#items + 1] = { id = id, name = name, used_by = e.nusers or 0 }
+      local tid = outline.type_id(m, e.path, name)
+      items[#items + 1] = { id = id, name = name, used_by = tid and #outline.users(m, tid, up) or 0 }
       nodes[id] = { kind = 'type', name = name, path = e.path, line = e.line }
     end
   end
@@ -321,7 +323,7 @@ function M.all_keys()
         { 'j k', 'move' },
         { 'l', 'open it: a folder, a file, the calls' },
         { 'h', 'close it, or up a level' },
-        { 'J', 'the code screen on it: a function or a file' },
+        { 'J', 'the code screen on it: a function, a type or a file' },
       },
     },
     {
@@ -412,7 +414,7 @@ function M.status()
     if x.open or outline.parent(st.orows, i) then
       row[#row + 1] = 'h'
     end
-    if x.kind == 'fn' or x.kind == 'file' then
+    if x.kind == 'fn' or x.kind == 'type' or x.kind == 'file' then
       row[#row + 1] = 'J'
     end
   end
@@ -478,9 +480,12 @@ local function tree_keys(buf)
     M.next_change(-1)
   end, o(buf))
   vim.keymap.set('n', 'J', function()
-    local x = M.at()
+    local x = st.ptype and st.ptype.row or M.at()
     if x and x.kind == 'fn' then
       require('seam.screen_code').open { kind = 'fn', id = x.id }
+    elseif x and x.kind == 'type' then
+      local sc = require 'seam.screen_code'
+      sc.open(sc.type_at { name = x.name, path = x.path, line = x.line, end_line = x.end_line, kind = x.decl_kind })
     elseif x and x.kind == 'file' then
       require('seam.screen_code').open { kind = 'file', path = x.path }
     end

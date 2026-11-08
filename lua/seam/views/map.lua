@@ -8,6 +8,7 @@
 local api = vim.api
 local data = require 'seam.map.data'
 local draw = require 'seam.draw'
+local graph = require 'seam.graph'
 local outline = require 'seam.outline'
 local st = require 'seam.state'
 local tv = require 'seam.typesview'
@@ -180,6 +181,12 @@ local function sides(x, m)
     for _, id in ipairs(data.calls(m, x.id)) do
       top[#top + 1] = { id = id, path = g.nodes[id].path, at = at_of(m, x.id, id) }
     end
+    if g.nodes[x.id].kind == 'value' then
+      for _, id in ipairs(outline.users(m, x.id, graph.visible(m, 'up'))) do
+        bottom[#bottom + 1] = { id = id, path = g.nodes[id].path }
+      end
+      return top, bottom
+    end
     local callers, tests = data.callers(m, x.id)
     for _, list in ipairs { { callers }, { tests, true } } do
       for _, id in ipairs(list[1]) do
@@ -229,8 +236,11 @@ end
 
 -- what each side of the folder and type displays is to the row, over it:
 -- above or left, below or right
-local function side_labels(x)
-  return x.kind == 'type' and { 'made by', 'taken by' } or { 'calls', 'called by' }
+local function side_labels(x, m)
+  if x.kind == 'type' then
+    return { 'made by', 'taken by' }
+  end
+  return { 'calls', x.kind == 'fn' and m.graph.nodes[x.id].kind == 'value' and 'used by' or 'called by' }
 end
 
 -- folder with T off: today's both ways, names only, each side by folder
@@ -272,7 +282,7 @@ local function names_display(x, m, ctx, top, bottom, centre)
   local rl, rr = both.rooms(need(left), need(right), w, cw)
   local L = both.side(left, rl, { budget = budget(ctx), open = s.open, side = 'left' })
   local R = both.side(right, rr, { budget = budget(ctx), open = s.open, side = 'right' })
-  return both.draw(L, R, centre, side_labels(x))
+  return both.draw(L, R, centre, side_labels(x, m))
 end
 
 -- what a type's head stands for: the first type of the repo it names
@@ -431,7 +441,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
   else
     centre = { segs = { { centre_name, x.kind == 'type' and 'SeamTypeBold' or 'SeamBold' } } }
   end
-  return flow.draw(groups(top, true), centre, groups(bottom, false), { width = ctx.width - 2, height = budget(ctx), open = s.open, labels = side_labels(x) })
+  return flow.draw(groups(top, true), centre, groups(bottom, false), { width = ctx.width - 2, height = budget(ctx), open = s.open, labels = side_labels(x, m) })
 end
 
 -- where a row holds a line of the code: in a function's lines, in its
@@ -568,7 +578,8 @@ function M.draw(out, x, m, display, ctx)
   end
   local top, bottom = sides(x, m)
   if #top == 0 and #bottom == 0 then
-    out[#out + 1] = row():add(' nothing calls it and it calls nothing', 'SeamLabel')
+    local value = x.kind == 'fn' and m.graph.nodes[x.id].kind == 'value'
+    out[#out + 1] = row():add(value and ' nothing uses it and it calls nothing' or ' nothing calls it and it calls nothing', 'SeamLabel')
     return
   end
   local label
@@ -603,9 +614,8 @@ function M.count(m, x)
     return nil
   end
   if x.kind == 'fn' then
-    -- a value is read, never called: only what it calls
     if m.graph.nodes[x.id].kind == 'value' then
-      return ('calls %d'):format(#data.calls(m, x.id))
+      return ('used by %d, calls %d'):format(#outline.users(m, x.id, graph.visible(m, 'up')), #data.calls(m, x.id))
     end
     local callers, tests = data.callers(m, x.id)
     return ('called by %d, calls %d'):format(#callers + #tests, #data.calls(m, x.id))
