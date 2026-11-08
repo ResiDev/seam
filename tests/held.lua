@@ -60,6 +60,17 @@ eq(tab_names(), { 'Code', 'Types', 'Map', 'Scene.ts' }, 'its file names the tab,
 eq(views.shown(pane.subject(), st.view).name, 'Map', 'landed on the view the target names')
 eq(pane_buf(), st.obuf.pane, 'the pane shows seam’s own buffer')
 
+local function display_after(target)
+  seam.show(target, { root = repo })
+  vim.wait(2000, function()
+    return false
+  end, 50)
+  return select(2, views.shown(pane.subject(), st.view))
+end
+eq(display_after 'packages/element/src/mutateElement.ts:mutateElement@Map/library', 'library', 'a link naming the library display')
+eq(display_after 'packages/element/src/mutateElement.ts:mutateElement@Map', 'folder', 'then one naming the Map alone: its first display, not the last used')
+eq(st.held and st.held.buf, code, 'links followed from seam’s own tab hold nothing new')
+
 to_held()
 eq(pane_buf(), code, 'shown, the pane’s window holds the buffer itself')
 eq(api.nvim_win_get_cursor(st.owin.pane)[1], 20, 'where its cursor was')
@@ -124,6 +135,14 @@ end
 seam.hold(page)
 to_held()
 eq(pane_buf(), page, 'the page in the pane')
+eq(vim.wo[st.owin.pane].statusline, "%!v:lua.require'seam.screen'.status()", 'seam’s status line under the page in the pane')
+eq(api.nvim_win_call(st.owin.tree, function()
+  vim.cmd 'split'
+  api.nvim_win_set_buf(0, page)
+  local line = vim.wo.statusline
+  vim.cmd 'close'
+  return line
+end) ~= vim.wo[st.owin.pane].statusline, true, 'and not in another window showing it')
 eq(tab_desc(page), 'fold', 'the cursor in the tree: the page keeps its <Tab>')
 api.nvim_set_current_win(st.owin.pane)
 eq(tab_desc(page), 'seam: the next view', 'the cursor in the pane on the page: <Tab> is seam’s')

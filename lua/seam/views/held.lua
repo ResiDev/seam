@@ -130,6 +130,9 @@ function M.show(win)
   if api.nvim_win_get_buf(win) ~= h.buf then
     api.nvim_win_set_buf(win, h.buf)
   end
+  -- seam's line under it, not the buffer's own ([Scratch] [-] for a
+  -- thread's page): set for this buffer in this window only
+  vim.wo[win][0].statusline = "%!v:lua.require'seam.screen'.status()"
   api.nvim_clear_autocmds { group = keys }
   api.nvim_create_autocmd('WinEnter', {
     group = keys,

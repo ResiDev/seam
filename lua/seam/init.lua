@@ -258,7 +258,8 @@ function M.show(target, opts)
       elseif t.view then
         st.view.at, st.view.aside = t.view, nil
       end
-      if t.display then
+      -- a view named without a display opens on its first, not the last one used
+      if t.view then
         st.view.display[t.view] = t.display
       end
       screen.show()
