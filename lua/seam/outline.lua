@@ -1,8 +1,10 @@
 -- The tree as data, no windows: folders, files, what each file declares at
 -- its top in the file's order, its functions, types and values as `shows`
 -- has them, and what each function or value calls, opened a level at a time
--- in the order first written; or the same tree with each level the most used
--- or the most calling first. The state is `st.outline`.
+-- in the order first written, each row with its two counts when `#` puts
+-- them there; or, sorted, one list of every function, type and value the
+-- files list, the most used or the most calling first. The state is
+-- `st.outline`.
 local data = require 'seam.map.data'
 local graph = require 'seam.graph'
 local index = require 'seam.index'
@@ -19,6 +21,7 @@ end
 ---@field open table<string, boolean> a row's key -> opened (true) or closed (false); nil is its default
 ---@field cursor string|nil the key of the row under the cursor
 ---@field shows table<string, boolean> what a file lists, by M.SHOWS key: `f` functions, `t` types, `v` values, `e` its exports alone
+---@field counts boolean|nil the tree's rows with their two counts, used by and calls (`#`); the sorted orders always have them
 
 ---@class seam.ORow
 ---@field key string 'd:<path>' | 'f:<path>' | 'f:<path>\n<id>\n<id>...' (the node ids from the file down)
@@ -31,8 +34,8 @@ end
 ---@field can_open boolean
 ---@field open boolean
 ---@field seen boolean a call already open above on its branch: dim, it does not open
----@field used integer|nil the sorted orders: its fan-in, M.fan's
----@field calls integer|nil the sorted orders: its fan-out, M.fan's
+---@field used integer|nil with the counts: its fan-in, M.fan's
+---@field calls integer|nil with the counts: its fan-out, M.fan's
 
 ---@class seam.Fan
 ---@field used integer the functions calling it; a file's or folder's from outside it
@@ -353,45 +356,12 @@ local function fan_key(it)
   return it.kind == 'dir' and ('d:' .. M.full(it)) or ('f:' .. it.path)
 end
 
--- the tree's folders and files with each level the most `by` first, equals
--- in the tree's order; once for a model, its lens and the order
-local function walk_by(m, by)
-  local c = m.outline_sorted
-  if not (c and c.visible == m.visible) then
-    c = { visible = m.visible }
-    m.outline_sorted = c
-  end
-  if not c[by] then
-    local fan = M.fan(m)
-    local root = { kids = {} }
-    local at = { [0] = root }
-    for _, it in ipairs(walk(m)) do
-      local n = { it = it, kids = {} }
-      table.insert(at[it.depth].kids, n)
-      at[it.depth + 1] = n
-    end
-    local items = {}
-    local function key_of(x)
-      return fan_key(x.it)
-    end
-    local function emit(n)
-      for _, k in ipairs(most_first(n.kids, fan, by, key_of)) do
-        items[#items + 1] = k.it
-        emit(k)
-      end
-    end
-    emit(root)
-    c[by] = items
-  end
-  return c[by]
-end
-
 -- a call's row and, opened, the rows of what it calls under it
 local function fn_rows(out, m, o, key, id, depth, under, chain)
   local g = m.graph
   local node = g.nodes[id]
   local row = { key = key, kind = 'fn', depth = depth, path = node.path, id = id, seen = chain[id] == true }
-  local fan = o.order ~= 'tree' and M.fan(m)
+  local fan = (o.counts or o.order ~= 'tree') and M.fan(m)
   if fan then
     row.used, row.calls = M.count(fan, id)
   end
@@ -405,7 +375,7 @@ local function fn_rows(out, m, o, key, id, depth, under, chain)
     end
   end
   local kids = not row.seen and graph.kids(g, id, 'down', graph.visible(m, 'down')) or {}
-  if fan then
+  if o.order ~= 'tree' then
     kids = most_first(kids, fan, o.order, function(k)
       return k.id
     end)
@@ -468,14 +438,67 @@ function M.used_by(g, id, visible)
   return n
 end
 
---- The rows the outline shows, top to bottom.
+-- a listed declaration's key in M.fan
+local function listed_key(m, e)
+  return e.node and e.node.id or M.type_id(m, e.type.path, e.type.name) or ''
+end
+
+-- a type's row, `key` its file's
+local function type_row(key, d, depth, used)
+  return {
+    used = used,
+    key = key .. '\ntype:' .. d.name,
+    kind = 'type',
+    depth = depth,
+    path = d.path,
+    name = d.name,
+    line = d.line,
+    end_line = d.end_line,
+    decl_kind = d.kind,
+    can_open = false,
+    open = false,
+    seen = false,
+  }
+end
+
+-- every declaration the files list under `o.shows`, the most `o.order`
+-- first, equals in the tree's order
+local function flat(m, o)
+  local all = {}
+  for _, it in ipairs(walk(m)) do
+    if it.kind == 'file' then
+      vim.list_extend(all, M.listed(m, it.path, o.shows))
+    end
+  end
+  return most_first(all, M.fan(m), o.order, function(e)
+    return listed_key(m, e)
+  end)
+end
+
+--- The rows the outline shows, top to bottom: the tree, or in a sorted
+--- order the flat list, each declaration a row at depth 0 keyed as it is
+--- in the tree, its file's key and its own, a function or value opening to
+--- what it calls.
 ---@param m table the model
 ---@param o seam.Outline
 ---@return seam.ORow[]
 function M.rows(m, o)
-  local fan = o.order ~= 'tree' and M.fan(m)
-  local out, skip = {}, nil
-  for _, it in ipairs(fan and walk_by(m, o.order) or walk(m)) do
+  local out = {}
+  if o.order ~= 'tree' then
+    local fan = M.fan(m)
+    for _, e in ipairs(flat(m, o)) do
+      local key = 'f:' .. (e.node and e.node.path or e.type.path)
+      if e.node then
+        fn_rows(out, m, o, key .. '\n' .. e.node.id, e.node.id, 0, nil, {})
+      else
+        out[#out + 1] = type_row(key, e.type, 0, (M.count(fan, listed_key(m, e))))
+      end
+    end
+    return out
+  end
+  local fan = o.counts and M.fan(m)
+  local skip = nil
+  for _, it in ipairs(walk(m)) do
     if not (skip and it.depth > skip) then
       skip = nil
       local key = (it.kind == 'dir' and 'd:' or 'f:') .. it.path
@@ -483,9 +506,6 @@ function M.rows(m, o)
       local fns = it.kind == 'file' and M.listed(m, it.path, o.shows) or {}
       if fan then
         row.used, row.calls = M.count(fan, fan_key(it))
-        fns = most_first(fns, fan, o.order, function(e)
-          return e.node and e.node.id or M.type_id(m, e.type.path, e.type.name) or ''
-        end)
       end
       if it.kind == 'dir' then
         row.can_open = it.touched == true
@@ -509,22 +529,7 @@ function M.rows(m, o)
           if e.node then
             fn_rows(out, m, o, key .. '\n' .. e.node.id, e.node.id, it.depth + 1, nil, {})
           else
-            local d = e.type
-            local used = fan and M.count(fan, M.type_id(m, d.path, d.name) or '')
-            out[#out + 1] = {
-              used = used or nil,
-              key = key .. '\ntype:' .. d.name,
-              kind = 'type',
-              depth = it.depth + 1,
-              path = d.path,
-              name = d.name,
-              line = d.line,
-              end_line = d.end_line,
-              decl_kind = d.kind,
-              can_open = false,
-              open = false,
-              seen = false,
-            }
+            out[#out + 1] = type_row(key, e.type, it.depth + 1, fan and (M.count(fan, listed_key(m, e))) or nil)
           end
         end
       end
@@ -562,8 +567,9 @@ end
 --- path or a folder's, and put the cursor on it, in whichever order; a
 --- function or value of a kind the files do not list, that kind listed
 --- too, and one kept to its file, not exports only. A folder inside a
---- chain of lone folders is the chain's row. False when the tree has no
---- row for it.
+--- chain of lone folders is the chain's row; a file or folder in a sorted
+--- order, the tree again, the sorted list holding none. False when the
+--- tree has no row for it.
 ---@param m table
 ---@param o seam.Outline
 ---@param target string
@@ -589,6 +595,10 @@ function M.reveal(m, o, target)
   if not key then
     return false
   end
+  -- the sorted list holds no files or folders
+  if not node then
+    o.order = 'tree'
+  end
   for _, k in ipairs(opens) do
     o.open[k] = true
   end
@@ -606,14 +616,18 @@ end
 
 --- What a key does to the outline, the cursor on row `i` of `rows`: `l`
 --- opens the row, or goes into it when open; `h` closes it, or goes to the
---- row it hangs from; `s` the next order; `f` `t` `v` a kind a file lists
---- on or off, or exports only (M.SHOWS). Says what the screen does next:
---- draw the rows again, or move the cursor to `o.cursor`.
+--- row it hangs from; `s` the next order, the cursor on its row there,
+--- else on what it stands for: from the tree on a file, its first
+--- declaration in the list, on a folder the list's first; back to the
+--- tree, its file opened; `#` the
+--- tree's counts on or off; `f` `t` `v` a kind a file lists on or off, or
+--- exports only (M.SHOWS). Says what the screen does next: draw the rows
+--- again, or move the cursor to `o.cursor`.
 ---@param m table
 ---@param o seam.Outline
 ---@param rows seam.ORow[]
 ---@param i integer
----@param k 'l'|'h'|'s'|'f'|'t'|'v'|'e'
+---@param k 'l'|'h'|'s'|'#'|'f'|'t'|'v'|'e'
 ---@return 'redraw'|'move'|nil
 function M.key(m, o, rows, i, k)
   local row = rows[i]
@@ -629,11 +643,38 @@ function M.key(m, o, rows, i, k)
       return 'redraw'
     end
   end
+  if k == '#' then
+    if o.order ~= 'tree' then
+      return nil
+    end
+    o.counts = not o.counts or nil
+    return 'redraw'
+  end
   if k == 's' then
+    local was = o.order
     local at = vim.fn.index(M.ORDERS, o.order) + 1
     o.order = M.ORDERS[at % #M.ORDERS + 1]
-    if row then
-      o.cursor = row.key
+    if not row then
+      return 'redraw'
+    end
+    o.cursor = row.key
+    if o.order == 'tree' then
+      -- its file in the tree, open, the folders above it too
+      local path = row.key:match '^f:([^\n]*)'
+      if path and M.reveal(m, o, path) then
+        o.open['f:' .. path] = true
+        o.cursor = row.key
+      end
+    elseif was == 'tree' and (row.kind == 'dir' or row.kind == 'file') then
+      local list = M.rows(m, o)
+      o.cursor = list[1] and list[1].key
+      local pre = 'f:' .. row.path .. '\n'
+      for _, r in ipairs(row.kind == 'file' and list or {}) do
+        if r.key:sub(1, #pre) == pre then
+          o.cursor = r.key
+          break
+        end
+      end
     end
     return 'redraw'
   end

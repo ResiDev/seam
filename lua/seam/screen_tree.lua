@@ -76,7 +76,7 @@ local function layout()
   end
   vim.wo[head].fillchars = vim.wo[head].fillchars:gsub('horiz: ', 'horiz:─')
   vim.wo[tree].winhighlight = vim.wo[tree].winhighlight .. ',WinBar:SeamLabel,WinBarNC:SeamLabel'
-  api.nvim_win_set_width(tree, odraw.LW)
+  api.nvim_win_set_width(tree, odraw.width(st.outline))
   api.nvim_win_set_height(head, 1)
   api.nvim_win_set_height(phead, 3)
   st.owin = { head = head, tree = tree, phead = phead, pane = pane }
@@ -125,6 +125,9 @@ function M.redraw(keep)
   st.orows = signs.decorate(m, outline.rows(m, o), o.only_changed, o.shows)
   local w = st.owin.tree
   st.drawing = true
+  if api.nvim_win_get_width(w) ~= odraw.width(o) then
+    api.nvim_win_set_width(w, odraw.width(o))
+  end
   vim.wo[w].winbar = odraw.titles(o)
   odraw.rows(st.obuf.tree, m, o, st.orows)
   local i = outline.find(st.orows, o.cursor) or 1
@@ -341,7 +344,8 @@ function M.all_keys()
     {
       'The tree',
       {
-        { 's', 'order: by folder, most used, most calling' },
+        { 's', 'order: by folder, or every name most used, most calling first' },
+        { '#', 'used by and calls on the tree, or off' },
         { 'f t v', 'what a file lists: its functions, types, values, each on or off' },
         { 'e', "a file's exports only, or all it declares" },
         { '/', 'search the names' },
@@ -447,7 +451,7 @@ local function tree_keys(buf)
     S().close()
   end, o(buf))
   S().goto_keys(buf)
-  for _, k in ipairs { 'l', 'h', 's', 'f', 't', 'v', 'e' } do
+  for _, k in ipairs { 'l', 'h', 's', '#', 'f', 't', 'v', 'e' } do
     vim.keymap.set('n', k, press(k), o(buf))
   end
   for _, k in ipairs { '<C-d>', '<C-u>', '<C-e>', '<C-y>' } do

@@ -336,7 +336,9 @@ run/
   drawn in seam, `design/mocks/tree17-bar.png`): `f t v  e`, each key lit
   when on in the colour its names have in code, the colour scheme's
   function, type and variable, `e` in the key colour, each dim when off,
-  `e` apart as it narrows the others; in a sorted order the counts' titles to its right.
+  `e` apart as it narrows the others; then `#`, lit when the rows have
+  their counts, and the counts' titles to its right
+  (`design/mocks/tree18-counts.png`).
 - **`e`: a file's exports only,** whichever kinds are on, the rest in the
   file's order (decided 2026-11-07, `design/mocks/tree15b-exports.png`).
   What it keeps to itself goes from the file's rows, not from under a
@@ -355,29 +357,41 @@ run/
   Mocks: `design/mocks/where-underline-core.png` (update()),
   `where-underline-react.png` (useOwnedRun() calling core's createRun).
 - **A call already open above** (recursion) is dim and doesn't open.
-- **Nothing beside a name** in the tree's own order. The pane shows its
-  types and counts; the tree stays narrow. (Decided 2026-10-31;
-  `design/mocks/tree-cols-*.png` were not liked.)
-- **`s` changes the order,** as `<Tab>` does in today's explorer: by folder
-  (the tree), most used first, most calling first. The two sorted orders
-  keep the tree, folders, files, functions and calls, what is open open,
-  and sort each level's rows by the order's count, the most first, the
-  tree's order between equals, so the biggest fan-in or fan-out is on top
-  at every level. Every row has two counts, used by and calls, the one it
-  sorts by lit. A function's: the functions and values calling it, and those it
-  calls. A value's: the functions and values naming it, and what it calls.
-  A type's: the functions, values and types naming it, and no calls
-  (decided 2026-11-07, `design/mocks/tree17-used.png`); who names a value
-  or type is the index's `users`, each use in the repo, its own file too,
-  held by the declaration at a file's top it sits in. A file's or a
-  folder's: the functions outside it that call into it, or name its values
-  and types, and those outside it that it calls, a call inside it not
-  counted.
-  Each counted once; tests and a file's top don't count; the lens is kept.
-  Counted once a model and lens, from the same calls the Map's folder and
-  file read across their edge. The cursor stays on its row.
-  `design/mocks/tree-sort-used.png`, `tree-sort-calls.png` (the flat list
-  first mocked; the tree kept since, 2026-11-02).
+- **The tree's own order has nothing beside a name until `#`** puts the
+  two counts on every row, used by and calls, neither lit, the tree as it
+  was; `#` again takes them off, for the session (decided 2026-11-08,
+  drawn in seam, `design/mocks/tree18-counts.png`). The tree first had
+  nothing beside a name (2026-10-31, `design/mocks/tree-cols-*.png` were not
+  liked), then the counts in its sorted orders alone (2026-11-02).
+- **`s` changes the order:** by folder (the tree), most used first, most
+  calling first. The two sorted orders are not a tree but one list
+  (decided 2026-11-08, drawn in seam, `design/mocks/tree18-list-used.png`,
+  `tree18-list-calls.png`): every function, type and value the files
+  list, as `f` `t` `v` and `e` have them, through the lens and without
+  tests, the most used or the most calling first, the tree's order
+  between equals; no folders and no files. A name has its file after it,
+  dim, as much of it as the name leaves, and its two counts, the one it
+  sorts by lit. The tree is 18 columns wider while the list shows, for
+  the names. A function or value opens to what it calls, as in the tree,
+  its calls sorted the same way. `s` keeps the cursor on its row; from a
+  file it goes to the file's first name in the list, from a folder to
+  the list's first; back in the tree a name's file is opened, its
+  folders too. A file or folder shown from `/` or a link goes back to the
+  tree, the list holding none. `#` does nothing there: the list always
+  has its counts. The tree's sorted orders before kept the tree, each
+  level sorted (2026-11-02, `design/mocks/tree17-used.png`); finding the
+  names most used across the repo meant opening every folder.
+- **The counts.** A function's: the functions and values calling it, and
+  those it calls. A value's: the functions and values naming it, and
+  what it calls. A type's: the functions, values and types naming it, and
+  no calls (decided 2026-11-07); who names a value or type is the index's
+  `users`, each use in the repo, its own file too, held by the
+  declaration at a file's top it sits in. A file's or a folder's, in the
+  tree with `#`: the functions outside it that call into it, or name its
+  values and types, and those outside it that it calls, a call inside it
+  not counted. Each counted once; tests and a file's top don't count; the
+  lens is kept. Counted once a model and lens, from the same calls the
+  Map's folder and file read across their edge.
 - **An opened function shows its calls, in the order they run,** and nothing
   around them: no closures, `if`s or `case`s (`design/mocks/tree-flow.png` was not
   liked).
@@ -992,7 +1006,8 @@ nothing to do where the cursor is does nothing, and its hint isn't shown.
 | `n` `N` | the next and previous import in the code |
 | `]c` `[c` | the next and previous change |
 | `gc` | only what changed in the tree, and back |
-| `s` | the tree's order: by folder, most used, most calling |
+| `s` | the tree's order: by folder, or every name in one list, most used or most calling first |
+| `#` | the tree's counts, used by and calls, on or off |
 | `/` | search the names |
 | `L` | the lens: the range of changes and the rules |
 | `<C-d>` `<C-u>` `<C-e>` `<C-y>` | scroll the pane from the tree |

@@ -14,11 +14,26 @@ local M = {}
 
 local row, trunc, shape = draw.row, draw.trunc, draw.shape
 
--- the tree's width, and where the sorted orders' two counts end
+-- the tree's width, and where the two counts end; the sorted list wider,
+-- its names with their files
 M.LW = 46
 local USED_END, CALLS_END = 37, 44
+local WIDER = 18
 local WORDS = { used = 'most used first', calls = 'most calling first' }
 local LIT = { f = '%#SeamShowF#', t = '%#SeamShowT#', v = '%#SeamShowV#' }
+
+--- The tree's width: the sorted list's wider.
+---@param o seam.Outline
+---@return integer
+function M.width(o)
+  return M.LW + (WORDS[o.order] and WIDER or 0)
+end
+
+-- where the two counts end
+local function ends(o)
+  local d = M.width(o) - M.LW
+  return USED_END + d, CALLS_END + d
+end
 
 --- What a sorted order is called; nil for the tree.
 ---@param o seam.Outline
@@ -114,22 +129,35 @@ function M.head(buf, m, o, x)
   draw.put(buf, { M.range(r) })
 end
 
+--- Whether the rows have their two counts: in a sorted order, or the tree
+--- with `#` on.
+---@param o seam.Outline
+---@return boolean
+function M.counted(o)
+  return WORDS[o.order] ~= nil or o.counts == true
+end
+
 --- The tree's bar over its rows: `f t v e`, the keys of what a file lists,
 --- each lit when on in the colour its names have in code, `e` a key's;
---- in a sorted order the counts' titles, the one it sorts by lit.
+--- then `#`, lit when the rows have their counts, and the counts' titles,
+--- the one a sorted order sorts by lit.
 ---@param o seam.Outline
 ---@return string
 function M.titles(o)
   local bar, w = '', 0
+  local function key(k, gap, on, lit)
+    bar = bar .. '%#SeamLabel#' .. gap .. (on and (lit or '%#SeamKey#') or '%#SeamDim#') .. k
+    w = w + #gap + #k
+  end
   for i, k in ipairs(outline.SHOWS) do
     -- `e` apart: it narrows the others
-    local gap = (i == 1 or k.key == 'e') and '  ' or ' '
-    bar = bar .. '%#SeamLabel#' .. gap .. (o.shows[k.key] and (LIT[k.key] or '%#SeamKey#') or '%#SeamDim#') .. k.key
-    w = w + #gap + 1
+    key(k.key, (i == 1 or k.key == 'e') and '  ' or ' ', o.shows[k.key], LIT[k.key])
   end
-  if not WORDS[o.order] then
+  key('#', '  ', M.counted(o))
+  if not M.counted(o) then
     return bar
   end
+  local USED_END, CALLS_END = ends(o)
   local function hl(which)
     return o.order == which and '%#SeamBold#' or '%#SeamLabel#'
   end
@@ -162,7 +190,8 @@ end
 ---@param rows seam.ORow[]
 function M.rows(buf, m, o, rows)
   local out = {}
-  local sorted = WORDS[o.order] ~= nil
+  local counted, flat = M.counted(o), WORDS[o.order] ~= nil
+  local USED_END, CALLS_END = ends(o)
   local lit, dim = o.order == 'used' and 'SeamBold' or 'SeamLabel', o.order == 'calls' and 'SeamBold' or 'SeamLabel'
   for _, x in ipairs(rows) do
     local r = tree_row(m, x)
@@ -170,7 +199,15 @@ function M.rows(buf, m, o, rows)
     r:add(x.sign or ' ', x.sign and signs.HL[x.sign])
     r:add ' '
     r:add(string.rep('  ', x.depth))
-    local room = (sorted and USED_END - 6 or M.LW - 1) - r.w
+    local stop = counted and USED_END - 6 or M.width(o) - 1
+    local room = stop - r.w
+    -- in the sorted list a declaration's file, dim after its name: what of
+    -- it the name leaves, at least 12 columns of it
+    local file = flat and x.depth == 0 and (x.kind == 'fn' or x.kind == 'type') and x.path:match '[^/]+$'
+    if file then
+      local w = math.min(#file + 2, math.max(12, room - api.nvim_strwidth(M.name(m, x))))
+      room = room - w
+    end
     if x.kind == 'fn' then
       local node = m.graph.nodes[x.id]
       local under, pkg = call_mark(m, x, node)
@@ -195,7 +232,10 @@ function M.rows(buf, m, o, rows)
         r:add(trunc(x.path:match '[^/]+$', room), 'SeamName')
       end
     end
-    if sorted and x.used then
+    if file and stop - r.w > 3 then
+      r:add('  '):add(trunc(file, stop - r.w - 2), 'SeamDim')
+    end
+    if counted and x.used then
       r:to(USED_END - #tostring(x.used)):add(tostring(x.used), lit)
       if x.calls then
         r:to(CALLS_END - #tostring(x.calls)):add(tostring(x.calls), dim)

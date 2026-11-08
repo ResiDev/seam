@@ -134,8 +134,7 @@ eq({ f 'd:pa/src/sub', f 'd:pb' }, { { 0, 1 }, { 1, 0 } }, 'sub calls b1 out of 
 eq(f 'f:pa/src/main.ts', { 0, 0 }, 'a file calling nothing outside, through its top alone: none')
 expect(outline.fan(m) == fan, 'the counts are made once a model and lens')
 
--- s: most used first, the tree kept, each level sorted, every row with both
--- counts; then most calling first; then the tree, nothing beside a name
+-- #: the tree's counts on and off, its order kept
 o = outline.new()
 local tree_keys = keys(outline.rows(m, o))
 local function counts(rs)
@@ -144,49 +143,69 @@ local function counts(rs)
   end, rs)
 end
 expect(outline.rows(m, o)[1].used == nil, 'the tree: no counts')
+eq(outline.key(m, o, outline.rows(m, o), 1, '#'), 'redraw', '#')
+rows = outline.rows(m, o)
+eq(keys(rows), tree_keys, '# keeps the tree as it is')
+eq({ row(rows, 'f:pa/src/b.ts').used, row(rows, 'd:pa/src/sub').calls }, { 2, 1 }, 'every row with its counts: b.ts used by two, sub calls one')
+outline.key(m, o, rows, 1, '#')
+expect(outline.rows(m, o)[1].used == nil, '# again: none')
+
+-- s: every function, value and type the files list, one list, the most used
+-- first, equals in the tree's order; then most calling first; then the tree
 local _, ib = row(outline.rows(m, o), 'f:pa/src/b.ts')
 eq(outline.key(m, o, outline.rows(m, o), ib, 's'), 'redraw', 's')
 eq(o.order, 'used', 's: most used first')
 rows = outline.rows(m, o)
 eq(counts(rows), {
-  { 'd:pb', 1, 0 },
-  { 'f:pb/c.ts', 1, 0 },
-  { 'd:pa', 0, 1 },
-  { 'f:pa/src/b.ts', 2, 0 },
-  { 'd:pa/src/sub', 0, 1 },
-  { 'f:pa/src/a.ts', 0, 2 },
-  { 'f:pa/src/main.ts', 0, 0 },
-  { 'f:pa/src/types.ts', 0, 0 },
-}, 'most used: pb before pa, b.ts first in pa, the rest in the tree order, sub still closed')
-eq(o.cursor, 'f:pa/src/b.ts', 's keeps the cursor on its row')
-o.open['f:pa/src/a.ts'] = true
-rows = outline.rows(m, o)
-local _, ia1 = row(rows, 'f:pa/src/a.ts')
-eq({ rows[ia1 + 1].key, rows[ia1 + 2].key }, { k('f:pa/src/a.ts', A2), k('f:pa/src/a.ts', A1) }, "a file's functions used as much: in the file's order")
-outline.key(m, o, rows, ia1 + 2, 's')
+  { k('f:pa/src/b.ts', B1), 2, 0 },
+  { k('f:pa/src/a.ts', A2), 1, 1 },
+  { k('f:pa/src/a.ts', A1), 1, 3 },
+  { k('f:pb/c.ts', C1), 1, 0 },
+  { k('f:pa/src/sub/d.ts', D1), 0, 1 },
+}, 'most used: b1, then a2 a1 c1 in the tree order, d1; no folders or files, no tests')
+eq(
+  vim.tbl_map(function(r)
+    return r.depth
+  end, rows),
+  { 0, 0, 0, 0, 0 },
+  'all at the top'
+)
+eq(o.cursor, k('f:pa/src/b.ts', B1), 's on a file: the cursor on its first in the list')
+outline.key(m, o, rows, 1, '#')
+eq(o.counts, nil, '# in a sorted order: nothing, the list has its counts')
+local _, ia1 = row(rows, k('f:pa/src/a.ts', A1))
+outline.key(m, o, rows, ia1, 's')
 eq(o.order, 'calls', 's again: most calling first')
 rows = outline.rows(m, o)
 eq(
-  vim.list_slice(keys(rows), 1, 5),
-  { 'd:pa', 'f:pa/src/a.ts', k('f:pa/src/a.ts', A1), k('f:pa/src/a.ts', A2), 'd:pa/src/sub' },
-  'most calling: pa, a.ts calling two outside, a1 calling three'
+  keys(rows),
+  { k('f:pa/src/a.ts', A1), k('f:pa/src/sub/d.ts', D1), k('f:pa/src/a.ts', A2), k('f:pa/src/b.ts', B1), k('f:pb/c.ts', C1) },
+  'most calling: a1 calling three, d1 and a2 one in the tree order (sub before a.ts), then b1 and c1'
 )
-eq({ row(rows, k('f:pa/src/a.ts', A1)).used, row(rows, k('f:pa/src/a.ts', A1)).calls }, { 1, 3 }, 'a function row has its counts')
-local _, ic = row(rows, k('f:pa/src/a.ts', A1))
-eq(outline.key(m, o, rows, ic, 'l'), 'redraw', 'a function opens in a sorted order too')
+eq(o.cursor, k('f:pa/src/a.ts', A1), 's keeps the cursor on its row')
+eq(outline.key(m, o, rows, 1, 'l'), 'redraw', 'a function opens in the list')
 rows = outline.rows(m, o)
 eq(
-  { rows[ic + 1].key, rows[ic + 2].key, rows[ic + 3].key },
-  { k('f:pa/src/a.ts', A1, A2), k('f:pa/src/a.ts', A1, B1), k('f:pa/src/a.ts', A1, C1) },
-  'its calls, the most calling first: a2 calls one, b1 and c1 none, as written'
+  { rows[2].key, rows[3].key, rows[4].key, rows[2].depth },
+  { k('f:pa/src/a.ts', A1, A2), k('f:pa/src/a.ts', A1, B1), k('f:pa/src/a.ts', A1, C1), 1 },
+  'its calls under it, the most calling first: a2 calls one, b1 and c1 none, as written'
 )
-eq(rows[ic + 3].where, 'pkg', 'its calls say where they live')
-outline.key(m, o, rows, ic + 2, 's')
+eq(rows[4].where, 'pkg', 'its calls say where they live')
+outline.key(m, o, rows, 3, 's')
 eq(o.order, 'tree', 's a third time: the tree')
 rows = outline.rows(m, o)
-expect(row(rows, k('f:pa/src/a.ts', A1, B1)) ~= nil and o.cursor == k('f:pa/src/a.ts', A1, B1), 'back in the tree, the row the cursor was on', o.cursor)
+expect(
+  row(rows, k('f:pa/src/a.ts', A1, B1)) ~= nil and o.cursor == k('f:pa/src/a.ts', A1, B1),
+  'back in the tree, the row the cursor was on, its file opened',
+  o.cursor
+)
 o.open['f:pa/src/a.ts'], o.open[k('f:pa/src/a.ts', A1)] = nil, nil
 eq(keys(outline.rows(m, o)), tree_keys, 'the tree as it was')
+o = outline.new()
+o.open['d:pa/src/sub'] = true
+rows = outline.rows(m, o)
+outline.key(m, o, rows, select(2, row(rows, 'd:pa/src/sub')), 's')
+eq(o.cursor, k('f:pa/src/b.ts', B1), "s on a folder: the cursor on the list's first")
 
 -- reveal: a function in a closed folder, its folder and file opened
 o = outline.new()
@@ -202,8 +221,8 @@ eq(o.cursor, 'f:pa/src/main.ts', 'on main.ts')
 o = outline.new()
 o.order = 'used'
 eq({ outline.reveal(m, o, D1), o.order }, { true, 'used' }, 'in a sorted order a function is shown there')
-expect(row(outline.rows(m, o), k('f:pa/src/sub/d.ts', D1)) ~= nil, 'd1 is a row, its folder opened', o.cursor)
-eq({ outline.reveal(m, o, 'pb/c.ts'), o.order, o.cursor }, { true, 'used', 'f:pb/c.ts' }, 'and a file')
+expect(row(outline.rows(m, o), k('f:pa/src/sub/d.ts', D1)) ~= nil, 'd1 is a row in the list', o.cursor)
+eq({ outline.reveal(m, o, 'pb/c.ts'), o.order, o.cursor }, { true, 'tree', 'f:pb/c.ts' }, 'a file: the tree, the list holding none')
 o = outline.new()
 eq({ outline.reveal(m, o, 'pa/src/sub'), o.cursor }, { true, 'd:pa/src/sub' }, 'and a folder')
 expect(row(outline.rows(m, o), 'd:pa/src/sub') ~= nil, 'the folder is a row, the folders above it opened', o.cursor)
@@ -336,10 +355,11 @@ do
   eq({ v.used, v.calls }, { 1, 1 }, 'a value its users and its calls')
   eq(
     keys(rows),
-    { 'd:pk', 'f:pk/k.ts', k('f:pk/k.ts', 'type:T'), k('f:pk/k.ts', KV), k('f:pk/k.ts', KF), 'd:pq', 'f:pq/q.ts' },
-    'most used first, the type before the value'
+    { k('f:pk/k.ts', 'type:T'), k('f:pk/k.ts', KV), k('f:pk/k.ts', KF), k('f:pq/q.ts', 'pq/q.ts:9:qf') },
+    'most used first, the type before the value, in one list'
   )
-  eq(row(rows, 'f:pk/k.ts').used, 1, 'a file is used by what names its types from elsewhere: Q')
+  uo.order, uo.counts = 'tree', true
+  eq(row(outline.rows(mu, uo), 'f:pk/k.ts').used, 1, 'a file is used by what names its types from elsewhere: Q')
   package.loaded['seam.written'] = nil
 end
 

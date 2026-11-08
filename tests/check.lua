@@ -160,7 +160,7 @@ local function check_tree()
   end
   local tl, tm = lines(st.obuf.tree), marks(st.obuf.tree)
   for i, r in ipairs(rows) do
-    if vim.fn.strdisplaywidth(tl[i]) > odraw.LW then
+    if vim.fn.strdisplaywidth(tl[i]) > odraw.width(st.outline) then
       fail(('row %d is wider than the tree: %s'):format(i, tl[i]))
       break
     end
@@ -365,37 +365,60 @@ do
       end
       key 'l'
     end
-    -- s: the tree, each level most used first, then most calling first,
-    -- every row with both counts; then the tree on the same row
+    -- #: the tree's counts, its rows kept; again, none
+    where = 'tree #'
+    local tree_keys = vim.tbl_map(function(r)
+      return r.key
+    end, st.orows)
+    key '#'
+    check_tree()
+    if not vim.deep_equal(
+      vim.tbl_map(function(r)
+        return r.key
+      end, st.orows),
+      tree_keys
+    ) then
+      fail '# changed the rows'
+    end
+    for _, r in ipairs(st.orows) do
+      if r.kind ~= 'gone' and r.kind ~= 'type' and not (r.used and r.calls) then
+        fail('#: ' .. r.key:gsub('\n', ' ') .. ' has no counts')
+        break
+      end
+    end
+    if not vim.wo[st.owin.tree].winbar:find('used by', 1, true) then
+      fail '# has no titles'
+    end
+    key '#'
+    if st.orows[1].used then
+      fail '# again left the counts'
+    end
+    -- s: every function the files list in one list, most used first, then
+    -- most calling first, each with both counts; then the tree on the same row
     where = 'tree s'
-    local tree_n = #st.orows
     for _, order in ipairs { 'used', 'calls' } do
       key 's'
       check_tree()
       if st.outline.order ~= order then
         fail('s did not go to ' .. order)
       end
-      if #st.orows ~= tree_n then
-        fail(('%s has %d rows, the tree %d'):format(order, #st.orows, tree_n))
-      end
-      -- the last count at each depth, under the same parent
-      local last = {}
+      local last
       for _, r in ipairs(st.orows) do
-        if r.kind ~= 'gone' then
+        if r.kind ~= 'fn' then
+          fail(order .. ': ' .. r.key:gsub('\n', ' ') .. ' is not a function')
+          break
+        end
+        -- a function's calls, opened under it, apart
+        if r.depth == 0 then
           if not (r.used and r.calls) then
             fail(order .. ': ' .. r.key:gsub('\n', ' ') .. ' has no counts')
             break
           end
-          for d in pairs(last) do
-            if d > r.depth then
-              last[d] = nil
-            end
-          end
-          if last[r.depth] and r[order] > last[r.depth] then
+          if last and r[order] > last then
             fail(order .. ' is not sorted most first at ' .. r.key:gsub('\n', ' '))
             break
           end
-          last[r.depth] = r[order]
+          last = r[order]
         end
       end
       if not vim.wo[st.owin.tree].winbar:find('used by', 1, true) then

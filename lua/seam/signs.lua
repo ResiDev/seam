@@ -162,7 +162,8 @@ function M.decorate(m, rows, only, shows)
     adds[after] = adds[after] or {}
     table.insert(adds[after], r)
   end
-  local tree = rows[1] and rows[1].kind ~= 'fn'
+  -- the tree, not a flat list of functions, values and types
+  local tree = rows[1] and (rows[1].kind == 'dir' or rows[1].kind == 'file')
   if tree then
     for i, x in ipairs(rows) do
       if x.kind == 'file' and x.open then
