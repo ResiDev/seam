@@ -7,6 +7,7 @@
 -- display. The diff (D) is no view: Code and Types draw what changed.
 local changed_view = require 'seam.views.changed'
 local code_view = require 'seam.views.code'
+local held = require 'seam.views.held'
 local index = require 'seam.index'
 local st = require 'seam.state'
 local map_view = require 'seam.views.map'
@@ -25,6 +26,8 @@ local M = {}
 ---@field count fun(m: table, row: seam.ORow): string|nil what the pane's head says of the row in this view
 ---@field nowrap boolean|nil its rows go on right past the pane, scrolled with zl zh, not wrapped
 ---@field under fun(win: integer, row: seam.ORow, m: table): table|nil what is under the cursor in the pane `win`, for the foot (seam.foot)
+---@field label fun(): string|nil its name in the head, when not its name
+---@field holds boolean|nil a buffer not seam's, shown itself in the pane (seam.views.held)
 
 ---@class seam.ViewCtx
 ---@field open table<string, boolean> the types opened in place for the row, by key (seam.typesview)
@@ -140,7 +143,26 @@ M.list = {
       return require('seam.map.keys').under()
     end,
   },
+  {
+    name = held.NAME,
+    label = held.label,
+    tab = true,
+    gone = true,
+    holds = true,
+    displays = { 'buffer' },
+    has = function()
+      return held.buf() ~= nil
+    end,
+    draw = function() end,
+  },
 }
+
+--- `v`'s name in the head and the status line.
+---@param v seam.View
+---@return string
+function M.label(v)
+  return v.label and v.label() or v.name
+end
 
 M.under = code_view.under
 

@@ -505,11 +505,12 @@ function M.find(rows, key)
   end
 end
 
---- Open the folders and the file down to `target`, a node id or a file's
---- path, and put the cursor on it, in whichever order; a function or value
---- of a kind the files do not list, that kind listed too, and one kept to
---- its file, not exports only. False when the tree
---- has no row for it.
+--- Open the folders and the file down to `target`, a node id, a file's
+--- path or a folder's, and put the cursor on it, in whichever order; a
+--- function or value of a kind the files do not list, that kind listed
+--- too, and one kept to its file, not exports only. A folder inside a
+--- chain of lone folders is the chain's row. False when the tree has no
+--- row for it.
 ---@param m table
 ---@param o seam.Outline
 ---@param target string
@@ -520,15 +521,23 @@ function M.reveal(m, o, target)
     target, node = node.path, nil
   end
   local path = node and node.path or target
-  if not files(m)[path] then
-    return false
-  end
-  local key = 'f:' .. path .. (node and ('\n' .. node.id) or '')
+  local key = files(m)[path] and ('f:' .. path .. (node and ('\n' .. node.id) or ''))
+  local opens = {}
   for _, it in ipairs(walk(m)) do
     local full = M.full(it)
-    if it.kind == 'dir' and path:sub(1, #full + 1) == full .. '/' then
-      o.open['d:' .. it.path] = true
+    if it.kind == 'dir' then
+      if path:sub(1, #full + 1) == full .. '/' then
+        opens[#opens + 1] = 'd:' .. it.path
+      elseif not key and (full == path or full:sub(1, #path + 1) == path .. '/') and (it.path == path or path:sub(1, #it.path + 1) == it.path .. '/') then
+        key = 'd:' .. it.path
+      end
     end
+  end
+  if not key then
+    return false
+  end
+  for _, k in ipairs(opens) do
+    o.open[k] = true
   end
   if node then
     o.open['f:' .. path] = true

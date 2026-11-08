@@ -371,7 +371,11 @@ function M.status()
     left = odraw.name(m, px)
     local v, d = views.shown(px, st.view)
     if v then
-      left = left .. '  ' .. v.name:lower() .. (#views.displays(v, px) > 1 and ' · ' .. d or '') .. require('seam.map.keys').status(pane.inside())
+      left = left
+        .. '  '
+        .. (v.label and v.label() or v.name:lower())
+        .. (#views.displays(v, px) > 1 and ' · ' .. d or '')
+        .. require('seam.map.keys').status(pane.inside())
     end
   end
   local shows = outline.shows_word(st.outline)
@@ -383,7 +387,10 @@ function M.status()
   end
   left = pane.said(left)
   local rules = st.lens and #st.lens.rules or 0
-  if pane.inside() then
+  -- in a buffer held, its own keys: seam's are on the tree
+  if pane.inside() and require('seam.views.held').shown(st.owin.pane) then
+    return hints.status(left, { { { '<C-w>h', 'the tree' } } }, rules)
+  elseif pane.inside() then
     return hints.status(left, { pane.hints 'tree' }, rules)
   end
   local row, pgroup = {}, pane.view_hints(px)

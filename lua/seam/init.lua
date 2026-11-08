@@ -27,14 +27,48 @@ function M.open(root)
   screen.open(normal(root))
 end
 
+--- The view you came from holds `buf`, a buffer seam shows itself in its
+--- pane, beside its own views; nil lets go of it.
+---@param buf integer|nil
+function M.hold(buf)
+  require('seam.views.held').hold(buf)
+  if require('seam.pane').wins() then
+    require('seam.pane').redraw()
+  end
+end
+
+-- the buffer you are arriving from: the current one, outside seam's tab,
+-- in a window of its own, unless an empty one
+local function arriving()
+  local buf = api.nvim_get_current_buf()
+  if (st.tab and api.nvim_get_current_tabpage() == st.tab) or api.nvim_win_get_config(0).relative ~= '' then
+    return nil
+  end
+  local bt = vim.bo[buf].buftype
+  if bt == 'quickfix' or bt == 'prompt' then
+    return nil
+  end
+  local empty = api.nvim_buf_get_name(buf) == '' and api.nvim_buf_line_count(buf) == 1 and api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ''
+  return not empty and buf or nil
+end
+
 --- Open seam on a repo (the current one by default), indexing it first when
 --- it has no index yet, an older one, or when asked to; on seam's tab as it
 --- was when it is open on that repo already. `after` runs once it is open.
+--- The view you came from holds `from`, else the buffer you arrive from.
 ---@param root? string
----@param opts? { reindex?: boolean, after?: fun() }
+---@param opts? { reindex?: boolean, after?: fun(), from?: integer }
 function M.start(root, opts)
   root = normal(root)
   opts = opts or {}
+  local buf = opts.from or arriving()
+  if buf then
+    -- you land on what you asked for, not on where you came from
+    if st.view and st.view.at == require('seam.views.held').NAME then
+      st.view.at = 'Code'
+    end
+    M.hold(buf)
+  end
   local from = api.nvim_get_current_tabpage()
   local function show()
     screen.open(root)
@@ -154,6 +188,89 @@ function M.here(how)
         end
         pick()
       end
+    end,
+  })
+end
+
+--- Why `target` is nothing seam can show in the repo at `root`, for the
+--- agent who wrote it; nil when it is. Reads the repo's index on disk and
+--- leaves seam's open state alone, so it runs headless and while seam shows
+--- another repo. A contract the lens hides still counts: the lens is the
+--- reader's, not the link's.
+---@param target string   e.g. "src/store.ts:save@Map/library"
+---@param root string     the repo's root, absolute
+---@return string|nil why
+function M.check(target, root)
+  local t, why = require('seam.target').parse(target)
+  if not t then
+    return why
+  end
+  root = normal(root)
+  local where = vim.fn.fnamemodify(root, ':~')
+  local ok, m = pcall(index.peek, root)
+  if not ok then
+    return ('seam could not read its index of %s: open it with :Seam! to make it again (%s)'):format(where, m)
+  elseif not m then
+    return ('seam has no index of %s: open it with :Seam once'):format(where)
+  elseif m.version < index.VERSION then
+    return ('seam has an index of %s older than it reads: open it with :Seam once to make it again'):format(where)
+  end
+  local _, no = require('seam.target').resolve(m, t)
+  return no
+end
+
+--- Open seam on `target` in the repo at `opts.root` (default: the current
+--- repo, as `start` finds it), its row in the view and display it names,
+--- the view you came from holding `opts.from` (default: the buffer you
+--- arrive from). One that does not resolve says why and leaves the tree's
+--- `/` picker holding its name.
+---@param target string
+---@param opts? { root?: string, from?: integer }
+function M.show(target, opts)
+  opts = opts or {}
+  local tg = require 'seam.target'
+  local t, why = tg.parse(target)
+  if not t then
+    vim.notify('seam: ' .. why, vim.log.levels.WARN)
+    return
+  end
+  M.start(opts.root, {
+    from = opts.from,
+    after = function()
+      local m = index.model()
+      local tree = require 'seam.screen_tree'
+      local function pick(msg)
+        vim.notify('seam: ' .. msg, vim.log.levels.WARN)
+        screen.show()
+        tree.search(tg.query(t))
+      end
+      local at, no = tg.resolve(m, t)
+      if not at then
+        return pick(no)
+      end
+      local c = at.contract
+      if c and not vim.tbl_contains(m.contracts, c) then
+        return pick('the lens hides ' .. c.name .. ' (' .. c.path .. '); L to see it')
+      end
+      st.view = st.view or require('seam.views').new()
+      if t.view == 'Map' then
+        st.view.aside = 'Map'
+      elseif t.view then
+        st.view.at, st.view.aside = t.view, nil
+      end
+      if t.display then
+        st.view.display[t.view] = t.display
+      end
+      screen.show()
+      -- a type has no row: it shows in the pane, its file's row under it
+      local shown = tree.reveal(at.id or at.path)
+      if at.kind == 'type' then
+        tree.show_type(at.name, t.view)
+      elseif not shown then
+        return pick('the lens hides ' .. at.path .. '; L to see it')
+      end
+      -- drawn now, not once the cursor rests: no key follows to wake it
+      require('seam.pane').flush()
     end,
   })
 end

@@ -23,10 +23,21 @@ In any buffer of the repo, on a name. Seam opens on its repo (indexing it first 
 | `:SeamHere calls` | `<leader>kc` | the code screen on that function, the tree on its row under it; several, the tree's `/` holding the word |
 | `:SeamHere called_by` | `<leader>kC` | the tree on that function's row, the pane on its Map; several, the tree's `/` holding the word |
 | `:SeamHere types` | | the tree, its pane on the Types view of the repo type that word names, the tree's cursor on the file you asked from; otherwise the tree's `/` holding the word |
+| `:SeamShow <target>` | | seam on the place a link names: `src/store.ts:save@Map`, `type:Card@Types`, `src/billing/@Map/library` (SPEC.md, From a link). One that does not resolve says why, the tree's `/` holding its name |
 | `:Seam` | `<leader>ko` | seam on the repo, as it was when it is open |
 | `:Seam!` | `<leader>kr` | index the repo again |
 
 The keys are not mapped by seam; the suggested ones are in the author's config.
+
+### The view you came from (prototype)
+
+Each of these, from a buffer outside seam's tab, holds that buffer: one more tab after seam's, named by the buffer's `b:seam_name`, else its file. The pane's window shows the buffer itself, its own keys and options; seam maps nothing in it. One at a time, the last arrived from; from seam's own tab nothing changes.
+
+| Key | Does |
+|---|---|
+| `<Tab>` | on the tree or the code, to that tab and away again, as the other tabs |
+| `<C-w>l` | from the tree or the code, into the buffer held |
+| `<C-w>h` | from it, back to the tree or the code |
 
 ## The tree
 

@@ -507,7 +507,9 @@ function M.status()
     left = left .. '   ' .. (n.object and (n.object .. '.') or '') .. n.name .. (n.kind == 'call' and '()' or '') .. (n.type and (': ' .. n.type) or '')
   end
   local rules = st.lens and #st.lens.rules or 0
-  if pane.inside() then
+  if pane.inside() and require('seam.views.held').shown(st.cwin.pane) then
+    return hints.status(left, { { { '<C-w>h', 'the code' } } }, rules)
+  elseif pane.inside() then
     return hints.status(left, { pane.hints 'code' }, rules)
   end
   local rg = {}

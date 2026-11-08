@@ -289,15 +289,9 @@ function M.pane_head(buf, m, o, x, sv)
   -- the tabs, the one shown lit; a view aside after them, lit, the tabs dim
   local t = row():add ' '
   local tabs = views.tabs(x)
-  draw.tabs(
-    t,
-    vim.tbl_map(function(v)
-      return v.name
-    end, tabs),
-    shown and views.is_tab(shown) and shown.name
-  )
+  draw.tabs(t, vim.tbl_map(views.label, tabs), shown and views.is_tab(shown) and views.label(shown))
   if shown and not views.is_tab(shown) then
-    t:add(#tabs > 0 and '      ' or ''):add(' ' .. shown.name .. ' ', 'SeamTab')
+    t:add(#tabs > 0 and '      ' or ''):add(' ' .. views.label(shown) .. ' ', 'SeamTab')
   end
   local ds = shown and views.displays(shown, x) or {}
   if shown and shown.list then

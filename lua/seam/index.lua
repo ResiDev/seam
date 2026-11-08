@@ -1,6 +1,6 @@
 -- The model: a repo's index read from its JSON, one model a source, with the
 -- lens applied; where indexes live, and making one with treesitter.
-local lens = require 'seam.lens'
+local lenses = require 'seam.lens'
 local st = require 'seam.state'
 local types = require 'seam.types'
 local M = {}
@@ -95,12 +95,18 @@ function M.graph(list)
   return g
 end
 
-local function build(file)
+--- A model from a source's JSON, `lens` applied when given, its types hung
+--- on from `types.json` beside it.
+---@param file string
+---@param lens? seam.Lens
+---@return table
+function M.read(file, lens)
   local fh = assert(io.open(file, 'r'))
   local s = fh:read '*a'
   fh:close()
   local d = vim.json.decode(s, { luanil = { object = true, array = true } })
   local m = {
+    version = d.version or 1,
     ms = d.ms or {},
     packages = d.packages or {},
     exports = d.exports or {},
@@ -151,8 +157,8 @@ local function build(file)
       m.contracts[#m.contracts + 1] = e
     end
   end
-  if st.lens then
-    lens.apply(st.lens, m)
+  if lens then
+    lenses.apply(lens, m)
   end
   M.attach_types(m, vim.fs.dirname(file))
   return m
@@ -184,7 +190,7 @@ function M.load(only)
     local stat = vim.uv.fs_stat(f)
     local mt = stat and (stat.mtime.sec .. ':' .. stat.size) or ''
     if not st.models[name] or st.models[name].mtime ~= mt then
-      local ok, m = pcall(build, f)
+      local ok, m = pcall(M.read, f, st.lens)
       if ok then
         m.mtime = mt
         st.models[name] = m
@@ -196,6 +202,34 @@ function M.load(only)
   end
   st.names = vim.tbl_keys(st.models)
   table.sort(st.names)
+end
+
+local function stamp(f)
+  local s = vim.uv.fs_stat(f)
+  return s and (s.mtime.sec .. '.' .. s.mtime.nsec .. ':' .. s.size) or ''
+end
+
+local peeked = {}
+
+--- The repo's treesitter model as it is on disk, for looking without
+--- opening seam on it: seam's open state untouched, no lens; kept until its
+--- index or types change. Nil when the repo has no index.
+---@param root string
+---@return table|nil
+function M.peek(root)
+  local dir = M.dir(root)
+  local file = dir .. '/treesitter.json'
+  local key = stamp(file)
+  if key == '' then
+    return nil
+  end
+  key = key .. '|' .. stamp(dir .. '/types.json')
+  local p = peeked[root]
+  if not (p and p.key == key) then
+    p = { key = key, m = M.read(file) }
+    peeked[root] = p
+  end
+  return p.m
 end
 
 --- The model of the source shown.

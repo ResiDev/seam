@@ -1277,12 +1277,63 @@ view in the tree's pane. Several and none here: the `/` picker of the
 screen asked for, holding the word. `:Seam` on a repo seam is open on comes to its
 tab as it was; another repo closes it first.
 
+**From a link.** `require('seam').show(target, { root?, from? })`, `:SeamShow <target>`,
+opens seam on a place written as a string, for a link in a thread to land
+on; `require('seam').check(target, root)` says why a target is nothing
+seam can show, nil when it is, for the agent who wrote the link to fix it.
+
+```
+target  := what ['@' view ['/' display]]
+what    := 'type:' Name                 a repo type
+         | path ':' name [':' line]     a function, value or contract declared in that file; the line breaks ties
+         | path                         a file or a folder, a trailing '/' allowed
+view    := 'Code' | 'Types' | 'Map'
+display := one of that view's displays for that row (Map: folder, type, library; a type's: folder, type)
+```
+
+`src/store.ts:save@Map`, `type:Card@Map/type`, `src/billing/@Map/library`,
+`src/store.ts`. A path is from the repo's root; a name is the tree's, found
+as `here` finds a word in that file, but only one declared there. No view,
+the view seam has chosen. `seam.target` parses the string once and
+resolves it against a model; neither touches the open state. `check` reads
+the repo's treesitter index from disk (`index.peek`, kept per repo until
+its files change, no lens: what the lens hides is the reader's choice, not
+a wrong link), so it runs headless and while seam shows another repo; no
+index, or an older one, says to open it with `:Seam` once. Its whys say
+what is wrong and what is near: `src/store.ts has no function, value or contract
+named sav; it has save, load, …`, `a type's Map has no display 'library':
+folder or type`. `show` starts seam on the repo, sets the view and display,
+then the row (a type in the pane, its file's row under it), the pane drawn
+at once; one that does not resolve, or the lens hides, says why and leaves
+the tree's `/` holding its name. It adds no screen: it opens the existing
+ones in a given state.
+
+**Prototype: the view you came from** (2026-11-07, unmocked, the head's
+change only one more tab name). Landing in seam from a thread, the thread
+was gone. Seam's pane holds one buffer not its own, the last you arrived
+from: `show(target, { from = buf })` holds `buf`; `show` without `from`,
+`here` and `:Seam` hold the buffer current when called, outside seam's tab
+and in a window of its own (an empty one, a float, a list or a prompt
+none); from seam's tab nothing changes; `require('seam').hold(buf)` holds
+it, nil lets go. While held it is a tab on every row, after seam's,
+named by `b:seam_name` (thread sets its thread's title), else its file,
+else `buffer`; arriving, you land on the target, not on it. Shown, the
+pane's window displays the buffer itself (`seam.views.held`), where its
+cursor was when held; seam draws nothing into it, the tree's cursor leaves
+it be, `<Tab>` away gives the window back seam's buffer. Neovim's own
+window options per buffer do the rest: the buffer comes with its window's
+options (numbers, wrap, its status line) and seam's pane gets its own back.
+`<C-w>l` goes into it (from the pane's head on), `<C-w>h` back; seam maps
+nothing in it. Wiped, its tab goes; shown in the pane then, Neovim closes
+the pane's window with it and the screen is laid out again.
+
 ## Code layout
 
 ```
 lua/seam/
-  init.lua          :Seam, start and open the tree, here (from your code), what tests and view steps call
+  init.lua          :Seam, start and open the tree, here (from your code), show and check (from a link), hold (the view you came from), what tests and view steps call
   here.lua          the word under the cursor in a file to the contract or function it names
+  target.lua        a link's target: the string parsed, then resolved in a model to a row, its view and display, or why not
   state.lua         the one table every screen reads: repo, models, tab, windows, what is shown
   index.lua         the model from a source's JSON, the lens applied, its types hung on, where indexes live, indexing
   theme.lua         highlight groups, hues
@@ -1294,6 +1345,7 @@ lua/seam/
   views.lua         the pane's views, a registry: the two tabs and the views aside, which rows each has, its displays, how it draws, what is under its cursor for the foot
   views/code.lua    the Code view: a function, a file, a type's declaration, each call underlined where it lives
   views/types.lua   the Types view: a line a function, takes → name → gives; a folder's, a file's, a type's; types opened in place
+  views/held.lua    the view you came from (prototype): the buffer held, its name, shown itself in the pane's window and given back
   typesview.lua     the Types view as data: a function's line, the names that are types, the types opened as a set of keys laid out
   written.lua       what a file has written, from treesitter: a function's signature, the types it declares
   draw/outline.lua  the tree's rows and head, the pane's head and tabs
@@ -1337,6 +1389,7 @@ tests/
   names.lua         names in the code: each kind, its type, its later uses, the types after names and the types display, on files written by hand
   outline.lua       the tree's, the graph's and the picker's specs, on a graph written by hand
   here.lua          here's resolution specs, on a model written by hand
+  target.lua        targets parsed, well and badly, and checked against a real repo's index, seam's state untouched
   types.lua         hovers parsed, flows built, signatures fitted, on a model written by hand
   typesview.lua     a function's line, the names that are types, the types opened in place laid out
   changes.lua       what changed: declarations compared, signature and body, files new and gone, uses at from, the hunks, the words, the layout folded

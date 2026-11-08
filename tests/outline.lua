@@ -202,6 +202,10 @@ o.order = 'used'
 eq({ outline.reveal(m, o, D1), o.order }, { true, 'used' }, 'in a sorted order a function is shown there')
 expect(row(outline.rows(m, o), k('f:pa/src/sub/d.ts', D1)) ~= nil, 'd1 is a row, its folder opened', o.cursor)
 eq({ outline.reveal(m, o, 'pb/c.ts'), o.order, o.cursor }, { true, 'used', 'f:pb/c.ts' }, 'and a file')
+o = outline.new()
+eq({ outline.reveal(m, o, 'pa/src/sub'), o.cursor }, { true, 'd:pa/src/sub' }, 'and a folder')
+expect(row(outline.rows(m, o), 'd:pa/src/sub') ~= nil, 'the folder is a row, the folders above it opened', o.cursor)
+eq(outline.reveal(m, o, 'pa/src/nowhere'), false, 'a folder the tree does not hold')
 
 -- the lens: a folder hidden from contracts leaves the tree
 m.visible = function(path, col)

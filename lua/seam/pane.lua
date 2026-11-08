@@ -5,6 +5,7 @@
 -- and the foot following the cursor.
 local api = vim.api
 local draw = require 'seam.draw'
+local held = require 'seam.views.held'
 local index = require 'seam.index'
 local odraw = require 'seam.draw.outline'
 local opening = require 'seam.opening'
@@ -65,7 +66,13 @@ function M.show(x, keep)
   end
   local m = index.model()
   odraw.pane_head(st.obuf.phead, m, st.outline, x, st.view)
-  odraw.pane(st.obuf.pane, w.pane, m, x, st.view, ctx(x, w), keep)
+  local v = views.shown(x, st.view)
+  if v and v.holds then
+    held.show(w.pane)
+  else
+    held.hide(w.pane)
+    odraw.pane(st.obuf.pane, w.pane, m, x, st.view, ctx(x, w), keep)
+  end
   require('seam.foot').update()
 end
 
@@ -270,7 +277,8 @@ end
 ---@return integer[]
 function M.stops(what)
   local out = {}
-  if not M.wins() then
+  local w = M.wins()
+  if not w or held.shown(w.pane) then
     return out
   end
   for i = 1, api.nvim_buf_line_count(st.obuf.pane) do
@@ -479,6 +487,12 @@ function M.autocmds(aug)
       buffer = b,
       callback = function()
         M.flush()
+        -- nothing to do in the head over a buffer held: <C-w>l goes on into it
+        local w = M.wins()
+        if b == st.obuf.phead and w and held.shown(w.pane) and vim.fn.win_getid(vim.fn.winnr '#') ~= w.pane then
+          api.nvim_set_current_win(w.pane)
+          return
+        end
         require('seam.foot').update()
         vim.cmd 'redrawstatus'
       end,
