@@ -120,7 +120,8 @@ return function(t)
           if s then
             n = n + 1
             if not at then
-              at, name = { i, s + 3 }, l:sub(s + 4):match '^(%S+)'
+              -- its first word, a function's without its () and comma
+              at, name = { i, s + 3 }, l:sub(s + 4):match '^([^%s(,]+)'
             end
           end
         end

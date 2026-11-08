@@ -240,7 +240,7 @@ local function side_labels(x, m)
   if x.kind == 'type' then
     return { 'made by', 'taken by' }
   end
-  return { 'calls', x.kind == 'fn' and m.graph.nodes[x.id].kind == 'value' and 'used by' or 'called by' }
+  return { 'built from', 'used by' }
 end
 
 -- folder with T off: today's both ways, names only, each side by folder
@@ -304,6 +304,8 @@ end
 
 -- the room between what a function takes and what it gives
 local GAP = '   '
+-- the names a closed group of the type display says before `+N more`
+local NAMES = 3
 
 --- folder and type: the row's calls above, gathered under a folder or the
 --- type each gives, the row, its callers below gathered the same way.
@@ -390,11 +392,26 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
         end
         return line_of(a) < line_of(b)
       end)
-      local head
+      local head, closed
       if by == 'type' then
-        head = grp.key == 'void' and { { 'returns nothing', 'SeamLabel' } }
-          or grp.key == '?' and { { 'returns what no signature says', 'SeamLabel' } }
-          or cat({ { 'returns ', 'SeamLabel', type_hit(m, grp.key) } }, tsegs(grp.key, false, type_hit(m, grp.key)))
+        -- open, the type alone over its lines, each ending in it; closed,
+        -- the names that give it back and the type: `a(), b() +2 more  →  T`
+        head = grp.key == 'void' and { { 'nothing', 'SeamLabel' } }
+          or grp.key == '?' and { { 'no type written', 'SeamLabel' } }
+          or tsegs(grp.key, false, type_hit(m, grp.key))
+        closed = {}
+        for i, e in ipairs(grp.list) do
+          if i > NAMES then
+            closed[#closed + 1] = { ' +' .. (#grp.list - NAMES) .. ' more', 'SeamLabel' }
+            break
+          end
+          if i > 1 then
+            closed[#closed + 1] = { ', ', 'SeamLabel' }
+          end
+          local n = name(e)
+          closed[#closed + 1] = { draw.shape(m.graph.nodes[e.id]), n[2], n[3] }
+        end
+        closed = cat(closed, { { '  →  ', 'SeamLabel' } }, head)
       else
         head = { { folder_text(grp.key), 'SeamBold', grp.dir and { kind = 'dir', path = grp.dir } or nil } }
       end
@@ -411,9 +428,9 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
         elseif by == 'folder' then
           cols, tail = { at_text(e), { name(e) } }, cat(takes(e), gives(e))
         elseif is_top then
-          cols, tail = { place(e), { name(e) } }, takes(e)
+          cols, tail = { place(e), { name(e) } }, cat(takes(e), gives(e))
         else
-          cols, tail = { at_text(e), { name(e) } }, takes(e)
+          cols, tail = { at_text(e), { name(e) } }, cat(takes(e), gives(e))
         end
         -- by folder an empty row between the files the calls are in
         local gap = by == 'folder' and is_top and prev ~= nil and e.path ~= prev
@@ -421,7 +438,7 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
         files[e.path] = true
         items[#items + 1] = { cols = cols, tail = tail, gap = gap }
       end
-      res[#res + 1] = { head = head, items = items, key = grp.key, files = vim.tbl_count(files) }
+      res[#res + 1] = { head = head, closed = closed, items = items, key = grp.key, files = vim.tbl_count(files) }
     end
     return res
   end
@@ -615,10 +632,10 @@ function M.count(m, x)
   end
   if x.kind == 'fn' then
     if m.graph.nodes[x.id].kind == 'value' then
-      return ('used by %d, calls %d'):format(#outline.users(m, x.id, graph.visible(m, 'up')), #data.calls(m, x.id))
+      return ('used by %d, built from %d'):format(#outline.users(m, x.id, graph.visible(m, 'up')), #data.calls(m, x.id))
     end
     local callers, tests = data.callers(m, x.id)
-    return ('called by %d, calls %d'):format(#callers + #tests, #data.calls(m, x.id))
+    return ('used by %d, built from %d'):format(#callers + #tests, #data.calls(m, x.id))
   elseif x.kind == 'type' then
     local makers, takers = data.flow(m, x.name)
     return ('made by %d, taken by %d'):format(#makers, #takers)
@@ -631,7 +648,7 @@ function M.count(m, x)
     end
     return vim.tbl_count(t)
   end
-  return ('called from %s, calls %d'):format(draw.plural(files(into, 'from'), 'file'), files(outs, 'to'))
+  return ('used by %s, built from %s'):format(draw.plural(files(into, 'from'), 'file'), draw.plural(files(outs, 'to'), 'file'))
 end
 
 --- A name in the code seen through its type.

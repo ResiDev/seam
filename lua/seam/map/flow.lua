@@ -30,6 +30,7 @@ M.DROP = 2
 ---@field key string|nil what it is opened by, else its head's text
 ---@field files integer|nil the files its items are in, for its closed line
 ---@field names integer|nil the names it holds, for its closed line and its fold, else its items
+---@field closed table[]|nil pieces its closed line says after ▸, in place of its head and its count
 
 local function width(segs)
   local n = 0
@@ -187,15 +188,17 @@ local function rows_of(g, ws, x, width)
 end
 
 -- a group closed at `x`, `y`: its head after ▸, how many names in how many
--- files, all of it opening it with l
+-- files, or what it says closed; all of it opening it with l
 local function put_closed(cv, g, k, x, y)
   local hit = { fold = k, label = key_of(g) }
   local segs = { { '▸ ', 'SeamLabel', hit } }
-  for _, s in ipairs(g.head) do
+  for _, s in ipairs(g.closed or g.head) do
     segs[#segs + 1] = { s[1], s[2], hit }
   end
-  local count = draw.plural(g.names or #g.items, 'name') .. (g.files and (' in ' .. draw.plural(g.files, 'file')) or '')
-  segs[#segs + 1] = { '  ' .. count, 'SeamLabel', hit }
+  if not g.closed then
+    local count = draw.plural(g.names or #g.items, 'name') .. (g.files and (' in ' .. draw.plural(g.files, 'file')) or '')
+    segs[#segs + 1] = { '  ' .. count, 'SeamLabel', hit }
+  end
   cv:seg(segs, x, y)
 end
 

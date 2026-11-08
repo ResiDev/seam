@@ -903,15 +903,23 @@ Filled 2026-11-01, drawn to be looked at (`design/mocks/src/map/ideas.py`, round
 
 - **Each side says what it is to the row** (decided 2026-11-07; drawn
   in seam and kept as the pictures, `design/mocks/map16-labels-*.png`).
-  Over the left side, or above, `calls`, a type's `made by`; over the
-  right, or below, `called by`, a type's `taken by`, a value's `used by`,
-  the functions and values naming it (`design/mocks/map17-value-used.png`);
-  the words the pane's head counts with. In type, each head says `returns` before its type,
-  `returns nothing`, so a head is never a bare type to guess at. (It said
-  `gives` until 2026-11-08: under `calls` it read as something handed to
-  the row; `returns` is the word the code uses. Everywhere seam shows
-  it: the Types view's `returns a Card` and `takes and returns`, a type's
-  head `50 functions return one`; `design/mocks/map22-returns.png`.)
+  Over the left side, or above, `built from`, a type's `made by`; over
+  the right, or below, `used by`, a type's `taken by`; a value's used by
+  is the functions and values naming it
+  (`design/mocks/map17-value-used.png`); the words the pane's head counts
+  with, `used by 2, built from 29`, a folder's or file's in files, and
+  the tree's (2026-11-08: `calls` and `called by` until then,
+  `design/mocks/map23-built-from.png`).
+- **Type: each group what its functions give back, said without a
+  word.** Closed, the names and the type: `storageOf()  →
+  StorageAdapter<…>`, `loading(), begin()  →  State<Step>`, three names
+  then `+2 more`, `→  nothing`, `→  no type written`. Open, the type
+  alone over its lines, each line its place, its name, what it takes,
+  `→` and the type. (2026-11-08, `design/mocks/map23-built-from.png`. A
+  head said `gives State<Step>  2 names in 1 file` until then, then
+  `returns`, `map22-returns.png`: either way it never said who gives it
+  back. The Types view's `returns a Card` and `takes and returns`, and a
+  type's head `50 functions return one`, kept `returns`.)
 
 ### 7. The Code view and the code screen
 
