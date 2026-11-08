@@ -344,8 +344,8 @@ function M.all_keys()
     {
       'The tree',
       {
-        { 's', 'order: by folder, or every name most used, or that uses most, first' },
-        { '#', 'used by and uses on the tree, or off' },
+        { 's', 'order: by folder, or every name most used, or with most deps, first' },
+        { '#', 'used by and deps on the tree, or off' },
         { 'f t v', 'what a file lists: its functions, types, values, each on or off' },
         { 'e', "a file's exports only, or all it declares" },
         { '/', 'search the names' },
