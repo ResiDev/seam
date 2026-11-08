@@ -55,14 +55,17 @@ end
 --- Open seam on a repo (the current one by default), indexing it first when
 --- it has no index yet, an older one, or when asked to; on seam's tab as it
 --- was when it is open on that repo already. `after` runs once it is open.
---- The view you came from holds `from`, else the buffer you arrive from.
+--- The view you came from holds `from`; with `hold`, or `vim.g.seam_hold`
+--- set, the buffer you arrive from. Arriving from outside seam's tab any
+--- other way lets go of what it held: the tab is there while you asked.
 ---@param root? string
----@param opts? { reindex?: boolean, after?: fun(), from?: integer }
+---@param opts? { reindex?: boolean, after?: fun(), from?: integer, hold?: boolean }
 function M.start(root, opts)
   root = normal(root)
   opts = opts or {}
-  local buf = opts.from or arriving()
-  if buf then
+  local outside = not (st.tab and api.nvim_get_current_tabpage() == st.tab)
+  local buf = opts.from or ((opts.hold or vim.g.seam_hold == true) and arriving() or nil)
+  if buf or outside then
     -- you land on what you asked for, not on where you came from
     if st.view and st.view.at == require('seam.views.held').NAME then
       st.view.at = 'Code'
@@ -221,11 +224,11 @@ end
 
 --- Open seam on `target` in the repo at `opts.root` (default: the current
 --- repo, as `start` finds it), its row in the view and display it names,
---- the view you came from holding `opts.from` (default: the buffer you
---- arrive from). One that does not resolve says why and leaves the tree's
---- `/` picker holding its name.
+--- the view you came from holding `opts.from`, or with `opts.hold` the
+--- buffer you arrive from (as `start`). One that does not resolve says why
+--- and leaves the tree's `/` picker holding its name.
 ---@param target string
----@param opts? { root?: string, from?: integer }
+---@param opts? { root?: string, from?: integer, hold?: boolean }
 function M.show(target, opts)
   opts = opts or {}
   local tg = require 'seam.target'
@@ -236,6 +239,7 @@ function M.show(target, opts)
   end
   M.start(opts.root, {
     from = opts.from,
+    hold = opts.hold,
     after = function()
       local m = index.model()
       local tree = require 'seam.screen_tree'

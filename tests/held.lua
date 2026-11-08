@@ -1,6 +1,7 @@
--- The view you came from: seam opened from a buffer holds it, a tab beside
--- seam's own views, the pane's window showing the buffer itself, on the
--- lab's excalidraw copy (SEAM_REPO).
+-- The view you came from: seam opened from a buffer, asked to, holds it, a
+-- tab beside seam's own views, the pane's window showing the buffer itself;
+-- opened any other way, it lets go. On the lab's excalidraw copy
+-- (SEAM_REPO).
 --   nvim --headless --clean -l tests/held.lua
 -- Exits 0 when nothing failed.
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
@@ -55,7 +56,12 @@ api.nvim_win_set_cursor(0, { 20, 0 })
 
 seam.show('packages/element/src/mutateElement.ts:mutateElement@Map', { root = repo })
 opened()
-eq(st.held and st.held.buf, code, 'show without from holds the buffer it was called from')
+eq(st.held, nil, 'show not asked to hold: nothing held')
+eq(tab_names(), { 'Code', 'Types', 'Map' }, 'and no tab for it')
+api.nvim_set_current_tabpage(st.from_tab or 1)
+eq(api.nvim_get_current_buf(), code, 'back in your code')
+seam.show('packages/element/src/mutateElement.ts:mutateElement@Map', { root = repo, hold = true })
+eq(st.held and st.held.buf, code, 'show with hold holds the buffer it was called from')
 eq(tab_names(), { 'Code', 'Types', 'Map', 'Scene.ts' }, 'its file names the tab, after seam’s')
 eq(views.shown(pane.subject(), st.view).name, 'Map', 'landed on the view the target names')
 eq(pane_buf(), st.obuf.pane, 'the pane shows seam’s own buffer')
@@ -109,14 +115,23 @@ eq(require('seam.screen_tree').valid(), true, 'the pane laid out again')
 eq(pane_buf(), st.obuf.pane, 'seam’s buffer in it')
 eq(tab_names(), { 'Code', 'Types', 'Map' }, 'and its tab gone')
 
--- from your code again: here holds it, from a file at the repo's root
+-- from your code again: here holds nothing unless seam_hold is set; with
+-- it, the buffer it was called from, a file at the repo's root
 api.nvim_set_current_tabpage(st.from_tab)
 vim.cmd.edit(repo .. '/setupTests.ts')
 local setup = api.nvim_get_current_buf()
 api.nvim_win_set_cursor(0, { 9, 8 })
+seam.hold(setup)
 seam.here()
 opened()
-eq(st.held and st.held.buf, setup, 'here holds the buffer it was called from')
+eq(st.held, nil, 'here from outside, not asked to hold: what was held let go')
+api.nvim_set_current_tabpage(st.from_tab)
+api.nvim_win_set_cursor(0, { 9, 8 })
+vim.g.seam_hold = true
+seam.here()
+opened()
+vim.g.seam_hold = nil
+eq(st.held and st.held.buf, setup, 'with seam_hold, here holds the buffer it was called from')
 to_held()
 eq(api.nvim_win_get_cursor(st.owin.pane), { 9, 8 }, 'at its cursor')
 

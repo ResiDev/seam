@@ -1360,11 +1360,15 @@ ones in a given state.
 **Prototype: the view you came from** (2026-11-07, unmocked, the head's
 change only one more tab name). Landing in seam from a thread, the thread
 was gone. Seam's pane holds one buffer not its own, the last you arrived
-from: `show(target, { from = buf })` holds `buf`; `show` without `from`,
-`here` and `:Seam` hold the buffer current when called, outside seam's tab
-and in a window of its own (an empty one, a float, a list or a prompt
-none); from seam's tab nothing changes; `require('seam').hold(buf)` holds
-it, nil lets go. While held it is a tab on every row, after seam's,
+from, and only when asked: `show(target, { from = buf })` holds `buf`
+(a thread's links do); `show(target, { hold = true })`, or `here` and
+`:Seam` with `vim.g.seam_hold = true`, the buffer current when called,
+outside seam's tab and in a window of its own (an empty one, a float, a
+list or a prompt none). Arriving from outside seam's tab any other way
+lets go of what was held, its tab gone: it is there for the time you
+asked (2026-11-08; until then every arrival held its buffer). From
+seam's tab nothing changes; `require('seam').hold(buf)` holds it, nil
+lets go. While held it is a tab on every row, after seam's,
 named by `b:seam_name` (thread sets its thread's title), else its file,
 else `buffer`; arriving, you land on the target, not on it. Shown, the
 pane's window displays the buffer itself (`seam.views.held`), where its

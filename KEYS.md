@@ -31,7 +31,7 @@ The keys are not mapped by seam; the suggested ones are in the author's config.
 
 ### The view you came from (prototype)
 
-Each of these, from a buffer outside seam's tab, holds that buffer: one more tab after seam's, named by the buffer's `b:seam_name`, else its file. The pane's window shows the buffer itself, its own keys and options; seam maps nothing in it. One at a time, the last arrived from; from seam's own tab nothing changes.
+Asked to, opening seam from a buffer outside seam's tab holds that buffer: `require('seam').show(target, { from = buf })` (a thread's links), `show(target, { hold = true })`, or `here` and `:Seam` with `vim.g.seam_hold = true`. Opened from outside any other way, it lets go and the tab goes. Held, it is one more tab after seam's, named by the buffer's `b:seam_name`, else its file. The pane's window shows the buffer itself, its own keys and options; seam maps nothing in it. One at a time, the last arrived from; from seam's own tab nothing changes.
 
 | Key | Does |
 |---|---|
