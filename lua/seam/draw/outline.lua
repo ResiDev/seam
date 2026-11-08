@@ -19,7 +19,7 @@ local row, trunc, shape = draw.row, draw.trunc, draw.shape
 M.LW = 46
 local USED_END, CALLS_END = 37, 44
 local WIDER = 18
-local WORDS = { used = 'most used first', calls = 'most calling first' }
+local WORDS = { used = 'most used first', calls = 'uses most first' }
 local LIT = { f = '%#SeamShowF#', t = '%#SeamShowT#', v = '%#SeamShowV#' }
 
 --- The tree's width: the sorted list's wider.
@@ -161,7 +161,7 @@ function M.titles(o)
   local function hl(which)
     return o.order == which and '%#SeamBold#' or '%#SeamLabel#'
   end
-  local used, calls = 'used by', 'calls'
+  local used, calls = 'used by', 'uses'
   return bar
     .. '%#SeamLabel#'
     .. string.rep(' ', USED_END - #used - w)
@@ -310,7 +310,7 @@ function M.pane_head(buf, m, o, x, sv)
     if count then
       h:add('   ' .. count, 'SeamLabel')
     elseif WORDS[o.order] and x.used then
-      h:add(o.order == 'used' and ('   used by ' .. x.used) or ('   calls ' .. x.calls), 'SeamLabel')
+      h:add(o.order == 'used' and ('   used by ' .. x.used) or ('   uses ' .. x.calls), 'SeamLabel')
     end
   elseif x and x.kind == 'file' then
     h:add(M.name(m, x), 'SeamBold'):add('   file in ', 'SeamLabel')

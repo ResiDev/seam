@@ -358,17 +358,17 @@ run/
   `where-underline-react.png` (useOwnedRun() calling core's createRun).
 - **A call already open above** (recursion) is dim and doesn't open.
 - **The tree's own order has nothing beside a name until `#`** puts the
-  two counts on every row, used by and calls, neither lit, the tree as it
+  two counts on every row, used by and uses, neither lit, the tree as it
   was; `#` again takes them off, for the session (decided 2026-11-08,
   drawn in seam, `design/mocks/tree18-counts.png`). The tree first had
   nothing beside a name (2026-10-31, `design/mocks/tree-cols-*.png` were not
   liked), then the counts in its sorted orders alone (2026-11-02).
-- **`s` changes the order:** by folder (the tree), most used first, most
-  calling first. The two sorted orders are not a tree but one list
+- **`s` changes the order:** by folder (the tree), most used first, uses
+  most first. The two sorted orders are not a tree but one list
   (decided 2026-11-08, drawn in seam, `design/mocks/tree18-list-used.png`,
-  `tree18-list-calls.png`): every function, type and value the files
+  `tree19-list-uses.png`): every function, type and value the files
   list, as `f` `t` `v` and `e` have them, through the lens and without
-  tests, the most used or the most calling first, the tree's order
+  tests, the most used or the one using most first, the tree's order
   between equals; no folders and no files. A name has its file after it,
   dim, as much of it as the name leaves, and its two counts, the one it
   sorts by lit. The tree is 18 columns wider while the list shows, for
@@ -381,10 +381,14 @@ run/
   has its counts. The tree's sorted orders before kept the tree, each
   level sorted (2026-11-02, `design/mocks/tree17-used.png`); finding the
   names most used across the repo meant opening every folder.
-- **The counts.** A function's: the functions and values calling it, and
-  those it calls. A value's: the functions and values naming it, and
-  what it calls. A type's: the functions, values and types naming it, and
-  no calls (decided 2026-11-07); who names a value or type is the index's
+- **The counts: used by and uses,** one word each way (renamed from
+  `calls` 2026-11-08: `calls 257` read as called 257 times, and the two
+  directions did not show; `design/mocks/tree19-list-uses.png`). The
+  Map keeps `calls` and `called by`, which list the calls themselves. A
+  function's: the functions and values calling it, and those it calls.
+  A value's: the functions and values naming it, and what it calls. A
+  type's: the functions, values and types naming it, its uses blank
+  (decided 2026-11-07); who names a value or type is the index's
   `users`, each use in the repo, its own file too, held by the
   declaration at a file's top it sits in. A file's or a folder's, in the
   tree with `#`: the functions outside it that call into it, or name its
@@ -1006,8 +1010,8 @@ nothing to do where the cursor is does nothing, and its hint isn't shown.
 | `n` `N` | the next and previous import in the code |
 | `]c` `[c` | the next and previous change |
 | `gc` | only what changed in the tree, and back |
-| `s` | the tree's order: by folder, or every name in one list, most used or most calling first |
-| `#` | the tree's counts, used by and calls, on or off |
+| `s` | the tree's order: by folder, or every name in one list, most used or uses most first |
+| `#` | the tree's counts, used by and uses, on or off |
 | `/` | search the names |
 | `L` | the lens: the range of changes and the rules |
 | `<C-d>` `<C-u>` `<C-e>` `<C-y>` | scroll the pane from the tree |
