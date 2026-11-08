@@ -326,7 +326,7 @@ function M.pane_head(buf, m, o, x, sv)
     if count then
       h:add('   ' .. count, 'SeamLabel')
     elseif f then
-      h:add(('   %s give one · %d take one'):format(draw.plural(#f.gives, 'function'), #require('seam.types').takers(f)), 'SeamLabel')
+      h:add(('   %s return one · %d take one'):format(draw.plural(#f.gives, 'function'), #require('seam.types').takers(f)), 'SeamLabel')
     end
   elseif x and x.kind == 'name' then
     M.name_head(h, x.n)

@@ -392,9 +392,9 @@ local function flow_display(x, m, ctx, C, by, top, bottom, centre_name)
       end)
       local head
       if by == 'type' then
-        head = grp.key == 'void' and { { 'gives nothing', 'SeamLabel' } }
-          or grp.key == '?' and { { 'gives what no signature says', 'SeamLabel' } }
-          or cat({ { 'gives ', 'SeamLabel', type_hit(m, grp.key) } }, tsegs(grp.key, false, type_hit(m, grp.key)))
+        head = grp.key == 'void' and { { 'returns nothing', 'SeamLabel' } }
+          or grp.key == '?' and { { 'returns what no signature says', 'SeamLabel' } }
+          or cat({ { 'returns ', 'SeamLabel', type_hit(m, grp.key) } }, tsegs(grp.key, false, type_hit(m, grp.key)))
       else
         head = { { folder_text(grp.key), 'SeamBold', grp.dir and { kind = 'dir', path = grp.dir } or nil } }
       end

@@ -351,7 +351,7 @@ local function fn_rows(out, C, f, cols, kept, top)
     for _, n in ipairs(line.names) do
       local k = tv.child(key, 'l', n)
       C.defaults[k] = true
-      C.top_keys[k] = (takes[n] and gives[n]) and 'takes and gives' or takes[n] and 'takes' or 'gives'
+      C.top_keys[k] = (takes[n] and gives[n]) and 'takes and returns' or takes[n] and 'takes' or 'returns'
     end
   end
   light(C, r, key, 'l', names)
@@ -512,7 +512,7 @@ local function type_view(out, C, x)
   C.lit = x.name
   local cols = columns(C, vim.list_extend(vim.list_slice(gives), takes))
   if #gives > 0 then
-    title(out, 'gives ' .. a(x.name))
+    title(out, 'returns ' .. a(x.name))
     fn_list(out, C, gives, cols)
   end
   if #takes > 0 then

@@ -1185,7 +1185,7 @@ do
       local tkey = tv.child(key_, 'l', ty)
       local head
       for i, l in ipairs(body) do
-        head = head or (l:match('^ takes ' .. vim.pesc(ty) .. '   ') or l:match('^ takes and gives ' .. vim.pesc(ty) .. '   ')) and i
+        head = head or (l:match('^ takes ' .. vim.pesc(ty) .. '   ') or l:match('^ takes and returns ' .. vim.pesc(ty) .. '   ')) and i
       end
       if not head then
         fail(ty .. ', what ' .. node.name .. ' takes, is not written out under its line')

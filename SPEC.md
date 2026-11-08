@@ -233,8 +233,8 @@ A folder, `run/`: its exports.
 
 A file: the same for every function in it, its exports first.
 
-A type, `Model`: every function that gives one, then every function that
-takes one, `Model` lit. Under them its declaration, as written.
+A type, `Model`: every function that returns one, under `returns a Model`,
+then every function that takes one, `Model` lit. Under them its declaration, as written.
 
 ```
 (Given, UserRecord)            → initialModel → Model
@@ -694,7 +694,7 @@ head lists them, the one shown bold.
 | Display | A function | A folder | A file | A type |
 |---|---|---|---|---|
 | **folder** | names only, as it opens: both ways as it was, each side a folder, its files and each file's names after them, an empty row between folders. `T` the flow: its calls above under their folders, each a line, its file and the line it is declared on (the file once, the lines under it), the name, what it takes, what it gives; a line down the left through the folders into the row, written as what it takes → its name → what it gives; from under the middle of its name down a few rows, left, and on down under the row to its callers, so they stand apart from the row and do not read as what it gives, the row going on right of that line where it is too long, under their folders, each with its file and line (tests dim, last). Where and the name in columns, the signature straight after, nothing cut: a line too long goes on under itself, broken between words, `→` kept with what follows, an object over 30 letters as the names of its fields; an empty row between folders and between the files the calls are in | the same for the names crossing its edge: those it calls out to above, those calling in below under the caller's file | the same for a file | its makers above, its takers below |
-| **type** | the flow with each head the type its functions give, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
+| **type** | the flow with each head the type its functions return, the repo's types first, builtins, then nothing; each line the name, what it takes, its folder and file (`design/mocks/map9-type.png`) | the same | the same | the same |
 | **library** | each library it takes from a head, the most used first; a line down through them into the row; under it each name taken from it, used most first, tests last, and every line it uses it on (`design/mocks/map13-libraries-grouped.png`) | the same, each name once, then the functions using it, the file once and the line each first uses it on, tests dim; outside every function the declaration holding it, in a test its title | the same for a file | none |
 
 - **The flow and its foot** (chosen 2026-11-01, `design/mocks/map9-folder.png`,
@@ -906,8 +906,12 @@ Filled 2026-11-01, drawn to be looked at (`design/mocks/src/map/ideas.py`, round
   Over the left side, or above, `calls`, a type's `made by`; over the
   right, or below, `called by`, a type's `taken by`, a value's `used by`,
   the functions and values naming it (`design/mocks/map17-value-used.png`);
-  the words the pane's head counts with. In type, each head says `gives` before its type,
-  `gives nothing`, so a head is never a bare type to guess at.
+  the words the pane's head counts with. In type, each head says `returns` before its type,
+  `returns nothing`, so a head is never a bare type to guess at. (It said
+  `gives` until 2026-11-08: under `calls` it read as something handed to
+  the row; `returns` is the word the code uses. Everywhere seam shows
+  it: the Types view's `returns a Card` and `takes and returns`, a type's
+  head `50 functions return one`; `design/mocks/map22-returns.png`.)
 
 ### 7. The Code view and the code screen
 

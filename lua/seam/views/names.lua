@@ -98,7 +98,7 @@ function M.draw(out, x, m, ctx)
       tk[nm.name] = true
     end
     for _, nm in ipairs(tv.names(t, C.known)) do
-      add(nm.name, n.kind ~= 'method' and 'is' or tk[nm.name] and 'takes' or 'gives')
+      add(nm.name, n.kind ~= 'method' and 'is' or tk[nm.name] and 'takes' or 'returns')
     end
   end
   if #line.names == 0 then
