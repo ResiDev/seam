@@ -14,25 +14,24 @@ local M = {}
 
 local row, trunc, shape = draw.row, draw.trunc, draw.shape
 
--- the tree's width, and where the two counts end; the sorted list wider,
--- its names with their files
+-- the tree's width; wider with the counts, `built from` being long, and the
+-- sorted list wider again, its names with their files
 M.LW = 46
-local USED_END, CALLS_END = 37, 44
-local WIDER = 18
-local WORDS = { used = 'most used first', calls = 'most deps first' }
+local COUNTS, WIDER = 5, 18
+local WORDS = { used = 'most used first', calls = 'built from most first' }
 local LIT = { f = '%#SeamShowF#', t = '%#SeamShowT#', v = '%#SeamShowV#' }
 
---- The tree's width: the sorted list's wider.
+--- The tree's width: wider with the counts, the sorted list's wider again.
 ---@param o seam.Outline
 ---@return integer
 function M.width(o)
-  return M.LW + (WORDS[o.order] and WIDER or 0)
+  return M.LW + (M.counted(o) and COUNTS or 0) + (WORDS[o.order] and WIDER or 0)
 end
 
--- where the two counts end
+-- where the two counts end, under the ends of `used by` and `built from`
 local function ends(o)
-  local d = M.width(o) - M.LW
-  return USED_END + d, CALLS_END + d
+  local calls = M.width(o) - 2
+  return calls - 12, calls
 end
 
 --- What a sorted order is called; nil for the tree.
@@ -161,7 +160,7 @@ function M.titles(o)
   local function hl(which)
     return o.order == which and '%#SeamBold#' or '%#SeamLabel#'
   end
-  local used, calls = 'used by', 'deps'
+  local used, calls = 'used by', 'built from'
   return bar
     .. '%#SeamLabel#'
     .. string.rep(' ', USED_END - #used - w)
@@ -310,7 +309,7 @@ function M.pane_head(buf, m, o, x, sv)
     if count then
       h:add('   ' .. count, 'SeamLabel')
     elseif WORDS[o.order] and x.used then
-      h:add(o.order == 'used' and ('   used by ' .. x.used) or ('   ' .. x.calls .. ' deps'), 'SeamLabel')
+      h:add(o.order == 'used' and ('   used by ' .. x.used) or ('   built from ' .. x.calls), 'SeamLabel')
     end
   elseif x and x.kind == 'file' then
     h:add(M.name(m, x), 'SeamBold'):add('   file in ', 'SeamLabel')

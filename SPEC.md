@@ -358,21 +358,22 @@ run/
   `where-underline-react.png` (useOwnedRun() calling core's createRun).
 - **A call already open above** (recursion) is dim and doesn't open.
 - **The tree's own order has nothing beside a name until `#`** puts the
-  two counts on every row, used by and deps, neither lit, the tree as it
+  two counts on every row, used by and built from, neither lit, the tree as it
   was; `#` again takes them off, for the session (decided 2026-11-08,
-  drawn in seam, `design/mocks/tree18-counts.png`). The tree first had
+  drawn in seam, `design/mocks/tree18-counts.png`, `tree21-counts.png`
+  with `built from`). The tree first had
   nothing beside a name (2026-10-31, `design/mocks/tree-cols-*.png` were not
   liked), then the counts in its sorted orders alone (2026-11-02).
-- **`s` changes the order:** by folder (the tree), most used first, most
-  deps first. The two sorted orders are not a tree but one list
+- **`s` changes the order:** by folder (the tree), most used first, built
+  from most first. The two sorted orders are not a tree but one list
   (decided 2026-11-08, drawn in seam, `design/mocks/tree18-list-used.png`,
-  `tree20-list-deps.png`): every function, type and value the files
+  `tree21-list-built-from.png`): every function, type and value the files
   list, as `f` `t` `v` and `e` have them, through the lens and without
-  tests, the most used or the one with most deps first, the tree's order
+  tests, the most used or the one built from most first, the tree's order
   between equals; no folders and no files. A name has its file after it,
   dim, as much of it as the name leaves, and its two counts, the one it
-  sorts by lit. The tree is 18 columns wider while the list shows, for
-  the names. A function or value opens to what it calls, as in the tree,
+  sorts by lit. The tree is 5 columns wider with the counts, for
+  `built from`, and 18 more while the list shows, for the names. A function or value opens to what it calls, as in the tree,
   its calls sorted the same way. `s` keeps the cursor on its row; from a
   file it goes to the file's first name in the list, from a folder to
   the list's first; back in the tree a name's file is opened, its
@@ -381,15 +382,17 @@ run/
   has its counts. The tree's sorted orders before kept the tree, each
   level sorted (2026-11-02, `design/mocks/tree17-used.png`); finding the
   names most used across the repo meant opening every folder.
-- **The counts: used by and deps,** what needs it and what it needs
-  (2026-11-08: `calls 257` read as called 257 times, the two directions
-  not showing; `uses`, `tree19-list-uses.png`, still did not say it is a
-  count of dependencies; `design/mocks/tree20-list-deps.png`). A dep is a
-  function or value in the repo, not a package. The
+- **The counts: used by and built from,** what is built on it and what
+  it is built from, the words of the old Used by and Built from views
+  (2026-11-08, `design/mocks/tree21-list-built-from.png`). Tried first:
+  `calls`, read as called so many times; `uses`
+  (`tree19-list-uses.png`), how often it is used or how many it uses;
+  `deps` (`tree20-list-deps.png`), packages. Built from counts functions
+  and values in the repo, not packages. The
   Map keeps `calls` and `called by`, which list the calls themselves. A
   function's: the functions and values calling it, and those it calls.
   A value's: the functions and values naming it, and what it calls. A
-  type's: the functions, values and types naming it, its deps blank
+  type's: the functions, values and types naming it, its built from blank
   (decided 2026-11-07); who names a value or type is the index's
   `users`, each use in the repo, its own file too, held by the
   declaration at a file's top it sits in. A file's or a folder's, in the
@@ -1012,8 +1015,8 @@ nothing to do where the cursor is does nothing, and its hint isn't shown.
 | `n` `N` | the next and previous import in the code |
 | `]c` `[c` | the next and previous change |
 | `gc` | only what changed in the tree, and back |
-| `s` | the tree's order: by folder, or every name in one list, most used or most deps first |
-| `#` | the tree's counts, used by and deps, on or off |
+| `s` | the tree's order: by folder, or every name in one list, most used or built from most first |
+| `#` | the tree's counts, used by and built from, on or off |
 | `/` | search the names |
 | `L` | the lens: the range of changes and the rules |
 | `<C-d>` `<C-u>` `<C-e>` `<C-y>` | scroll the pane from the tree |
